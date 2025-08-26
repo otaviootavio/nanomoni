@@ -1,0 +1,4 @@
+envs/env.sh
+.git
+__pycache__
+dist 
