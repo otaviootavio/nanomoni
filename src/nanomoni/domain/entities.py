@@ -6,7 +6,10 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_serializer, field_validator, EmailStr
+from pydantic import BaseModel, Field, field_serializer, EmailStr
+
+
+_sentinel = object()
 
 
 class User(BaseModel):
@@ -110,12 +113,21 @@ class Task(BaseModel):
         self.status = "failed"
         self.updated_at = datetime.now(timezone.utc)
 
-    def update_details(self, title: Optional[str] = None, description: Optional[str] = None) -> None:
+    def reset(self) -> None:
+        """Reset the task to pending status."""
+        if self.status in ["completed", "failed"]:
+            raise ValueError("Cannot reset a completed or failed task.")
+        self.status = "pending"
+        self.updated_at = datetime.now(timezone.utc)
+
+    def update_details(
+        self, title: Optional[str] = None, description: Any = _sentinel
+    ) -> None:
         """Update task's title and/or description."""
         if self.status in ["completed", "failed"]:
             raise ValueError("Cannot update a completed or failed task.")
         if title:
             self.title = title
-        if description is not None:
+        if description is not _sentinel:
             self.description = description
         self.updated_at = datetime.now(timezone.utc)

@@ -16,7 +16,6 @@ class DatabaseClient:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.database_path = self._get_database_path()
-        self._initialize_database()
 
     def _get_database_path(self) -> str:
         """Get database path from settings."""
@@ -24,7 +23,7 @@ class DatabaseClient:
             return self.settings.database_url.replace("sqlite:///", "")
         return self.settings.database_url
 
-    def _initialize_database(self) -> None:
+    def initialize_database(self) -> None:
         """Initialize database and create tables."""
         # Ensure directory exists
         db_path = Path(self.database_path)
@@ -91,4 +90,5 @@ def get_database_client(settings: Settings) -> DatabaseClient:
     global _db_client
     if _db_client is None:
         _db_client = DatabaseClient(settings)
+        _db_client.initialize_database()
     return _db_client

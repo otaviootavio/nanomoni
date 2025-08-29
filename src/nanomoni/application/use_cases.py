@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from ..domain.entities import User, Task
+from ..domain.entities import User, Task, _sentinel
 from ..domain.repositories import UserRepository, TaskRepository
 from .dtos import (
     CreateUserDTO,
@@ -25,12 +25,13 @@ class UserService:
 
     async def create_user(self, dto: CreateUserDTO) -> UserResponseDTO:
         """Create a new user."""
+        email = dto.email.lower()
         # Check if user already exists
-        if await self.user_repository.exists_by_email(dto.email):
+        if await self.user_repository.exists_by_email(email):
             raise ValueError("User with this email already exists")
 
         # Create user entity
-        user = User(name=dto.name, email=dto.email)
+        user = User(name=dto.name, email=email)
 
         # Save user
         created_user = await self.user_repository.create(user)
@@ -47,7 +48,7 @@ class UserService:
 
     async def get_user_by_email(self, email: str) -> Optional[UserResponseDTO]:
         """Get user by email."""
-        user = await self.user_repository.get_by_email(email)
+        user = await self.user_repository.get_by_email(email.lower())
         if not user:
             return None
 
@@ -69,16 +70,18 @@ class UserService:
             return None
 
         # Check if email is being changed and if it already exists
-        if dto.email and dto.email != user.email:
-            if await self.user_repository.exists_by_email(dto.email):
-                raise ValueError("User with this email already exists")
+        if dto.email:
+            new_email = dto.email.lower()
+            if new_email != user.email:
+                if await self.user_repository.exists_by_email(new_email):
+                    raise ValueError("User with this email already exists")
+                user.email = new_email
 
-        # Update user
+        # Update user's name if provided
         if dto.name:
             user.name = dto.name
-        if dto.email:
-            user.email = dto.email
 
+        # Call update_profile to set updated_at and persist changes
         user.update_profile(user.name, user.email)
 
         updated_user = await self.user_repository.update(user)
@@ -172,15 +175,34 @@ class TaskService:
         if not task:
             return None
 
-        # Update task fields
-        if dto.title:
-            task.title = dto.title
-        if dto.description is not None:
-            task.description = dto.description
-        if dto.status:
-            task.status = dto.status
+        update_data = dto.model_dump(exclude_unset=True)
 
-        task.update_details(task.title, task.description)
+        # Handle detail updates
+        if "title" in update_data or "description" in update_data:
+            description = (
+                update_data.get("description")
+                if "description" in update_data
+                else _sentinel
+            )
+            task.update_details(
+                title=update_data.get("title"),
+                description=description,
+            )
+
+        # Handle status changes
+        if "status" in update_data:
+            new_status = update_data["status"]
+            if new_status == "running":
+                task.start()
+            elif new_status == "completed":
+                task.complete()
+            elif new_status == "failed":
+                task.fail()
+            elif new_status == "pending":
+                task.reset()
+            else:
+                # This should not be reachable due to DTO validation
+                raise ValueError(f"Invalid task status: {new_status}")
 
         updated_task = await self.task_repository.update(task)
         return TaskResponseDTO(**updated_task.model_dump())
