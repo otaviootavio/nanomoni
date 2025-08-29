@@ -34,6 +34,10 @@ After all these steps, to run the code:
 ### Running with Docker 
 
 ```bash
+docker build . -t  nanomoni
+```
+
+```bash
 # 1. Source the environment variables
 . ./envs/env.sh 
 
