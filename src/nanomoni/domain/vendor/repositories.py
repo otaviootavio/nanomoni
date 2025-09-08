@@ -1,4 +1,4 @@
-"""Repository interfaces (ports) for the domain layer."""
+"""Vendor domain repositories: UserRepository and TaskRepository."""
 
 from __future__ import annotations
 

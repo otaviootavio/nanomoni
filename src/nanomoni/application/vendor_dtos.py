@@ -1,9 +1,9 @@
-"""Data Transfer Objects for the application layer."""
+"""Data Transfer Objects for the vendor application layer."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_serializer
@@ -30,11 +30,11 @@ class UpdateUserDTO(BaseModel):
 
 
 class UserResponseDTO(BaseModel):
-    """DTO for user response."""
+    """DTO for returning user data."""
 
     id: UUID
     name: str
-    email: str
+    email: EmailStr
     created_at: datetime
     updated_at: Optional[datetime]
     is_active: bool
@@ -65,11 +65,11 @@ class UpdateTaskDTO(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    status: Optional[str] = Field(None, pattern=r"^(pending|running|completed|failed)$")
+    status: Optional[Literal["pending", "running", "completed", "failed"]] = Field(None)
 
 
 class TaskResponseDTO(BaseModel):
-    """DTO for task response."""
+    """DTO for returning task data."""
 
     id: UUID
     title: str

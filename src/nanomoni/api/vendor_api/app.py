@@ -1,11 +1,12 @@
-"""FastAPI application configuration."""
+"""FastAPI application configuration (Vendor API)."""
 
 from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from ...middleware.ecdsa import ECDSASignatureMiddleware
 
-from ..env import get_settings
+from ...envs.vendor_env import get_settings
 from .routers import users, tasks
 
 settings = get_settings()
@@ -16,7 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="NanoMoni CRUD API with DDD and Hexagonal Architecture",
+        description="NanoMoni Vendor CRUD API",
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -31,6 +32,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Add ECDSA signature verification middleware
+    app.add_middleware(ECDSASignatureMiddleware)
+
     # Include routers
     app.include_router(users.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
@@ -39,7 +43,7 @@ def create_app() -> FastAPI:
     async def root():
         """Root endpoint."""
         return {
-            "message": f"Welcome to {settings.app_name} API",
+            "message": f"Welcome to {settings.app_name} Vendor API",
             "version": settings.app_version,
             "docs": "/docs",
         }
@@ -49,7 +53,7 @@ def create_app() -> FastAPI:
         """Health check endpoint."""
         return {
             "status": "healthy",
-            "service": settings.app_name,
+            "service": f"{settings.app_name} Vendor",
             "version": settings.app_version,
         }
 

@@ -1,9 +1,9 @@
-"""Domain entities representing core business objects."""
+"""Vendor domain entities: User and Task."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer, EmailStr
@@ -121,7 +121,7 @@ class Task(BaseModel):
         self.updated_at = datetime.now(timezone.utc)
 
     def update_details(
-        self, title: Optional[str] = None, description: Any = _sentinel
+        self, title: Optional[str] = None, description: object = _sentinel
     ) -> None:
         """Update task's title and/or description."""
         if self.status in ["completed", "failed"]:

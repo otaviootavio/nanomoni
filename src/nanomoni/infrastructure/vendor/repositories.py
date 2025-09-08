@@ -1,4 +1,4 @@
-"""SQLite repository implementations (adapters)."""
+"""Vendor-related SQLite repository implementations."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from ..domain.entities import User, Task
-from ..domain.repositories import UserRepository, TaskRepository
-from .database import DatabaseClient
+from ...domain.vendor.entities import User, Task
+from ...domain.vendor.repositories import UserRepository, TaskRepository
+from ..database import DatabaseClient
 
 
 class SQLiteUserRepository(UserRepository):

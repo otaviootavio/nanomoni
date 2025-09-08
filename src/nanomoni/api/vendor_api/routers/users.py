@@ -1,4 +1,4 @@
-"""User API routes."""
+"""User API routes (Vendor)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...application.dtos import CreateUserDTO, UpdateUserDTO, UserResponseDTO
-from ...application.use_cases import UserService
+from ....application.vendor_dtos import CreateUserDTO, UpdateUserDTO, UserResponseDTO
+from ....application.vendor_use_case import UserService
 from ..dependencies import get_user_service
 
 router = APIRouter(prefix="/users", tags=["users"])

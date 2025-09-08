@@ -1,13 +1,16 @@
-"""Use cases for the application layer."""
+"""Use cases for the vendor application layer."""
 
 from __future__ import annotations
 
 from typing import List, Optional
 from uuid import UUID
 
-from ..domain.entities import User, Task, _sentinel
-from ..domain.repositories import UserRepository, TaskRepository
-from .dtos import (
+from ..domain.vendor.entities import User, Task
+from ..domain.vendor.repositories import (
+    UserRepository,
+    TaskRepository,
+)
+from .vendor_dtos import (
     CreateUserDTO,
     UpdateUserDTO,
     UserResponseDTO,
@@ -64,51 +67,51 @@ class UserService:
     async def update_user(
         self, user_id: UUID, dto: UpdateUserDTO
     ) -> Optional[UserResponseDTO]:
-        """Update a user."""
+        """Update user details."""
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
 
-        # Check if email is being changed and if it already exists
-        if dto.email:
-            new_email = dto.email.lower()
-            if new_email != user.email:
-                if await self.user_repository.exists_by_email(new_email):
+        # Determine new email if provided and perform duplicate check only when changing
+        new_email: Optional[str] = None
+        if dto.email is not None:
+            candidate = dto.email.lower()
+            if candidate != user.email.lower():
+                if await self.user_repository.exists_by_email(candidate):
                     raise ValueError("User with this email already exists")
-                user.email = new_email
+            new_email = candidate
 
-        # Update user's name if provided
-        if dto.name:
-            user.name = dto.name
-
-        # Call update_profile to set updated_at and persist changes
-        user.update_profile(user.name, user.email)
+        # Use entity method to set updated_at and apply provided fields
+        user.update_details(name=dto.name, email=new_email)
 
         updated_user = await self.user_repository.update(user)
+
         return UserResponseDTO(**updated_user.model_dump())
 
     async def delete_user(self, user_id: UUID) -> bool:
-        """Delete a user."""
+        """Delete a user by ID."""
         return await self.user_repository.delete(user_id)
 
     async def deactivate_user(self, user_id: UUID) -> Optional[UserResponseDTO]:
-        """Deactivate a user."""
+        """Deactivate a user by ID."""
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
 
         user.deactivate()
         updated_user = await self.user_repository.update(user)
+
         return UserResponseDTO(**updated_user.model_dump())
 
     async def activate_user(self, user_id: UUID) -> Optional[UserResponseDTO]:
-        """Activate a user."""
+        """Activate a user by ID."""
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             return None
 
         user.activate()
         updated_user = await self.user_repository.update(user)
+
         return UserResponseDTO(**updated_user.model_dump())
 
 
@@ -170,45 +173,25 @@ class TaskService:
     async def update_task(
         self, task_id: UUID, dto: UpdateTaskDTO
     ) -> Optional[TaskResponseDTO]:
-        """Update a task."""
+        """Update task details."""
         task = await self.task_repository.get_by_id(task_id)
         if not task:
             return None
 
-        update_data = dto.model_dump(exclude_unset=True)
-
-        # Handle detail updates
-        if "title" in update_data or "description" in update_data:
-            description = (
-                update_data.get("description")
-                if "description" in update_data
-                else _sentinel
-            )
-            task.update_details(
-                title=update_data.get("title"),
-                description=description,
-            )
-
-        # Handle status changes
-        if "status" in update_data:
-            new_status = update_data["status"]
-            if new_status == "running":
-                task.start()
-            elif new_status == "completed":
-                task.complete()
-            elif new_status == "failed":
-                task.fail()
-            elif new_status == "pending":
-                task.reset()
-            else:
-                # This should not be reachable due to DTO validation
-                raise ValueError(f"Invalid task status: {new_status}")
+        # Update provided fields via entity method to set updated_at
+        if dto.description is not None:
+            task.update_details(title=dto.title, description=dto.description)
+        else:
+            task.update_details(title=dto.title)
+        if dto.status is not None:
+            task.status = dto.status
 
         updated_task = await self.task_repository.update(task)
+
         return TaskResponseDTO(**updated_task.model_dump())
 
     async def delete_task(self, task_id: UUID) -> bool:
-        """Delete a task."""
+        """Delete a task by ID."""
         return await self.task_repository.delete(task_id)
 
     async def start_task(self, task_id: UUID) -> Optional[TaskResponseDTO]:
@@ -216,27 +199,24 @@ class TaskService:
         task = await self.task_repository.get_by_id(task_id)
         if not task:
             return None
-
         task.start()
-        updated_task = await self.task_repository.update(task)
-        return TaskResponseDTO(**updated_task.model_dump())
+        updated = await self.task_repository.update(task)
+        return TaskResponseDTO(**updated.model_dump())
 
     async def complete_task(self, task_id: UUID) -> Optional[TaskResponseDTO]:
         """Complete a task."""
         task = await self.task_repository.get_by_id(task_id)
         if not task:
             return None
-
         task.complete()
-        updated_task = await self.task_repository.update(task)
-        return TaskResponseDTO(**updated_task.model_dump())
+        updated = await self.task_repository.update(task)
+        return TaskResponseDTO(**updated.model_dump())
 
     async def fail_task(self, task_id: UUID) -> Optional[TaskResponseDTO]:
-        """Mark a task as failed."""
+        """Fail a task."""
         task = await self.task_repository.get_by_id(task_id)
         if not task:
             return None
-
         task.fail()
-        updated_task = await self.task_repository.update(task)
-        return TaskResponseDTO(**updated_task.model_dump())
+        updated = await self.task_repository.update(task)
+        return TaskResponseDTO(**updated.model_dump())

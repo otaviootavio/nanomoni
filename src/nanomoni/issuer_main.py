@@ -11,24 +11,23 @@ if sys.platform != "win32":
 
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     except ImportError:
-        pass  # uvloop not available, continue with default event loop
+        pass
 
-from .envs.vendor_env import get_settings
-from .api.vendor_api.app import create_app
+from .envs.issuer_env import get_settings
+from .api.issuer_api.app import create_issuer_app
 
 
 def main() -> None:
-    """Main entry point for the vendor application."""
-
     settings = get_settings()
-    app = create_app()
+    app = create_issuer_app()
 
-    print(f"Starting {settings.app_name} v{settings.app_version}")
+    print(f"Starting {settings.app_name} Issuer v{settings.app_version}")
     print(f"Database: {settings.database_url}")
-    print(f"API will be available at: http://{settings.api_host}:{settings.api_port}")
-    print(f"API Documentation: http://{settings.api_host}:{settings.api_port}/docs")
+    print(
+        f"Issuer API will be available at: http://{settings.api_host}:{settings.api_port}"
+    )
+    print(f"Docs: http://{settings.api_host}:{settings.api_port}/docs")
 
-    # Run the FastAPI application
     uvicorn.run(
         app,
         host=settings.api_host,
