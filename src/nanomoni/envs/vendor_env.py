@@ -17,6 +17,8 @@ class Settings(BaseModel):
     app_name: str
     app_version: str
 
+    issuer_base_url: str
+
 
 def get_settings() -> Settings:
     database_echo_str = os.environ.get("VENDOR_DATABASE_ECHO")
@@ -39,4 +41,5 @@ def get_settings() -> Settings:
         else None,
         app_name=os.environ.get("VENDOR_APP_NAME"),
         app_version=os.environ.get("VENDOR_APP_VERSION"),
+        issuer_base_url=os.environ.get("ISSUER_BASE_URL"),
     )

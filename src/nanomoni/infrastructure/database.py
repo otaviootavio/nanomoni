@@ -80,6 +80,15 @@ class DatabaseClient:
                 )
             """)
 
+            # Cache table for issuer public key
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS issuer_public_key (
+                    id TEXT PRIMARY KEY,
+                    der_b64 TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+
             # Create indexes for better performance
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
             conn.execute(

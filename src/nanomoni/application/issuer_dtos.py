@@ -42,5 +42,4 @@ class RegistrationCertificateDTO(BaseModel):
 
 
 class IssuerPublicKeyDTO(BaseModel):
-    pem: str
     der_b64: str

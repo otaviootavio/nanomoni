@@ -42,16 +42,13 @@ class IssuerService:
 
     def get_issuer_public_key(self) -> IssuerPublicKeyDTO:
         public_key = self.issuer_private_key.public_key()
-        pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode("utf-8")
+
         der = public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         der_b64 = base64.b64encode(der).decode("utf-8")
-        return IssuerPublicKeyDTO(pem=pem, der_b64=der_b64)
+        return IssuerPublicKeyDTO(der_b64=der_b64)
 
     async def start_registration(
         self, dto: StartRegistrationRequestDTO

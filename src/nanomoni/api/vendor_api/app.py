@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ...middleware.ecdsa import ECDSASignatureMiddleware
 
 from ...envs.vendor_env import get_settings
+from ...infrastructure.database import get_database_client
 from .routers import users, tasks
 
 settings = get_settings()
@@ -32,8 +33,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Database client for caching issuer public key
+    db_client = get_database_client(settings)
+
     # Add ECDSA signature verification middleware
-    app.add_middleware(ECDSASignatureMiddleware)
+    app.add_middleware(
+        ECDSASignatureMiddleware,
+        issuer_base_url=settings.issuer_base_url,
+        db_client=db_client,
+    )
 
     # Include routers
     app.include_router(users.router, prefix="/api/v1")
