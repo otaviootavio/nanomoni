@@ -14,14 +14,12 @@ if sys.platform != "win32":
         pass  # uvloop not available, continue with default event loop
 
 from .envs.vendor_env import get_settings
-from .api.vendor_api.app import create_app
 
 
 def main() -> None:
     """Main entry point for the vendor application."""
 
     settings = get_settings()
-    app = create_app()
 
     print(f"Starting {settings.app_name} v{settings.app_version}")
     print(f"Database: {settings.database_url}")
@@ -30,11 +28,11 @@ def main() -> None:
 
     # Run the FastAPI application
     uvicorn.run(
-        app,
+        "nanomoni.api.vendor_api.app:app",
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.api_debug,
-        log_level="info" if not settings.api_debug else "debug",
+        log_level="trace",
     )
 
 
