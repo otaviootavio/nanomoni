@@ -173,9 +173,13 @@ def _signed_request(
 def vendor_get_user_by_email(
     client: httpx.Client,
     vendor_base: str,
+    cert: Dict[str, Any],
+    private_key,
     email: str,
 ) -> Dict[str, Any]:
-    r = client.get(f"{vendor_base}/users/email/{email}")
+    r = _signed_request(
+        client, "GET", f"{vendor_base}/users/email/{email}", cert, private_key
+    )
     print_response("Vendor get user by email", r)
     r.raise_for_status()
     return r.json()
@@ -198,7 +202,7 @@ def vendor_create_user(
         return r.json()
     if r.status_code == 409:
         # Fetch existing user by email
-        return vendor_get_user_by_email(client, vendor_base, email)
+        return vendor_get_user_by_email(client, vendor_base, cert, private_key, email)
     r.raise_for_status()
     return r.json()
 
@@ -254,16 +258,19 @@ def vendor_complete_task(
 def vendor_list_tasks(
     client: httpx.Client,
     vendor_base: str,
+    cert: Dict[str, Any],
+    private_key,
 ) -> None:
-    # GET is not protected, but we may call it without auth headers
-    r = client.get(f"{vendor_base}/tasks/")
+    r = _signed_request(
+        client, "GET", f"{vendor_base}/tasks/", cert, private_key
+    )
     print_response("Vendor list tasks", r)
     r.raise_for_status()
 
 
 def main() -> None:
-    issuer_base_url = os.getenv("ISSUER_BASE_URL", "http://127.0.0.1:8001/api/v1")
-    vendor_base_url = os.getenv("BASE_URL", "http://127.0.0.1:8000/api/v1")
+    issuer_base_url = os.getenv("ISSUER_BASE_URL")
+    vendor_base_url = os.getenv("VENDOR_BASE_URL")
 
     settings = get_settings()
     private_key = serialization.load_pem_private_key(
@@ -301,7 +308,7 @@ def main() -> None:
 
         vendor_start_task(client, vendor_base_url, cert, private_key, task_id)
         vendor_complete_task(client, vendor_base_url, cert, private_key, task_id)
-        vendor_list_tasks(client, vendor_base_url)
+        vendor_list_tasks(client, vendor_base_url, cert, private_key)
 
 
 if __name__ == "__main__":

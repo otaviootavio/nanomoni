@@ -1,10 +1,10 @@
 services:
-  # client:
-  #   build:
-  #     context: .
-  #     dockerfile: dockerfiles/Dockerfile.client
-  #   networks:
-  #     - app-network
+  client:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.client
+    networks:
+      - app-network
 
   issuer:
     build:
