@@ -15,15 +15,14 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_HOME='/usr/local'
 
 # Application environment variables
-ENV ENVIRONMENT=${ENVIRONMENT} \
-    DATABASE_URL=${DATABASE_URL} \
-    DATABASE_ECHO=${DATABASE_ECHO} \
-    API_HOST=${API_HOST} \
-    API_PORT=${API_PORT} \
-    API_DEBUG=${API_DEBUG} \
-    API_CORS_ORIGINS=${API_CORS_ORIGINS} \
-    APP_NAME=${APP_NAME} \
-    APP_VERSION=${APP_VERSION}
+ENV VENDOR_DATABASE_ECHO=${VENDOR_DATABASE_ECHO} \
+    VENDOR_API_HOST=${VENDOR_API_HOST} \
+    VENDOR_API_PORT=${VENDOR_API_PORT} \
+    VENDOR_API_DEBUG=${VENDOR_API_DEBUG} \
+    VENDOR_API_CORS_ORIGINS=${VENDOR_API_CORS_ORIGINS} \
+    VENDOR_APP_NAME=${VENDOR_APP_NAME} \
+    VENDOR_APP_VERSION=${VENDOR_APP_VERSION} \
+    VENDOR_ISSUER_BASE_URL=${VENDOR_ISSUER_BASE_URL}
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN pip install pipx
@@ -37,4 +36,6 @@ COPY . /app
 
 RUN poetry install
 
-CMD ["poetry", "run", "python", "-m", "src.nanomoni.main"]
+RUN chmod +x scripts/vendor-entrypoint.sh
+
+ENTRYPOINT ["bash", "scripts/vendor-entrypoint.sh"] 

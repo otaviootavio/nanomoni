@@ -1,0 +1,29 @@
+services:
+  client:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.client
+    networks:
+      - app-network
+
+  issuer:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.issuer
+    ports:
+      - 8001:8001
+    networks:
+      - app-network
+
+  vendor:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.vendor
+    ports:
+      - 8000:8000
+    networks:
+      - app-network
+
+networks:
+  app-network:
+      

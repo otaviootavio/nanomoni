@@ -1,0 +1,42 @@
+FROM python:3.9.23-slim
+
+# Python
+ENV PYTHONFAULTHANDLER=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=random \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100
+
+# Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR='/var/cache/pypoetry' \
+    POETRY_HOME='/usr/local'
+
+# Application environment variables
+ENV ISSUER_DATABASE_URL=${ISSUER_DATABASE_URL} \
+    ISSUER_DATABASE_ECHO=${ISSUER_DATABASE_ECHO} \
+    ISSUER_API_HOST=${ISSUER_API_HOST} \
+    ISSUER_API_PORT=${ISSUER_API_PORT} \
+    ISSUER_API_DEBUG=${ISSUER_API_DEBUG} \
+    ISSUER_API_CORS_ORIGINS=${ISSUER_API_CORS_ORIGINS} \
+    ISSUER_APP_NAME=${ISSUER_APP_NAME} \
+    ISSUER_APP_VERSION=${ISSUER_APP_VERSION} \
+    ISSUER_PRIVATE_KEY_PEM=${ISSUER_PRIVATE_KEY_PEM}
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN pip install pipx
+RUN pipx install poetry==2.1.3
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock /app/
+COPY . /app
+
+RUN poetry install
+
+RUN chmod +x scripts/issuer-entrypoint.sh
+
+ENTRYPOINT ["bash", "scripts/issuer-entrypoint.sh"] 

@@ -14,12 +14,10 @@ if sys.platform != "win32":
         pass
 
 from .envs.issuer_env import get_settings
-from .api.issuer_api.app import create_issuer_app
 
 
 def main() -> None:
     settings = get_settings()
-    app = create_issuer_app()
 
     print(f"Starting {settings.app_name} Issuer v{settings.app_version}")
     print(f"Database: {settings.database_url}")
@@ -29,11 +27,11 @@ def main() -> None:
     print(f"Docs: http://{settings.api_host}:{settings.api_port}/docs")
 
     uvicorn.run(
-        app,
+        "nanomoni.api.issuer_api.app:app",
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.api_debug,
-        log_level="info" if not settings.api_debug else "debug",
+        log_level="trace",
     )
 
 

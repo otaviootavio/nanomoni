@@ -42,3 +42,5 @@ def create_issuer_app() -> FastAPI:
         return {"status": "healthy", "service": f"{settings.app_name} Issuer"}
 
     return app
+
+app = create_issuer_app()

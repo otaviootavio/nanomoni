@@ -175,20 +175,20 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     async def _get_issuer_public_key_with_cache(self):
-        # 1) In-memory cache
-        if self._issuer_public_key is not None:
-            return self._issuer_public_key
+        # # 1) In-memory cache
+        # if self._issuer_public_key is not None:
+        #     return self._issuer_public_key
 
-        # 2) SQLite cache
-        der_b64 = await self._read_issuer_pubkey_from_sqlite()
-        if der_b64:
-            try:
-                der = base64.b64decode(der_b64, validate=True)
-                self._issuer_public_key = serialization.load_der_public_key(der)
-                self._issuer_public_key_der_b64 = der_b64
-                return self._issuer_public_key
-            except Exception:
-                pass  # fall through to fetch
+        # # 2) SQLite cache
+        # der_b64 = await self._read_issuer_pubkey_from_sqlite()
+        # if der_b64:
+        #     try:
+        #         der = base64.b64decode(der_b64, validate=True)
+        #         self._issuer_public_key = serialization.load_der_public_key(der)
+        #         self._issuer_public_key_der_b64 = der_b64
+        #         return self._issuer_public_key
+        #     except Exception:
+        #         pass  # fall through to fetch
 
         # 3) Fetch from issuer
         fetched = await self._fetch_issuer_public_key()
