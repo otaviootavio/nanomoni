@@ -87,7 +87,7 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        # Ensure issuer public key is available (in-memory -> sqlite -> fetch)
+        # Ensure issuer public key is available (in-memory -> redis -> fetch)
         try:
             issuer_public_key = await self._get_issuer_public_key_with_cache()
             if issuer_public_key is None:
@@ -179,8 +179,8 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         # if self._issuer_public_key is not None:
         #     return self._issuer_public_key
 
-        # # 2) SQLite cache
-        # der_b64 = await self._read_issuer_pubkey_from_sqlite()
+        # # 2) Redis cache
+        # der_b64 = await self._read_issuer_pubkey_from_cache()
         # if der_b64:
         #     try:
         #         der = base64.b64decode(der_b64, validate=True)
@@ -202,43 +202,28 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         except Exception:
             return None
 
-        # Persist to SQLite cache (best effort)
+        # Persist to Redis cache (best effort)
         try:
-            await self._write_issuer_pubkey_to_sqlite(fetched_der_b64)
+            await self._write_issuer_pubkey_to_cache(fetched_der_b64)
         except Exception:
             pass
 
         return self._issuer_public_key
 
-    async def _read_issuer_pubkey_from_sqlite(self) -> Optional[str]:
+    async def _read_issuer_pubkey_from_cache(self) -> Optional[str]:
         if not self._db_client:
             return None
         async with self._db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT der_b64 FROM issuer_public_key WHERE id = ?",
-                ("default",),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
-            return row[0] if isinstance(row, tuple) else row["der_b64"]
+            return await conn.get("issuer_public_key:der_b64")
 
-    async def _write_issuer_pubkey_to_sqlite(self, der_b64: str) -> None:
+    async def _write_issuer_pubkey_to_cache(self, der_b64: str) -> None:
         if not self._db_client:
             return
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO issuer_public_key (id, der_b64, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET der_b64=excluded.der_b64, updated_at=excluded.updated_at
-                """,
-                ("default", der_b64, now_iso),
-            )
-            conn.commit()
+            # Store both value and timestamp for potential inspection
+            await conn.set("issuer_public_key:der_b64", der_b64)
+            await conn.set("issuer_public_key:updated_at", now_iso)
 
     async def _fetch_issuer_public_key(self) -> Optional[str]:
         if not self._issuer_base_url:
