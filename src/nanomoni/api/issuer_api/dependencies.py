@@ -6,9 +6,10 @@ from functools import lru_cache
 
 from ...envs.issuer_env import get_settings, Settings
 from ...infrastructure.database import get_database_client, DatabaseClient
+from ...infrastructure.storage import RedisKeyValueStore
 from ...infrastructure.issuer.repositories import (
-    SQLiteIssuerClientRepository,
-    SQLiteIssuerChallengeRepository,
+    IssuerClientRepositoryImpl,
+    IssuerChallengeRepositoryImpl,
 )
 from ...application.issuer_use_case import IssuerService
 
@@ -24,14 +25,20 @@ def get_database_client_dependency() -> DatabaseClient:
     return get_database_client(settings)
 
 
-def get_issuer_client_repository() -> SQLiteIssuerClientRepository:
+@lru_cache()
+def get_store_dependency() -> RedisKeyValueStore:
     db_client = get_database_client_dependency()
-    return SQLiteIssuerClientRepository(db_client)
+    return RedisKeyValueStore(db_client)
 
 
-def get_issuer_challenge_repository() -> SQLiteIssuerChallengeRepository:
-    db_client = get_database_client_dependency()
-    return SQLiteIssuerChallengeRepository(db_client)
+def get_issuer_client_repository() -> IssuerClientRepositoryImpl:
+    store = get_store_dependency()
+    return IssuerClientRepositoryImpl(store)
+
+
+def get_issuer_challenge_repository() -> IssuerChallengeRepositoryImpl:
+    store = get_store_dependency()
+    return IssuerChallengeRepositoryImpl(store)
 
 
 def get_issuer_service() -> IssuerService:

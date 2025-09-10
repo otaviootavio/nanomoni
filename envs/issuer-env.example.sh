@@ -1,7 +1,7 @@
 # Issuer environment variables
 
-# Database settings
-export ISSUER_DATABASE_URL="sqlite:///issuer-nanomoni.db"
+# Database settings (Redis)
+export ISSUER_DATABASE_URL="redis://redis-issuer:6380/0"
 export ISSUER_DATABASE_ECHO="false"
 
 # API settings

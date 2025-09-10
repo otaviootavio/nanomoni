@@ -1,8 +1,7 @@
-"""Issuer-related SQLite repository implementations."""
+"""Issuer repositories implemented over a storage abstraction."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -11,99 +10,56 @@ from ...domain.issuer.repositories import (
     IssuerClientRepository,
     IssuerChallengeRepository,
 )
-from ..database import DatabaseClient
+from ..storage import KeyValueStore
 
 
-class SQLiteIssuerClientRepository(IssuerClientRepository):
-    """SQLite implementation for issuer clients."""
+class IssuerClientRepositoryImpl(IssuerClientRepository):
+    """Issuer client repository using a KeyValueStore."""
 
-    def __init__(self, db_client: DatabaseClient):
-        self.db_client = db_client
+    def __init__(self, store: KeyValueStore):
+        self.store = store
 
     async def create(self, client: IssuerClient) -> IssuerClient:
-        async with self.db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO issuer_clients (id, public_key_der_b64, balance, created_at)
-                VALUES (?, ?, ?, ?)
-            """,
-                (
-                    str(client.id),
-                    client.public_key_der_b64,
-                    client.balance,
-                    client.created_at.isoformat(),
-                ),
-            )
-            conn.commit()
-            return client
+        pk_key = f"issuer_client:pk:{client.public_key_der_b64}"
+        existing = await self.store.get(pk_key)
+        if existing is not None:
+            raise ValueError("Client with this public key already exists")
+
+        client_key = f"issuer_client:{client.id}"
+        await self.store.set(client_key, client.model_dump_json())
+        await self.store.set(pk_key, str(client.id))
+        return client
 
     async def get_by_public_key(
         self, public_key_der_b64: str
     ) -> Optional[IssuerClient]:
-        async with self.db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM issuer_clients WHERE public_key_der_b64 = ?",
-                (public_key_der_b64,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
-            return IssuerClient(
-                id=UUID(row["id"]),
-                public_key_der_b64=row["public_key_der_b64"],
-                balance=int(row["balance"]),
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
+        pk_key = f"issuer_client:pk:{public_key_der_b64}"
+        client_id = await self.store.get(pk_key)
+        if not client_id:
+            return None
+        data = await self.store.get(f"issuer_client:{client_id}")
+        if not data:
+            return None
+        return IssuerClient.model_validate_json(data)
 
 
-class SQLiteIssuerChallengeRepository(IssuerChallengeRepository):
-    """SQLite implementation for issuer challenges."""
+class IssuerChallengeRepositoryImpl(IssuerChallengeRepository):
+    """Issuer challenge repository using a KeyValueStore."""
 
-    def __init__(self, db_client: DatabaseClient):
-        self.db_client = db_client
+    def __init__(self, store: KeyValueStore):
+        self.store = store
 
     async def create(self, challenge: IssuerChallenge) -> IssuerChallenge:
-        async with self.db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO issuer_challenges (id, client_public_key_der_b64, nonce_b64, created_at)
-                VALUES (?, ?, ?, ?)
-            """,
-                (
-                    str(challenge.id),
-                    challenge.client_public_key_der_b64,
-                    challenge.nonce_b64,
-                    challenge.created_at.isoformat(),
-                ),
-            )
-            conn.commit()
-            return challenge
+        key = f"issuer_challenge:{challenge.id}"
+        await self.store.set(key, challenge.model_dump_json())
+        return challenge
 
     async def get_by_id(self, challenge_id: UUID) -> Optional[IssuerChallenge]:
-        async with self.db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM issuer_challenges WHERE id = ?",
-                (str(challenge_id),),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
-            return IssuerChallenge(
-                id=UUID(row["id"]),
-                client_public_key_der_b64=row["client_public_key_der_b64"],
-                nonce_b64=row["nonce_b64"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
+        data = await self.store.get(f"issuer_challenge:{challenge_id}")
+        if not data:
+            return None
+        return IssuerChallenge.model_validate_json(data)
 
     async def delete(self, challenge_id: UUID) -> bool:
-        async with self.db_client.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "DELETE FROM issuer_challenges WHERE id = ?", (str(challenge_id),)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        res = await self.store.delete(f"issuer_challenge:{challenge_id}")
+        return res == 1

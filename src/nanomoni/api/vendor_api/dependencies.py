@@ -6,9 +6,10 @@ from functools import lru_cache
 
 from ...envs.vendor_env import get_settings, Settings
 from ...infrastructure.database import get_database_client, DatabaseClient
+from ...infrastructure.storage import RedisKeyValueStore
 from ...infrastructure.vendor.repositories import (
-    SQLiteUserRepository,
-    SQLiteTaskRepository,
+    UserRepositoryImpl,
+    TaskRepositoryImpl,
 )
 from ...application.vendor_use_case import UserService, TaskService
 
@@ -24,14 +25,20 @@ def get_database_client_dependency() -> DatabaseClient:
     return get_database_client(settings)
 
 
-def get_user_repository() -> SQLiteUserRepository:
+@lru_cache()
+def get_store_dependency() -> RedisKeyValueStore:
     db_client = get_database_client_dependency()
-    return SQLiteUserRepository(db_client)
+    return RedisKeyValueStore(db_client)
 
 
-def get_task_repository() -> SQLiteTaskRepository:
-    db_client = get_database_client_dependency()
-    return SQLiteTaskRepository(db_client)
+def get_user_repository() -> UserRepositoryImpl:
+    store = get_store_dependency()
+    return UserRepositoryImpl(store)
+
+
+def get_task_repository() -> TaskRepositoryImpl:
+    store = get_store_dependency()
+    return TaskRepositoryImpl(store)
 
 
 def get_user_service() -> UserService:

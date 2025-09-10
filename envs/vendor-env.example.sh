@@ -1,7 +1,7 @@
 # Vendor environment variables
 
-# Database settings
-export VENDOR_DATABASE_URL="sqlite:///vendor-nanomoni.db"
+# Database settings (Redis)
+export VENDOR_DATABASE_URL="redis://redis-vendor:6379/0"
 export VENDOR_DATABASE_ECHO="false"
 
 # API settings
@@ -15,5 +15,5 @@ export VENDOR_APP_NAME="Vendor NanoMoni"
 export VENDOR_APP_VERSION="1.0.0"
 
 # Issuer base URL (used by middleware to fetch issuer public key)
-# Default issuer example: http://127.0.0.1:8001/api/v1
+# Default issuer example: http://issuer:8001/api/v1 (docker service name)
 export ISSUER_BASE_URL="http://issuer:8001/api/v1" 
