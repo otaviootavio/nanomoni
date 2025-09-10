@@ -99,8 +99,12 @@ class TaskRepositoryImpl(TaskRepository):
 
         created_ts = task.created_at.timestamp()
         await self.store.zadd("tasks:all", {str(task.id): created_ts})
-        await self.store.zadd(f"tasks:by_user:{task.user_id}", {str(task.id): created_ts})
-        await self.store.zadd(f"tasks:by_status:{task.status}", {str(task.id): created_ts})
+        await self.store.zadd(
+            f"tasks:by_user:{task.user_id}", {str(task.id): created_ts}
+        )
+        await self.store.zadd(
+            f"tasks:by_status:{task.status}", {str(task.id): created_ts}
+        )
         return task
 
     async def get_by_id(self, task_id: UUID) -> Optional[Task]:
@@ -155,7 +159,8 @@ class TaskRepositoryImpl(TaskRepository):
         if old_status and old_status != task.status:
             await self.store.zrem(f"tasks:by_status:{old_status}", str(task.id))
             await self.store.zadd(
-                f"tasks:by_status:{task.status}", {str(task.id): task.created_at.timestamp()}
+                f"tasks:by_status:{task.status}",
+                {str(task.id): task.created_at.timestamp()},
             )
         return task
 

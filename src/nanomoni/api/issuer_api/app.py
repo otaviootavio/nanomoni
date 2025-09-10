@@ -43,4 +43,5 @@ def create_issuer_app() -> FastAPI:
 
     return app
 
+
 app = create_issuer_app()

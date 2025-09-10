@@ -261,9 +261,7 @@ def vendor_list_tasks(
     cert: Dict[str, Any],
     private_key,
 ) -> None:
-    r = _signed_request(
-        client, "GET", f"{vendor_base}/tasks/", cert, private_key
-    )
+    r = _signed_request(client, "GET", f"{vendor_base}/tasks/", cert, private_key)
     print_response("Vendor list tasks", r)
     r.raise_for_status()
 

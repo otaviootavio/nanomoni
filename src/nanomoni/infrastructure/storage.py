@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Mapping, Optional
+from typing import Mapping, Optional
 
 from .database import DatabaseClient
 
@@ -64,4 +64,4 @@ class RedisKeyValueStore(KeyValueStore):
 
     async def zrem(self, key: str, member: str) -> int:
         async with self._db_client.get_connection() as conn:
-            return await conn.zrem(key, member) 
+            return await conn.zrem(key, member)

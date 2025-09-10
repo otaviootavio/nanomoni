@@ -22,6 +22,7 @@ from cryptography.exceptions import InvalidSignature
 def log_timing(tag: Optional[str] = None):
     def decorator(func):
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 t0 = time.time()
@@ -33,6 +34,7 @@ def log_timing(tag: Optional[str] = None):
 
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 t0 = time.time()
@@ -40,7 +42,9 @@ def log_timing(tag: Optional[str] = None):
                     return func(*args, **kwargs)
                 finally:
                     dt_ms = (time.time() - t0) * 1000.0
-                    print(f"[ECDSA-TIME][{datetime.now().isoformat()}] [{tag or func.__name__}] {dt_ms:.3f}ms")
+                    print(
+                        f"[ECDSA-TIME][{datetime.now().isoformat()}] [{tag or func.__name__}] {dt_ms:.3f}ms"
+                    )
 
             return sync_wrapper
 
@@ -98,7 +102,9 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         request, body = await self._buffer_request_body(request)
 
         # Required headers
-        cert_b64, cert_sig_b64, body_sig_b64, error_response = self._extract_required_headers(request)
+        cert_b64, cert_sig_b64, body_sig_b64, error_response = (
+            self._extract_required_headers(request)
+        )
         if error_response:
             return error_response
 
@@ -111,21 +117,29 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             return self._bad_gateway("Failed to obtain issuer public key")
 
         # Decode certificate + signature
-        certificate_bytes, certificate_signature_bytes, error_response = self._decode_certificate_and_signature(cert_b64, cert_sig_b64)
+        certificate_bytes, certificate_signature_bytes, error_response = (
+            self._decode_certificate_and_signature(cert_b64, cert_sig_b64)
+        )
         if error_response:
             return error_response
 
         # Verify issuer signature over certificate bytes
-        if not self._verify_issuer_signature(issuer_public_key, certificate_signature_bytes, certificate_bytes):
+        if not self._verify_issuer_signature(
+            issuer_public_key, certificate_signature_bytes, certificate_bytes
+        ):
             return self._unauthorized("Invalid issuer signature on certificate")
 
         # Parse certificate to extract client public key
-        cert_obj, client_pub_der_b64, balance_value, error_response = self._parse_certificate_payload(certificate_bytes)
+        cert_obj, client_pub_der_b64, balance_value, error_response = (
+            self._parse_certificate_payload(certificate_bytes)
+        )
         if error_response:
             return error_response
 
         # Load client public key from certificate
-        client_public_key, error_response = self._load_client_public_key_from_der_b64(client_pub_der_b64)
+        client_public_key, error_response = self._load_client_public_key_from_der_b64(
+            client_pub_der_b64
+        )
         if error_response:
             return error_response
 
@@ -135,7 +149,9 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             return error_response
 
         # Verify client signature over request body
-        if not self._verify_client_body_signature(client_public_key, body_signature_bytes, body):
+        if not self._verify_client_body_signature(
+            client_public_key, body_signature_bytes, body
+        ):
             return self._unauthorized("Invalid ECDSA signature for request body")
 
         # Attach certificate context for downstream handlers if needed
@@ -145,7 +161,7 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             balance_value=balance_value,
             cert_obj=cert_obj,
         )
- 
+
         return await call_next(request)
 
     @log_timing("H1_should_skip")
@@ -171,8 +187,13 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         cert_sig_b64 = request.headers.get("X-Certificate-Signature")
         body_sig_b64 = request.headers.get("X-Signature")
         if not cert_b64 or not cert_sig_b64 or not body_sig_b64:
-            return None, None, None, self._unauthorized(
-                "Missing X-Certificate, X-Certificate-Signature, or X-Signature header"
+            return (
+                None,
+                None,
+                None,
+                self._unauthorized(
+                    "Missing X-Certificate, X-Certificate-Signature, or X-Signature header"
+                ),
             )
         return cert_b64, cert_sig_b64, body_sig_b64, None
 
@@ -195,12 +216,21 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             certificate_signature_bytes = base64.b64decode(cert_sig_b64, validate=True)
             return certificate_bytes, certificate_signature_bytes, None
         except Exception:
-            return None, None, self._bad_request(
-                "Invalid certificate or certificate signature encoding (expected base64)"
+            return (
+                None,
+                None,
+                self._bad_request(
+                    "Invalid certificate or certificate signature encoding (expected base64)"
+                ),
             )
 
     @log_timing("H6_verify_issuer_signature")
-    def _verify_issuer_signature(self, issuer_public_key, certificate_signature_bytes: bytes, certificate_bytes: bytes) -> bool:
+    def _verify_issuer_signature(
+        self,
+        issuer_public_key,
+        certificate_signature_bytes: bytes,
+        certificate_bytes: bytes,
+    ) -> bool:
         try:
             issuer_public_key.verify(
                 certificate_signature_bytes,
@@ -241,7 +271,9 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             )
 
     @log_timing("H10_verify_client_body_signature")
-    def _verify_client_body_signature(self, client_public_key, body_signature_bytes: bytes, body: bytes) -> bool:
+    def _verify_client_body_signature(
+        self, client_public_key, body_signature_bytes: bytes, body: bytes
+    ) -> bool:
         try:
             client_public_key.verify(
                 body_signature_bytes, body, ec.ECDSA(hashes.SHA256())
@@ -265,8 +297,6 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
 
     @log_timing("H12_get_issuer_public_key_with_cache")
     async def _get_issuer_public_key_with_cache(self):
-        
-
         # 1) Redis cache
         der_b64 = await self._read_issuer_pubkey_from_cache()
         if der_b64:
