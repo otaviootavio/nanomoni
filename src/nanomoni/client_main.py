@@ -10,11 +10,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from nanomoni.envs.client_env import get_settings
+from nanomoni.middleware.ecdsa import log_timing
 
 
 PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+@log_timing("C1_public_key_der_b64_from_private")
 def public_key_der_b64_from_private(private_key) -> str:
     public_der = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.DER,
@@ -23,23 +25,21 @@ def public_key_der_b64_from_private(private_key) -> str:
     return base64.b64encode(public_der).decode("utf-8")
 
 
+@log_timing("C2_sign_body")
 def sign_body(private_key, body: bytes) -> str:
     signature_der = private_key.sign(body, ec.ECDSA(hashes.SHA256()))
     return base64.b64encode(signature_der).decode("utf-8")
 
 
-def print_response(label: str, r: httpx.Response) -> None:
-    try:
-        data = r.json()
-        pretty = json.dumps(data, indent=2, ensure_ascii=False)
-        print(f"{label}: {r.status_code}\n{pretty}")
-    except Exception:
-        print(f"{label}: {r.status_code} {r.text}")
+@log_timing("C3_print_response")
+def print_response(label: str) -> None:
+    print(f"{label}")
 
 
+@log_timing("C4_fetch_issuer_public_key")
 def _fetch_issuer_public_key(client: httpx.Client, issuer_base: str):
     r = client.get(f"{issuer_base}/issuer/public-key")
-    print_response("Issuer public key", r)
+    print_response("Issuer public key")
     r.raise_for_status()
     data = r.json()
     # Prefer DER b64 for compact transport
@@ -48,6 +48,7 @@ def _fetch_issuer_public_key(client: httpx.Client, issuer_base: str):
     return serialization.load_der_public_key(der), der_b64
 
 
+@log_timing("C5_decode_certificate")
 def _decode_certificate(response_json: Dict[str, Any]) -> Dict[str, Any]:
     certificate_bytes = base64.b64decode(
         response_json["certificate_b64"]
@@ -68,6 +69,7 @@ def _decode_certificate(response_json: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@log_timing("C6_validate_certificate")
 def _validate_certificate(
     issuer_public_key,
     certificate_bytes: bytes,
@@ -85,6 +87,7 @@ def _validate_certificate(
         raise RuntimeError("Certificate public key does not match our key")
 
 
+@log_timing("C7_issuer_register")
 def issuer_register(
     client: httpx.Client, issuer_base: str, public_key_b64: str, private_key
 ) -> Dict[str, Any]:
@@ -94,7 +97,7 @@ def issuer_register(
     # 1) Start registration
     start_payload = {"client_public_key_der_b64": public_key_b64}
     r = client.post(f"{issuer_base}/issuer/registration/start", json=start_payload)
-    print_response("Issuer start registration", r)
+    print_response("Issuer start registration")
     r.raise_for_status()
     start_data = r.json()
     challenge_id = start_data["challenge_id"]
@@ -109,7 +112,7 @@ def issuer_register(
     r = client.post(
         f"{issuer_base}/issuer/registration/complete", json=complete_payload
     )
-    print_response("Issuer complete registration", r)
+    print_response("Issuer complete registration")
     r.raise_for_status()
     resp_json = r.json()
 
@@ -142,6 +145,7 @@ def issuer_register(
 # ---------- Vendor helpers using signed headers ----------
 
 
+@log_timing("C8_auth_headers")
 def _auth_headers(cert: Dict[str, Any], body: bytes, private_key) -> Dict[str, str]:
     return {
         "X-Certificate": cert["certificate_b64"],
@@ -152,6 +156,7 @@ def _auth_headers(cert: Dict[str, Any], body: bytes, private_key) -> Dict[str, s
     }
 
 
+@log_timing("C9_signed_request")
 def _signed_request(
     client: httpx.Client,
     method: str,
@@ -170,6 +175,7 @@ def _signed_request(
     return client.request(method, url, content=body, headers=headers)
 
 
+@log_timing("C10_vendor_get_user_by_email")
 def vendor_get_user_by_email(
     client: httpx.Client,
     vendor_base: str,
@@ -180,11 +186,12 @@ def vendor_get_user_by_email(
     r = _signed_request(
         client, "GET", f"{vendor_base}/users/email/{email}", cert, private_key
     )
-    print_response("Vendor get user by email", r)
+    print_response("Vendor get user by email")
     r.raise_for_status()
     return r.json()
 
 
+@log_timing("C11_vendor_create_user")
 def vendor_create_user(
     client: httpx.Client,
     vendor_base: str,
@@ -197,7 +204,7 @@ def vendor_create_user(
     r = _signed_request(
         client, "POST", f"{vendor_base}/users/", cert, private_key, payload
     )
-    print_response("Vendor create user", r)
+    print_response("Vendor create user")
     if r.status_code == 201:
         return r.json()
     if r.status_code == 409:
@@ -207,6 +214,7 @@ def vendor_create_user(
     return r.json()
 
 
+@log_timing("C12_vendor_create_task")
 def vendor_create_task(
     client: httpx.Client,
     vendor_base: str,
@@ -220,11 +228,12 @@ def vendor_create_task(
     r = _signed_request(
         client, "POST", f"{vendor_base}/tasks/", cert, private_key, payload
     )
-    print_response("Vendor create task", r)
+    print_response("Vendor create task")
     r.raise_for_status()
     return r.json()
 
 
+@log_timing("C13_vendor_start_task")
 def vendor_start_task(
     client: httpx.Client,
     vendor_base: str,
@@ -235,11 +244,12 @@ def vendor_start_task(
     r = _signed_request(
         client, "PATCH", f"{vendor_base}/tasks/{task_id}/start", cert, private_key
     )
-    print_response("Vendor start task", r)
+    print_response("Vendor start task")
     r.raise_for_status()
     return r.json()
 
 
+@log_timing("C14_vendor_complete_task")
 def vendor_complete_task(
     client: httpx.Client,
     vendor_base: str,
@@ -250,11 +260,12 @@ def vendor_complete_task(
     r = _signed_request(
         client, "PATCH", f"{vendor_base}/tasks/{task_id}/complete", cert, private_key
     )
-    print_response("Vendor complete task", r)
+    print_response("Vendor complete task")
     r.raise_for_status()
     return r.json()
 
 
+@log_timing("C15_vendor_list_tasks")
 def vendor_list_tasks(
     client: httpx.Client,
     vendor_base: str,
@@ -262,10 +273,11 @@ def vendor_list_tasks(
     private_key,
 ) -> None:
     r = _signed_request(client, "GET", f"{vendor_base}/tasks/", cert, private_key)
-    print_response("Vendor list tasks", r)
+    print_response("Vendor list tasks")
     r.raise_for_status()
 
 
+@log_timing("C16_main")
 def main() -> None:
     issuer_base_url = os.getenv("ISSUER_BASE_URL")
     vendor_base_url = os.getenv("VENDOR_BASE_URL")
@@ -280,7 +292,7 @@ def main() -> None:
     with httpx.Client(timeout=10.0) as client:
         # Issuer registration flow (Alice registers with issuer Bob)
         cert = issuer_register(client, issuer_base_url, public_key_b64, private_key)
-        print(json.dumps(cert, indent=2, ensure_ascii=False))
+        # print(json.dumps(cert, indent=2, ensure_ascii=False))
 
         # Vendor flow using certificate
         user = vendor_create_user(

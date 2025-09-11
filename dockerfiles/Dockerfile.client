@@ -37,6 +37,6 @@ COPY . /app
 
 RUN poetry install
 
-RUN chmod +x scripts/client-entrypint.sh
+RUN chmod +x scripts/client-entrypoint.sh
 
-ENTRYPOINT ["bash", "scripts/client-entrypint.sh"] 
+ENTRYPOINT ["bash", "scripts/client-entrypoint.sh"] 

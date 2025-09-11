@@ -21,6 +21,23 @@ from cryptography.exceptions import InvalidSignature
 
 def log_timing(tag: Optional[str] = None):
     def decorator(func):
+        def _extract_request_info(args, kwargs) -> tuple[Optional[str], Optional[str]]:
+            req = None
+            for arg in args:
+                if isinstance(arg, Request):
+                    req = arg
+                    break
+            if req is None:
+                req = kwargs.get("request")
+            try:
+                if isinstance(req, Request):
+                    method = req.method.upper()
+                    path = req.url.path
+                    return method, path
+                return None, None
+            except Exception:
+                return None, None
+
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
@@ -30,7 +47,12 @@ def log_timing(tag: Optional[str] = None):
                     return await func(*args, **kwargs)
                 finally:
                     dt_ms = (time.time() - t0) * 1000.0
-                    print(f"[ECDSA-TIME][{tag or func.__name__}] {dt_ms:.3f}ms")
+                    method, route = _extract_request_info(args, kwargs)
+                    method = method or "N/A"
+                    route = route or "N/A"
+                    print(
+                        f"[ECDSA-TIME][{datetime.now().isoformat()}] [{tag or func.__name__}][{method}][{route}] {dt_ms:.3f}ms"
+                    )
 
             return async_wrapper
         else:
@@ -42,13 +64,42 @@ def log_timing(tag: Optional[str] = None):
                     return func(*args, **kwargs)
                 finally:
                     dt_ms = (time.time() - t0) * 1000.0
+                    method, route = _extract_request_info(args, kwargs)
+                    method = method or "N/A"
+                    route = route or "N/A"
                     print(
-                        f"[ECDSA-TIME][{datetime.now().isoformat()}] [{tag or func.__name__}] {dt_ms:.3f}ms"
+                        f"[ECDSA-TIME][{datetime.now().isoformat()}] [{tag or func.__name__}] [{method}] [{route}] {dt_ms:.3f}ms"
                     )
 
             return sync_wrapper
 
     return decorator
+
+
+# ## Data transform stuff
+# _should_skip --> H1_should_skip
+# _buffer_request_body --> H2_buffer_request_body
+# _extract_required_headers --> H3_extract_required_headers
+
+# _decode_certificate_and_signature --> H5_decode_certificate_and_signature
+# _decode_body_signature --> H9_decode_body_signature
+# _parse_certificate_payload --> H7_parse_certificate_payload
+# _load_client_public_key_from_der_b64 --> H8_load_client_public_key
+
+# ## Database query stuff
+# # Father
+# _get_issuer_public_key_with_cache --> H12_get_issuer_public_key_with_cache
+#     ## Son
+#     _read_issuer_pubkey_from_cache --> H13_read_cache ( deleted the logs, generates double count at the end )
+#     _fetch_issuer_public_key --> H15_fetch_issuer_public_key ( deleted the logs, generates double count at the end )
+#     _write_issuer_pubkey_to_cache --> H14_write_cache ( deleted the logs, generates double count at the end )
+
+# ## Crypto transform stuff
+# _verify_issuer_signature --> H6_verify_issuer_signature
+# _verify_client_body_signature --> H010_verify_client_body_signature
+
+# ## Data transform stuff
+# _attach_request_context --> H11_attach_request_context --> H11_attach_request_context
 
 
 class ECDSASignatureMiddleware(BaseHTTPMiddleware):
@@ -108,14 +159,6 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         if error_response:
             return error_response
 
-        # Ensure issuer public key is available
-        try:
-            issuer_public_key = await self._get_issuer_public_key_with_cache()
-            if issuer_public_key is None:
-                return self._bad_gateway("Unable to obtain issuer public key")
-        except Exception:
-            return self._bad_gateway("Failed to obtain issuer public key")
-
         # Decode certificate + signature
         certificate_bytes, certificate_signature_bytes, error_response = (
             self._decode_certificate_and_signature(cert_b64, cert_sig_b64)
@@ -123,16 +166,16 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         if error_response:
             return error_response
 
-        # Verify issuer signature over certificate bytes
-        if not self._verify_issuer_signature(
-            issuer_public_key, certificate_signature_bytes, certificate_bytes
-        ):
-            return self._unauthorized("Invalid issuer signature on certificate")
+        # Decode body signature
+        body_signature_bytes, error_response = self._decode_body_signature(body_sig_b64)
+        if error_response:
+            return error_response
 
         # Parse certificate to extract client public key
         cert_obj, client_pub_der_b64, balance_value, error_response = (
             self._parse_certificate_payload(certificate_bytes)
         )
+
         if error_response:
             return error_response
 
@@ -143,10 +186,19 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         if error_response:
             return error_response
 
-        # Decode body signature
-        body_signature_bytes, error_response = self._decode_body_signature(body_sig_b64)
-        if error_response:
-            return error_response
+        # Ensure issuer public key is available
+        try:
+            issuer_public_key = await self._get_issuer_public_key_with_cache()
+            if issuer_public_key is None:
+                return self._bad_gateway("Unable to obtain issuer public key")
+        except Exception:
+            return self._bad_gateway("Failed to obtain issuer public key")
+
+        # Verify issuer signature over certificate bytes
+        if not self._verify_issuer_signature(
+            issuer_public_key, certificate_signature_bytes, certificate_bytes
+        ):
+            return self._unauthorized("Invalid issuer signature on certificate")
 
         # Verify client signature over request body
         if not self._verify_client_body_signature(
@@ -270,7 +322,7 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
                 "Invalid body signature encoding (expected base64)"
             )
 
-    @log_timing("H10_verify_client_body_signature")
+    @log_timing("H010_verify_client_body_signature")
     def _verify_client_body_signature(
         self, client_public_key, body_signature_bytes: bytes, body: bytes
     ) -> bool:
@@ -328,14 +380,14 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
 
         return self._issuer_public_key
 
-    @log_timing("H13_read_cache")
+    # @log_timing("H13_read_cache")
     async def _read_issuer_pubkey_from_cache(self) -> Optional[str]:
         if not self._db_client:
             return None
         async with self._db_client.get_connection() as conn:
             return await conn.get("issuer_public_key:der_b64")
 
-    @log_timing("H14_write_cache")
+    # @log_timing("H14_write_cache")
     async def _write_issuer_pubkey_to_cache(self, der_b64: str) -> None:
         if not self._db_client:
             return
@@ -345,7 +397,7 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             await conn.set("issuer_public_key:der_b64", der_b64)
             await conn.set("issuer_public_key:updated_at", now_iso)
 
-    @log_timing("H15_fetch_issuer_public_key")
+    # @log_timing("H15_fetch_issuer_public_key")
     async def _fetch_issuer_public_key(self) -> Optional[str]:
         if not self._issuer_base_url:
             return None
@@ -357,16 +409,3 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             data = resp.json()
             der_b64 = data.get("der_b64")
             return der_b64
-
-    @log_timing("H16_load_public_key")
-    def _load_public_key(self, header_value: str):
-        # Detect PEM vs base64 DER
-        if "BEGIN PUBLIC KEY" in header_value:
-            return serialization.load_pem_public_key(header_value.encode("utf-8"))
-
-        try:
-            der_bytes = base64.b64decode(header_value, validate=True)
-        except Exception as exc:
-            raise ValueError("Not PEM or base64 DER") from exc
-
-        return serialization.load_der_public_key(der_bytes)
