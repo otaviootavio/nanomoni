@@ -4,8 +4,6 @@ import base64
 import hashlib
 import json
 import os
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
 
 from ....domain.issuer.entities import (
@@ -22,6 +20,15 @@ from ...issuer_dtos import (
     OpenChannelResponseDTO,
     CloseChannelRequestDTO,
     CloseChannelResponseDTO,
+    GetPaymentChannelRequestDTO,
+    PaymentChannelResponseDTO,
+)
+from ....crypto.certificates import (
+    load_public_key_der_b64,
+    verify_certificate,
+    PayChanCertificatePayload,
+    issuer_issue_paychan_certificate_envelope,
+    load_private_key_pem,
 )
 
 
@@ -29,10 +36,14 @@ class PaymentChannelService:
     """Service to manage opening and closing payment channels."""
 
     def __init__(
-        self, account_repo: AccountRepository, channel_repo: PaymentChannelRepository
+        self,
+        account_repo: AccountRepository,
+        channel_repo: PaymentChannelRepository,
+        issuer_private_key_pem: str,
     ):
         self.account_repo = account_repo
         self.channel_repo = channel_repo
+        self.issuer_private_key = load_private_key_pem(issuer_private_key_pem)
 
     @staticmethod
     def _compute_channel_id(
@@ -62,6 +73,20 @@ class PaymentChannelService:
         if client_acc.balance < dto.amount:
             raise ValueError("Insufficient client balance to lock funds")
 
+        # Verify client's intent: signature over canonicalized open request
+        client_public_key = load_public_key_der_b64(dto.client_public_key_der_b64)
+        open_payload = {
+            "client_public_key_der_b64": dto.client_public_key_der_b64,
+            "vendor_public_key_der_b64": dto.vendor_public_key_der_b64,
+            "amount": dto.amount,
+        }
+        try:
+            verify_certificate(
+                client_public_key, open_payload, dto.client_signature_b64
+            )
+        except InvalidSignature:
+            raise ValueError("Invalid client signature for open channel request")
+
         # Generate salt server-side
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
@@ -90,12 +115,29 @@ class PaymentChannelService:
             balance=0,
         )
         created = await self.channel_repo.create(channel)
+
+        # Issue a typed paychan certificate (signed by issuer) to the client
+        paychan_payload = PayChanCertificatePayload(
+            computed_id=computed_id,
+            amount=dto.amount,
+            balance=0,
+            vendor_public_key_der_b64=dto.vendor_public_key_der_b64,
+            client_public_key_der_b64=dto.client_public_key_der_b64,
+        )
+        paychan_certificate_b64, paychan_signature_b64 = (
+            issuer_issue_paychan_certificate_envelope(
+                self.issuer_private_key, paychan_payload
+            )
+        )
+
         return OpenChannelResponseDTO(
             channel_id=created.id,
             computed_id=created.computed_id,
             salt_b64=created.salt_b64,
             amount=created.amount,
             balance=created.balance,
+            paychan_certificate_b64=paychan_certificate_b64,
+            paychan_signature_b64=paychan_signature_b64,
         )
 
     async def close_channel(
@@ -124,32 +166,20 @@ class PaymentChannelService:
         if payload.amount != dto.owed_amount:
             raise ValueError("Certificate amount mismatch")
 
-        signature_bytes = base64.b64decode(dto.closing_signature_b64)
-
-        # Canonicalize payload JSON before signature verification
-        canonical_bytes = json.dumps(
-            payload.model_dump(), separators=(",", ":"), sort_keys=True
-        ).encode("utf-8")
-
-        # Verify client signature
-        client_public_key = serialization.load_der_public_key(
-            base64.b64decode(dto.client_public_key_der_b64)
-        )
+        # Verify client signature over canonical payload
+        client_public_key = load_public_key_der_b64(dto.client_public_key_der_b64)
         try:
-            client_public_key.verify(
-                signature_bytes, canonical_bytes, ec.ECDSA(hashes.SHA256())
+            verify_certificate(
+                client_public_key, payload.model_dump(), dto.closing_signature_b64
             )
         except InvalidSignature:
             raise ValueError("Invalid closing certificate signature")
 
         # Verify vendor signature (intent to close)
-        vendor_sig_bytes = base64.b64decode(dto.vendor_signature_b64)
-        vendor_public_key = serialization.load_der_public_key(
-            base64.b64decode(dto.vendor_public_key_der_b64)
-        )
+        vendor_public_key = load_public_key_der_b64(dto.vendor_public_key_der_b64)
         try:
-            vendor_public_key.verify(
-                vendor_sig_bytes, canonical_bytes, ec.ECDSA(hashes.SHA256())
+            verify_certificate(
+                vendor_public_key, payload.model_dump(), dto.vendor_signature_b64
             )
         except InvalidSignature:
             raise ValueError("Invalid vendor signature for closing")
@@ -190,4 +220,18 @@ class PaymentChannelService:
             computed_id=dto.computed_id,
             client_balance=client_acc.balance,
             vendor_balance=vendor_acc.balance,
+        )
+
+    async def get_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaymentChannelResponseDTO:
+        channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
+        if not channel:
+            raise ValueError("Payment channel not found")
+        return PaymentChannelResponseDTO(
+            channel_id=channel.id,
+            computed_id=channel.computed_id,
+            salt_b64=channel.salt_b64,
+            amount=channel.amount,
+            balance=channel.balance,
         )

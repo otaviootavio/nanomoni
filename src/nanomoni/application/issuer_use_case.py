@@ -23,7 +23,10 @@ from .issuer_dtos import (
     IssuerPublicKeyDTO,
 )
 
-import json
+from ..crypto.certificates import (
+    RegistrationCertificatePayload,
+    issuer_issue_registration_certificate,
+)
 
 
 class IssuerService:
@@ -98,6 +101,14 @@ class IssuerService:
             await self.client_repo.create(client)
 
         # Ensure Account is created/updated to mirror IssuerClient balance
+        existing_account = await self.account_repo.get_by_public_key(
+            client.public_key_der_b64
+        )
+        if existing_account is not None:
+            raise ValueError(
+                "Account already registered; refusing to overwrite existing balance"
+            )
+
         account = Account(
             public_key_der_b64=client.public_key_der_b64,
             balance=client.balance,
@@ -105,21 +116,15 @@ class IssuerService:
         await self.account_repo.upsert(account)
 
         # Generate and sign the certificate (not persisted on the client)
-        certificate_payload = {
-            "client_public_key_der_b64": client.public_key_der_b64,
-            "balance": client.balance,
-        }
-        certificate_data = json.dumps(
-            certificate_payload,
-            separators=(",", ":"),
-            sort_keys=True,
-            ensure_ascii=False,
-        ).encode("utf-8")
-        signature = self.issuer_private_key.sign(
-            certificate_data, ec.ECDSA(hashes.SHA256())
+        certificate_payload = RegistrationCertificatePayload(
+            client_public_key_der_b64=client.public_key_der_b64,
+            balance=client.balance,
         )
-        certificate_signature_b64 = base64.b64encode(signature).decode("utf-8")
-        certificate_b64 = base64.b64encode(certificate_data).decode("utf-8")
+        certificate_b64, certificate_signature_b64 = (
+            issuer_issue_registration_certificate(
+                self.issuer_private_key, certificate_payload
+            )
+        )
 
         # Remove challenge (one-time use)
         await self.challenge_repo.delete(challenge.id)

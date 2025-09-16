@@ -6,11 +6,11 @@ import base64
 from typing import Any, Dict, Optional
 
 import httpx
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
 
 from nanomoni.envs.client_env import get_settings
 from nanomoni.middleware.ecdsa import log_timing
+from nanomoni.crypto.certificates import sign_bytes, load_public_key_der_b64
 
 
 PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -27,8 +27,7 @@ def public_key_der_b64_from_private(private_key) -> str:
 
 @log_timing("C_sign_body")
 def sign_body(private_key, body: bytes) -> str:
-    signature_der = private_key.sign(body, ec.ECDSA(hashes.SHA256()))
-    return base64.b64encode(signature_der).decode("utf-8")
+    return sign_bytes(private_key, body)
 
 
 @log_timing("C_fetch_issuer_public_key")
@@ -38,8 +37,7 @@ def _fetch_issuer_public_key(client: httpx.Client, issuer_base: str):
     data = r.json()
     # Prefer DER b64 for compact transport
     der_b64 = data["der_b64"]
-    der = base64.b64decode(der_b64)
-    return serialization.load_der_public_key(der), der_b64
+    return load_public_key_der_b64(der_b64), der_b64
 
 
 @log_timing("C_issuer_registration_start")
@@ -101,9 +99,7 @@ def _validate_certificate(
     our_public_key_b64: str,
 ) -> None:
     # Verify signature
-    issuer_public_key.verify(
-        signature_bytes, certificate_bytes, ec.ECDSA(hashes.SHA256())
-    )
+    issuer_public_key.verify(signature_bytes, certificate_bytes)
 
     # Validate certificate binds to our public key
     if cert_pub_b64 != our_public_key_b64:

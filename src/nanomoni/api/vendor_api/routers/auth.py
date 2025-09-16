@@ -10,9 +10,8 @@ import secrets
 from datetime import datetime, timezone, timedelta
 
 import httpx
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
+from nanomoni.crypto.certificates import load_public_key_der_b64, verify_signature
 
 from ..dependencies import (
     get_database_client_dependency,
@@ -32,8 +31,7 @@ async def _get_issuer_public_key(db_client, settings):
         der_b64 = None
     if der_b64:
         try:
-            der = base64.b64decode(der_b64, validate=True)
-            return serialization.load_der_public_key(der)
+            return load_public_key_der_b64(der_b64)
         except Exception:
             pass
     # 2) Fetch from issuer
@@ -47,8 +45,7 @@ async def _get_issuer_public_key(db_client, settings):
             return None
         data = resp.json()
         fetched_der_b64 = data.get("der_b64")
-        der = base64.b64decode(fetched_der_b64, validate=True)
-        key = serialization.load_der_public_key(der)
+        key = load_public_key_der_b64(fetched_der_b64)
     except Exception:
         return None
     # 3) Best-effort write to cache
@@ -83,7 +80,6 @@ async def register_start(
     # Decode
     try:
         certificate_bytes = base64.b64decode(cert_b64, validate=True)
-        certificate_signature_bytes = base64.b64decode(cert_sig_b64, validate=True)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -97,11 +93,7 @@ async def register_start(
             detail="Unable to obtain issuer public key",
         )
     try:
-        issuer_public_key.verify(
-            certificate_signature_bytes,
-            certificate_bytes,
-            ec.ECDSA(hashes.SHA256()),
-        )
+        verify_signature(issuer_public_key, certificate_bytes, cert_sig_b64)
     except InvalidSignature:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -255,17 +247,11 @@ async def register_complete(
             )
         # Verify challenge signature using stored client public key
         try:
-            client_pub_der = base64.b64decode(client_pub_der_b64, validate=True)
-            client_public_key = serialization.load_der_public_key(client_pub_der)
+            client_public_key = load_public_key_der_b64(client_pub_der_b64)
             challenge_bytes = base64.b64decode(
                 reg.get("challenge_der_b64"), validate=True
             )
-            challenge_sig_bytes = base64.b64decode(challenge_sig_b64, validate=True)
-            client_public_key.verify(
-                challenge_sig_bytes,
-                challenge_bytes,
-                ec.ECDSA(hashes.SHA256()),
-            )
+            verify_signature(client_public_key, challenge_bytes, challenge_sig_b64)
         except InvalidSignature:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

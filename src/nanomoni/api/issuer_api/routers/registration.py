@@ -12,6 +12,8 @@ from ....application.issuer_dtos import (
     OpenChannelResponseDTO,
     CloseChannelRequestDTO,
     CloseChannelResponseDTO,
+    GetPaymentChannelRequestDTO,
+    PaymentChannelResponseDTO,
 )
 from ..dependencies import get_issuer_service, get_payment_channel_service
 from ....application.issuer_use_case import IssuerService
@@ -90,3 +92,15 @@ async def close_payment_channel(
         return await service.close_channel(payload)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/payment-channel/",
+    response_model=PaymentChannelResponseDTO,
+    status_code=status.HTTP_200_OK,
+)
+async def get_payment_channel(
+    payload: GetPaymentChannelRequestDTO,
+    service: PaymentChannelService = Depends(get_payment_channel_service),
+) -> PaymentChannelResponseDTO:
+    return await service.get_channel(payload)

@@ -52,6 +52,7 @@ class OpenChannelRequestDTO(BaseModel):
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     amount: int
+    client_signature_b64: str
 
 
 class OpenChannelResponseDTO(BaseModel):
@@ -62,6 +63,8 @@ class OpenChannelResponseDTO(BaseModel):
     salt_b64: str
     amount: int
     balance: int
+    paychan_certificate_b64: str
+    paychan_signature_b64: str
 
     @field_serializer("channel_id")
     def serialize_channel_id(self, value: UUID) -> str:
@@ -86,3 +89,15 @@ class CloseChannelResponseDTO(BaseModel):
     computed_id: str
     client_balance: int
     vendor_balance: int
+
+
+class GetPaymentChannelRequestDTO(BaseModel):
+    """Request to get a payment channel by its computed ID."""
+
+    computed_id: str
+
+
+class PaymentChannelResponseDTO(BaseModel):
+    """Response with payment channel details."""
+
+    channel_id: UUID

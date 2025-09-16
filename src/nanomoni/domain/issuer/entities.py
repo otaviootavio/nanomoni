@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -70,10 +71,10 @@ class PaymentChannel(BaseModel):
     amount: int
     balance: int = 0
     is_closed: bool = False
-    closing_certificate_b64: str | None = None
-    vendor_closing_signature_b64: str | None = None
+    closing_certificate_b64: Optional[str] = None
+    vendor_closing_signature_b64: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    closed_at: datetime | None = None
+    closed_at: Optional[datetime] = None
 
     @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:
@@ -84,7 +85,7 @@ class PaymentChannel(BaseModel):
         return value.isoformat()
 
     @field_serializer("closed_at")
-    def serialize_closed_at(self, value: datetime | None) -> str | None:
+    def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
         return value.isoformat() if value else None
 
 
@@ -93,10 +94,3 @@ class PaymentChannelCertificatePayload(BaseModel):
 
     computed_id: str
     amount: int
-
-
-class PaymentChannelCertificate(BaseModel):
-    """Certificate consisting of payload JSON and client signature."""
-
-    payload: PaymentChannelCertificatePayload
-    signature_b64: str
