@@ -43,3 +43,46 @@ class RegistrationCertificateDTO(BaseModel):
 
 class IssuerPublicKeyDTO(BaseModel):
     der_b64: str
+
+
+# Payment channel DTOs
+class OpenChannelRequestDTO(BaseModel):
+    """Request to open a payment channel and lock client funds."""
+
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    amount: int
+
+
+class OpenChannelResponseDTO(BaseModel):
+    """Response with created channel identifiers and channel values."""
+
+    channel_id: UUID
+    computed_id: str
+    salt_b64: str
+    amount: int
+    balance: int
+
+    @field_serializer("channel_id")
+    def serialize_channel_id(self, value: UUID) -> str:
+        return str(value)
+
+
+class CloseChannelRequestDTO(BaseModel):
+    """Vendor presents client-signed certificate to close the channel, with vendor's consent signature."""
+
+    computed_id: str
+    owed_amount: int
+    closing_certificate_b64: str
+    closing_signature_b64: str
+    vendor_signature_b64: str
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+
+
+class CloseChannelResponseDTO(BaseModel):
+    """Response after closing the channel with updated balances."""
+
+    computed_id: str
+    client_balance: int
+    vendor_balance: int

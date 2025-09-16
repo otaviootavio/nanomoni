@@ -10,8 +10,11 @@ from ...infrastructure.storage import RedisKeyValueStore
 from ...infrastructure.issuer.repositories import (
     IssuerClientRepositoryImpl,
     IssuerChallengeRepositoryImpl,
+    AccountRepositoryImpl,
+    PaymentChannelRepositoryImpl,
 )
 from ...application.issuer_use_case import IssuerService
+from ...application.issuer.use_cases.payment_channel import PaymentChannelService
 
 
 @lru_cache()
@@ -41,12 +44,30 @@ def get_issuer_challenge_repository() -> IssuerChallengeRepositoryImpl:
     return IssuerChallengeRepositoryImpl(store)
 
 
+def get_account_repository() -> AccountRepositoryImpl:
+    store = get_store_dependency()
+    return AccountRepositoryImpl(store)
+
+
+def get_payment_channel_repository() -> PaymentChannelRepositoryImpl:
+    store = get_store_dependency()
+    return PaymentChannelRepositoryImpl(store)
+
+
 def get_issuer_service() -> IssuerService:
     client_repo = get_issuer_client_repository()
     challenge_repo = get_issuer_challenge_repository()
+    account_repo = get_account_repository()
     settings = get_settings_dependency()
     return IssuerService(
         client_repo,
         challenge_repo,
         settings.issuer_private_key_pem,
+        account_repo,
     )
+
+
+def get_payment_channel_service() -> PaymentChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    return PaymentChannelService(account_repo, channel_repo)

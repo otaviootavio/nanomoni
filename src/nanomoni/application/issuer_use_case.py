@@ -9,10 +9,11 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from ..domain.issuer.entities import IssuerClient, IssuerChallenge
+from ..domain.issuer.entities import IssuerClient, IssuerChallenge, Account
 from ..domain.issuer.repositories import (
     IssuerClientRepository,
     IssuerChallengeRepository,
+    AccountRepository,
 )
 from .issuer_dtos import (
     StartRegistrationRequestDTO,
@@ -33,9 +34,11 @@ class IssuerService:
         client_repo: IssuerClientRepository,
         challenge_repo: IssuerChallengeRepository,
         issuer_private_key_pem: str,
+        account_repo: AccountRepository,
     ):
         self.client_repo = client_repo
         self.challenge_repo = challenge_repo
+        self.account_repo = account_repo
         self.issuer_private_key = serialization.load_pem_private_key(
             issuer_private_key_pem.encode(), password=None
         )
@@ -93,6 +96,13 @@ class IssuerService:
                 public_key_der_b64=challenge.client_public_key_der_b64, balance=100
             )
             await self.client_repo.create(client)
+
+        # Ensure Account is created/updated to mirror IssuerClient balance
+        account = Account(
+            public_key_der_b64=client.public_key_der_b64,
+            balance=client.balance,
+        )
+        await self.account_repo.upsert(account)
 
         # Generate and sign the certificate (not persisted on the client)
         certificate_payload = {
