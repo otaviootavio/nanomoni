@@ -8,7 +8,7 @@ from ...middleware.ecdsa import ECDSASignatureMiddleware
 
 from ...envs.vendor_env import get_settings
 from ...infrastructure.database import get_database_client
-from .routers import users, tasks
+from .routers import auth, users, tasks
 
 settings = get_settings()
 
@@ -36,16 +36,28 @@ def create_app() -> FastAPI:
     # Database client for caching issuer public key
     db_client = get_database_client(settings)
 
-    # Add ECDSA signature verification middleware
+    # Add ECDSA signature verification middleware, skipping registration endpoints
+    skip_paths = [
+        "/",
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/api/v1/issuer/",
+        "/api/v1/vendor/register/start",
+        "/api/v1/vendor/register/complete",
+    ]
     app.add_middleware(
         ECDSASignatureMiddleware,
         issuer_base_url=settings.issuer_base_url,
         db_client=db_client,
+        skip_paths=skip_paths,
     )
 
     # Include routers
     app.include_router(users.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
+    app.include_router(auth.router, prefix="/api/v1")
 
     @app.get("/")
     async def root():

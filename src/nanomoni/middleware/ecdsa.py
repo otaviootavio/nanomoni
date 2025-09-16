@@ -80,10 +80,7 @@ def log_timing(tag: Optional[str] = None):
 # _should_skip --> H1_should_skip
 # _buffer_request_body --> H2_buffer_request_body
 # _extract_required_headers --> H3_extract_required_headers
-
-# _decode_certificate_and_signature --> H5_decode_certificate_and_signature
 # _decode_body_signature --> H9_decode_body_signature
-# _parse_certificate_payload --> H7_parse_certificate_payload
 # _load_client_public_key_from_der_b64 --> H8_load_client_public_key
 
 # ## Database query stuff
@@ -95,22 +92,21 @@ def log_timing(tag: Optional[str] = None):
 #     _write_issuer_pubkey_to_cache --> H14_write_cache ( deleted the logs, generates double count at the end )
 
 # ## Crypto transform stuff
-# _verify_issuer_signature --> H6_verify_issuer_signature
 # _verify_client_body_signature --> H010_verify_client_body_signature
 
 # ## Data transform stuff
-# _attach_request_context --> H11_attach_request_context --> H11_attach_request_context
+# _attach_request_context --> H11_attach_request_context
 
 
 class ECDSASignatureMiddleware(BaseHTTPMiddleware):
-    """Validate client certificate and ECDSA body signatures for mutating HTTP methods.
+    """Validate ECDSA body signatures for protected HTTP methods using the client's public key.
 
     Expected headers:
-    - `X-Certificate`: Base64-encoded certificate bytes (JSON) issued by the issuer.
-      The decoded JSON must include at least:
-        { "client_public_key_der_b64": string, "balance": int }
-    - `X-Certificate-Signature`: Base64-encoded DER ECDSA signature by the issuer over the raw certificate bytes.
+    - `X-Client-Public-Key`: Base64-encoded DER ECDSA public key of the client.
     - `X-Signature`: Base64-encoded DER ECDSA signature over the raw request body by the client's private key.
+
+    Trust is established by checking Redis for a registration record created during the auth flow
+    (key: `vendor:registrations:{client_pub_der_b64}`) with status `trusted`.
 
     This MVP skips verification for safe/read-only paths and docs:
     - `/`, `/health`, `/docs`, `/redoc`, `/openapi.json`
@@ -126,17 +122,7 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         skip_paths: Optional[Iterable[str]] = None,
     ) -> None:
         super().__init__(app)
-        self._skip_paths = set(
-            skip_paths
-            or [
-                "/",
-                "/health",
-                "/docs",
-                "/redoc",
-                "/openapi.json",
-                "/api/v1/issuer/",
-            ]
-        )
+        self._skip_paths = set(skip_paths)
         self._protected_methods = {"GET", "POST", "PUT", "PATCH", "DELETE"}
         self._issuer_base_url = issuer_base_url
         self._issuer_public_key = None  # in-memory cache of cryptography key
@@ -153,15 +139,8 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         request, body = await self._buffer_request_body(request)
 
         # Required headers
-        cert_b64, cert_sig_b64, body_sig_b64, error_response = (
+        client_pub_der_b64, body_sig_b64, error_response = (
             self._extract_required_headers(request)
-        )
-        if error_response:
-            return error_response
-
-        # Decode certificate + signature
-        certificate_bytes, certificate_signature_bytes, error_response = (
-            self._decode_certificate_and_signature(cert_b64, cert_sig_b64)
         )
         if error_response:
             return error_response
@@ -171,34 +150,17 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         if error_response:
             return error_response
 
-        # Parse certificate to extract client public key
-        cert_obj, client_pub_der_b64, balance_value, error_response = (
-            self._parse_certificate_payload(certificate_bytes)
-        )
-
-        if error_response:
-            return error_response
-
-        # Load client public key from certificate
+        # Load client public key
         client_public_key, error_response = self._load_client_public_key_from_der_b64(
             client_pub_der_b64
         )
         if error_response:
             return error_response
 
-        # Ensure issuer public key is available
-        try:
-            issuer_public_key = await self._get_issuer_public_key_with_cache()
-            if issuer_public_key is None:
-                return self._bad_gateway("Unable to obtain issuer public key")
-        except Exception:
-            return self._bad_gateway("Failed to obtain issuer public key")
-
-        # Verify issuer signature over certificate bytes
-        if not self._verify_issuer_signature(
-            issuer_public_key, certificate_signature_bytes, certificate_bytes
-        ):
-            return self._unauthorized("Invalid issuer signature on certificate")
+        # Check if client public key is trusted (from registration)
+        is_trusted = await self._is_trusted_client_pubkey(client_pub_der_b64)
+        if not is_trusted:
+            return self._unauthorized("Untrusted client public key")
 
         # Verify client signature over request body
         if not self._verify_client_body_signature(
@@ -206,12 +168,10 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         ):
             return self._unauthorized("Invalid ECDSA signature for request body")
 
-        # Attach certificate context for downstream handlers if needed
+        # Attach minimal request context for downstream handlers if needed
         self._attach_request_context(
             request=request,
             client_pub_der_b64=client_pub_der_b64,
-            balance_value=balance_value,
-            cert_obj=cert_obj,
         )
 
         return await call_next(request)
@@ -235,19 +195,15 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
 
     @log_timing("H3_extract_required_headers")
     def _extract_required_headers(self, request: Request):
-        cert_b64 = request.headers.get("X-Certificate")
-        cert_sig_b64 = request.headers.get("X-Certificate-Signature")
+        client_pub_der_b64 = request.headers.get("X-Client-Public-Key")
         body_sig_b64 = request.headers.get("X-Signature")
-        if not cert_b64 or not cert_sig_b64 or not body_sig_b64:
+        if not client_pub_der_b64 or not body_sig_b64:
             return (
                 None,
                 None,
-                None,
-                self._unauthorized(
-                    "Missing X-Certificate, X-Certificate-Signature, or X-Signature header"
-                ),
+                self._unauthorized("Missing X-Client-Public-Key or X-Signature header"),
             )
-        return cert_b64, cert_sig_b64, body_sig_b64, None
+        return client_pub_der_b64, body_sig_b64, None
 
     def _json_error(self, status_code: int, detail: str) -> JSONResponse:
         return JSONResponse(status_code=status_code, content={"detail": detail})
@@ -261,48 +217,6 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
     def _bad_gateway(self, detail: str) -> JSONResponse:
         return self._json_error(status.HTTP_502_BAD_GATEWAY, detail)
 
-    @log_timing("H5_decode_certificate_and_signature")
-    def _decode_certificate_and_signature(self, cert_b64: str, cert_sig_b64: str):
-        try:
-            certificate_bytes = base64.b64decode(cert_b64, validate=True)
-            certificate_signature_bytes = base64.b64decode(cert_sig_b64, validate=True)
-            return certificate_bytes, certificate_signature_bytes, None
-        except Exception:
-            return (
-                None,
-                None,
-                self._bad_request(
-                    "Invalid certificate or certificate signature encoding (expected base64)"
-                ),
-            )
-
-    @log_timing("H6_verify_issuer_signature")
-    def _verify_issuer_signature(
-        self,
-        issuer_public_key,
-        certificate_signature_bytes: bytes,
-        certificate_bytes: bytes,
-    ) -> bool:
-        try:
-            issuer_public_key.verify(
-                certificate_signature_bytes,
-                certificate_bytes,
-                ec.ECDSA(hashes.SHA256()),
-            )
-            return True
-        except InvalidSignature:
-            return False
-
-    @log_timing("H7_parse_certificate_payload")
-    def _parse_certificate_payload(self, certificate_bytes: bytes):
-        try:
-            cert_obj = json.loads(certificate_bytes.decode("utf-8"))
-            client_pub_der_b64 = cert_obj["client_public_key_der_b64"]
-            balance_value = cert_obj.get("balance")
-            return cert_obj, client_pub_der_b64, balance_value, None
-        except Exception:
-            return None, None, None, self._bad_request("Malformed certificate payload")
-
     @log_timing("H8_load_client_public_key")
     def _load_client_public_key_from_der_b64(self, client_pub_der_b64: str):
         try:
@@ -310,7 +224,9 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             client_public_key = serialization.load_der_public_key(client_pub_der)
             return client_public_key, None
         except Exception:
-            return None, self._bad_request("Invalid client public key in certificate")
+            return None, self._bad_request(
+                "Invalid client public key encoding (expected base64 DER)"
+            )
 
     @log_timing("H9_decode_body_signature")
     def _decode_body_signature(self, body_sig_b64: str):
@@ -339,13 +255,8 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
         self,
         request: Request,
         client_pub_der_b64: str,
-        balance_value,
-        cert_obj: dict,
     ) -> None:
         request.state.client_public_key_der_b64 = client_pub_der_b64
-        request.state.client_balance = balance_value
-        request.state.certificate = cert_obj
-        request.state.issuer_public_key_der_b64 = self._issuer_public_key_der_b64
 
     @log_timing("H12_get_issuer_public_key_with_cache")
     async def _get_issuer_public_key_with_cache(self):
@@ -409,3 +320,17 @@ class ECDSASignatureMiddleware(BaseHTTPMiddleware):
             data = resp.json()
             der_b64 = data.get("der_b64")
             return der_b64
+
+    @log_timing("H16_is_trusted_client_pubkey")
+    async def _is_trusted_client_pubkey(self, client_pub_der_b64: str) -> bool:
+        if not self._db_client:
+            return False
+        async with self._db_client.get_connection() as conn:
+            raw = await conn.get(f"vendor:registrations:{client_pub_der_b64}")
+            if not raw:
+                return False
+            try:
+                reg = json.loads(raw)
+                return reg.get("status") == "trusted"
+            except Exception:
+                return False
