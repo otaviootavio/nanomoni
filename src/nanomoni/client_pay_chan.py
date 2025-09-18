@@ -36,9 +36,7 @@ def register_into_issuer_using_private_key(
         # 1) Register with issuer by sending public key
         reg_payload = {"client_public_key_der_b64": public_key_der_b64}
         try:
-            r = client.post(
-                f"{issuer_base_url}/issuer/register", json=reg_payload
-            )
+            r = client.post(f"{issuer_base_url}/issuer/register", json=reg_payload)
             r.raise_for_status()
             return r.json()
         except httpx.HTTPStatusError as e:

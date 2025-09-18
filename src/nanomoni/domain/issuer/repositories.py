@@ -1,26 +1,11 @@
-"""Issuer domain repositories: IssuerClientRepository and IssuerChallengeRepository."""
+"""Issuer domain repositories: AccountRepository and PaymentChannelRepository."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from uuid import UUID
 
-from .entities import IssuerClient, Account, PaymentChannel
-
-
-class IssuerClientRepository(ABC):
-    """Repository for issuer-registered clients."""
-
-    @abstractmethod
-    async def create(self, client: IssuerClient) -> IssuerClient:
-        pass
-
-    @abstractmethod
-    async def get_by_public_key(
-        self, public_key_der_b64: str
-    ) -> Optional[IssuerClient]:
-        pass
+from .entities import Account, PaymentChannel
 
 
 class AccountRepository(ABC):

@@ -8,7 +8,6 @@ from ...envs.issuer_env import get_settings, Settings
 from ...infrastructure.database import get_database_client, DatabaseClient
 from ...infrastructure.storage import RedisKeyValueStore
 from ...infrastructure.issuer.repositories import (
-    IssuerClientRepositoryImpl,
     AccountRepositoryImpl,
     PaymentChannelRepositoryImpl,
 )
@@ -33,11 +32,6 @@ def get_store_dependency() -> RedisKeyValueStore:
     return RedisKeyValueStore(db_client)
 
 
-def get_issuer_client_repository() -> IssuerClientRepositoryImpl:
-    store = get_store_dependency()
-    return IssuerClientRepositoryImpl(store)
-
-
 def get_account_repository() -> AccountRepositoryImpl:
     store = get_store_dependency()
     return AccountRepositoryImpl(store)
@@ -49,11 +43,9 @@ def get_payment_channel_repository() -> PaymentChannelRepositoryImpl:
 
 
 def get_issuer_service() -> IssuerService:
-    client_repo = get_issuer_client_repository()
     account_repo = get_account_repository()
     settings = get_settings_dependency()
     return IssuerService(
-        client_repo,
         settings.issuer_private_key_pem,
         account_repo,
     )

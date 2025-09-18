@@ -287,9 +287,7 @@ def main() -> None:
         # Vendor registration flow (trust establishment at vendor)
         start_data = vendor_register_start(client, vendor_base_url, cert)
         if start_data.get("status") != "trusted":
-            raise RuntimeError(
-                f"Unexpected registration start response: {start_data}"
-            )
+            raise RuntimeError(f"Unexpected registration start response: {start_data}")
 
         # Vendor flow using certificate and per-request signatures
         user = vendor_create_user(

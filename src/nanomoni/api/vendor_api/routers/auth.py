@@ -6,8 +6,7 @@ from fastapi import APIRouter, Request, HTTPException, status, Depends
 
 import base64
 import json
-import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import httpx
 from cryptography.exceptions import InvalidSignature

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ....application.issuer_dtos import (
     RegistrationRequestDTO,
-    RegistrationCertificateDTO,
+    RegistrationResponseDTO,
     IssuerPublicKeyDTO,
     OpenChannelRequestDTO,
     OpenChannelResponseDTO,
@@ -22,13 +22,13 @@ router = APIRouter(tags=["issuer"])
 
 @router.post(
     "/register",
-    response_model=RegistrationCertificateDTO,
+    response_model=RegistrationResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
 async def register(
     payload: RegistrationRequestDTO,
     service: IssuerService = Depends(get_issuer_service),
-) -> RegistrationCertificateDTO:
+) -> RegistrationResponseDTO:
     try:
         return await service.register(payload)
     except ValueError as e:

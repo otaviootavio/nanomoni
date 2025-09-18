@@ -6,46 +6,14 @@ from typing import Optional
 from uuid import UUID
 
 from ...domain.issuer.entities import (
-    IssuerClient,
     Account,
     PaymentChannel,
 )
 from ...domain.issuer.repositories import (
-    IssuerClientRepository,
     AccountRepository,
     PaymentChannelRepository,
 )
 from ..storage import KeyValueStore
-
-
-class IssuerClientRepositoryImpl(IssuerClientRepository):
-    """Issuer client repository using a KeyValueStore."""
-
-    def __init__(self, store: KeyValueStore):
-        self.store = store
-
-    async def create(self, client: IssuerClient) -> IssuerClient:
-        pk_key = f"issuer_client:pk:{client.public_key_der_b64}"
-        existing = await self.store.get(pk_key)
-        if existing is not None:
-            raise ValueError("Client with this public key already exists")
-
-        client_key = f"issuer_client:{client.id}"
-        await self.store.set(client_key, client.model_dump_json())
-        await self.store.set(pk_key, str(client.id))
-        return client
-
-    async def get_by_public_key(
-        self, public_key_der_b64: str
-    ) -> Optional[IssuerClient]:
-        pk_key = f"issuer_client:pk:{public_key_der_b64}"
-        client_id = await self.store.get(pk_key)
-        if not client_id:
-            return None
-        data = await self.store.get(f"issuer_client:{client_id}")
-        if not data:
-            return None
-        return IssuerClient.model_validate_json(data)
 
 
 class AccountRepositoryImpl(AccountRepository):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel
 
 
 class RegistrationRequestDTO(BaseModel):
@@ -13,14 +13,11 @@ class RegistrationRequestDTO(BaseModel):
     client_public_key_der_b64: str
 
 
-class RegistrationCertificateDTO(BaseModel):
-    """Issuer-signed certificate with client public key and initial balance."""
+class RegistrationResponseDTO(BaseModel):
+    """Response to registration request with client public key and initial balance."""
 
     client_public_key_der_b64: str
     balance: int
-    certificate_b64: str
-    certificate_signature_b64: str
-    # For now a simple self-describing envelope; could also add issuer signature if needed
 
 
 class IssuerPublicKeyDTO(BaseModel):
