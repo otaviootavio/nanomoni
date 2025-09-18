@@ -9,7 +9,6 @@ from ...infrastructure.database import get_database_client, DatabaseClient
 from ...infrastructure.storage import RedisKeyValueStore
 from ...infrastructure.issuer.repositories import (
     IssuerClientRepositoryImpl,
-    IssuerChallengeRepositoryImpl,
     AccountRepositoryImpl,
     PaymentChannelRepositoryImpl,
 )
@@ -39,11 +38,6 @@ def get_issuer_client_repository() -> IssuerClientRepositoryImpl:
     return IssuerClientRepositoryImpl(store)
 
 
-def get_issuer_challenge_repository() -> IssuerChallengeRepositoryImpl:
-    store = get_store_dependency()
-    return IssuerChallengeRepositoryImpl(store)
-
-
 def get_account_repository() -> AccountRepositoryImpl:
     store = get_store_dependency()
     return AccountRepositoryImpl(store)
@@ -56,12 +50,10 @@ def get_payment_channel_repository() -> PaymentChannelRepositoryImpl:
 
 def get_issuer_service() -> IssuerService:
     client_repo = get_issuer_client_repository()
-    challenge_repo = get_issuer_challenge_repository()
     account_repo = get_account_repository()
     settings = get_settings_dependency()
     return IssuerService(
         client_repo,
-        challenge_repo,
         settings.issuer_private_key_pem,
         account_repo,
     )

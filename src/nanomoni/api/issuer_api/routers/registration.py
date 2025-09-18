@@ -3,9 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ....application.issuer_dtos import (
-    StartRegistrationRequestDTO,
-    StartRegistrationResponseDTO,
-    CompleteRegistrationRequestDTO,
+    RegistrationRequestDTO,
     RegistrationCertificateDTO,
     IssuerPublicKeyDTO,
     OpenChannelRequestDTO,
@@ -19,35 +17,20 @@ from ..dependencies import get_issuer_service, get_payment_channel_service
 from ....application.issuer_use_case import IssuerService
 from ....application.issuer.use_cases.payment_channel import PaymentChannelService
 
-router = APIRouter(tags=["issuer-registration"])
+router = APIRouter(tags=["issuer"])
 
 
 @router.post(
-    "/registration/start",
-    response_model=StartRegistrationResponseDTO,
-    status_code=status.HTTP_201_CREATED,
-)
-async def start_registration(
-    payload: StartRegistrationRequestDTO,
-    service: IssuerService = Depends(get_issuer_service),
-) -> StartRegistrationResponseDTO:
-    try:
-        return await service.start_registration(payload)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post(
-    "/registration/complete",
+    "/register",
     response_model=RegistrationCertificateDTO,
     status_code=status.HTTP_201_CREATED,
 )
-async def complete_registration(
-    payload: CompleteRegistrationRequestDTO,
+async def register(
+    payload: RegistrationRequestDTO,
     service: IssuerService = Depends(get_issuer_service),
 ) -> RegistrationCertificateDTO:
     try:
-        return await service.complete_registration(payload)
+        return await service.register(payload)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

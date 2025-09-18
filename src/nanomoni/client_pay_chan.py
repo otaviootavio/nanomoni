@@ -33,29 +33,14 @@ def register_into_issuer_using_private_key(
     print(f"Registering into issuer using public key: {public_key_der_b64}")
 
     with httpx.Client(timeout=10.0) as client:
-        # 1) Start registration: send our public key
-        start_payload = {"client_public_key_der_b64": public_key_der_b64}
-        r = client.post(
-            f"{issuer_base_url}/issuer/registration/start", json=start_payload
-        )
-        r.raise_for_status()
-        start_data = r.json()
-        challenge_id = start_data["challenge_id"]
-        nonce_b64 = start_data["nonce_b64"]
-
-        # 2) Solve challenge: sign the nonce and complete registration
-        nonce_bytes = base64.b64decode(nonce_b64)
-        signature_der_b64 = sign_bytes(private_key, nonce_bytes)
-        complete_payload = {
-            "challenge_id": challenge_id,
-            "signature_der_b64": signature_der_b64,
-        }
+        # 1) Register with issuer by sending public key
+        reg_payload = {"client_public_key_der_b64": public_key_der_b64}
         try:
-            r2 = client.post(
-                f"{issuer_base_url}/issuer/registration/complete", json=complete_payload
+            r = client.post(
+                f"{issuer_base_url}/issuer/register", json=reg_payload
             )
-            r2.raise_for_status()
-            return r2.json()
+            r.raise_for_status()
+            return r.json()
         except httpx.HTTPStatusError as e:
             if e.response is not None and e.response.status_code == 400:
                 try:

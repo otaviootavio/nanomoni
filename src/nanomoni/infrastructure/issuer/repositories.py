@@ -7,13 +7,11 @@ from uuid import UUID
 
 from ...domain.issuer.entities import (
     IssuerClient,
-    IssuerChallenge,
     Account,
     PaymentChannel,
 )
 from ...domain.issuer.repositories import (
     IssuerClientRepository,
-    IssuerChallengeRepository,
     AccountRepository,
     PaymentChannelRepository,
 )
@@ -48,28 +46,6 @@ class IssuerClientRepositoryImpl(IssuerClientRepository):
         if not data:
             return None
         return IssuerClient.model_validate_json(data)
-
-
-class IssuerChallengeRepositoryImpl(IssuerChallengeRepository):
-    """Issuer challenge repository using a KeyValueStore."""
-
-    def __init__(self, store: KeyValueStore):
-        self.store = store
-
-    async def create(self, challenge: IssuerChallenge) -> IssuerChallenge:
-        key = f"issuer_challenge:{challenge.id}"
-        await self.store.set(key, challenge.model_dump_json())
-        return challenge
-
-    async def get_by_id(self, challenge_id: UUID) -> Optional[IssuerChallenge]:
-        data = await self.store.get(f"issuer_challenge:{challenge_id}")
-        if not data:
-            return None
-        return IssuerChallenge.model_validate_json(data)
-
-    async def delete(self, challenge_id: UUID) -> bool:
-        res = await self.store.delete(f"issuer_challenge:{challenge_id}")
-        return res == 1
 
 
 class AccountRepositoryImpl(AccountRepository):

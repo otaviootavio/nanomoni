@@ -59,8 +59,8 @@ async def _get_issuer_public_key(db_client, settings):
     return key
 
 
-@router.post("/register/start")
-async def register_start(
+@router.post("/register")
+async def register(
     request: Request,
     db_client=Depends(get_database_client_dependency),
     settings=Depends(get_settings_dependency),
@@ -116,18 +116,8 @@ async def register_start(
     # Persist registration with challenge
     key = f"vendor:registrations:{client_pub_der_b64}"
     now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(minutes=10)
-    challenge_bytes = secrets.token_bytes(32)
-    challenge_der_b64 = base64.b64encode(challenge_bytes).decode("utf-8")
-    registration_record = {
-        "status": "pending_challenge",
-        "client_public_key_der_b64": client_pub_der_b64,
-        "certificate": cert_obj,
-        "challenge_der_b64": challenge_der_b64,
-        "challenge_expires_at": expires_at.isoformat(),
-        "created_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-    }
+    now_iso = now.isoformat()
+
     async with db_client.get_connection() as conn:
         existing = await conn.get(key)
         if existing:
@@ -140,138 +130,15 @@ async def register_start(
                     }
             except Exception:
                 pass
+
+        registration_record = {
+            "status": "trusted",
+            "client_public_key_der_b64": client_pub_der_b64,
+            "certificate": cert_obj,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "trusted_at": now_iso,
+        }
         await conn.set(key, json.dumps(registration_record))
-    return {
-        "status": "pending_challenge",
-        "challenge_der_b64": challenge_der_b64,
-        "expires_at": expires_at.isoformat(),
-    }
 
-
-@router.post("/register/complete")
-async def register_complete(
-    request: Request,
-    db_client=Depends(get_database_client_dependency),
-    settings=Depends(get_settings_dependency),
-):
-    """Complete client registration by verifying the challenge signature.
-
-    Headers: X-Certificate (used to locate the registration)
-    Body: { "challenge_signature_der_b64": string }
-    """
-    cert_b64 = request.headers.get("X-Certificate")
-    if not cert_b64:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing X-Certificate header",
-        )
-    # Decode only the certificate (issuer verification was done at start)
-    try:
-        certificate_bytes = base64.b64decode(cert_b64, validate=True)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid certificate encoding",
-        )
-    # Parse certificate to determine registration key
-    try:
-        cert_obj = json.loads(certificate_bytes.decode("utf-8"))
-        client_pub_der_b64 = cert_obj["client_public_key_der_b64"]
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Malformed certificate payload",
-        )
-    # Parse body
-    try:
-        payload = await request.json()
-        challenge_sig_b64 = payload.get("challenge_signature_der_b64")
-        if not isinstance(challenge_sig_b64, str) or not challenge_sig_b64:
-            raise ValueError
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or missing challenge_signature_der_b64",
-        )
-    key = f"vendor:registrations:{client_pub_der_b64}"
-    async with db_client.get_connection() as conn:
-        raw = await conn.get(key)
-        if not raw:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Registration not found. Start registration first.",
-            )
-        try:
-            reg = json.loads(raw)
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Corrupted registration record",
-            )
-        if reg.get("status") == "trusted":
-            return {"status": "trusted", "trusted_at": reg.get("trusted_at")}
-        if reg.get("status") != "pending_challenge":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Registration not in pending_challenge state",
-            )
-        # Optional: ensure the provided certificate matches the stored one
-        try:
-            stored_cert = reg.get("certificate")
-            if (
-                not isinstance(stored_cert, dict)
-                or stored_cert.get("client_public_key_der_b64") != client_pub_der_b64
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Certificate mismatch. Restart registration.",
-                )
-        except HTTPException:
-            raise
-        # Check expiry
-        try:
-            exp = datetime.fromisoformat(reg.get("challenge_expires_at"))
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Challenge expired. Restart registration.",
-                )
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid challenge expiry. Restart registration.",
-            )
-        # Verify challenge signature using stored client public key
-        try:
-            client_public_key = load_public_key_der_b64(client_pub_der_b64)
-            challenge_bytes = base64.b64decode(
-                reg.get("challenge_der_b64"), validate=True
-            )
-            verify_signature(client_public_key, challenge_bytes, challenge_sig_b64)
-        except InvalidSignature:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid challenge signature",
-            )
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid key or signature encoding",
-            )
-        # Mark as trusted
-        now_iso = datetime.now(timezone.utc).isoformat()
-        reg.update(
-            {
-                "status": "trusted",
-                "trusted_at": now_iso,
-                "updated_at": now_iso,
-            }
-        )
-        reg.pop("challenge_der_b64", None)
-        reg.pop("challenge_expires_at", None)
-        await conn.set(key, json.dumps(reg))
-    return {"status": "trusted"}
+    return {"status": "trusted", "trusted_at": now_iso}

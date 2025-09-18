@@ -26,23 +26,6 @@ class IssuerClient(BaseModel):
         return value.isoformat()
 
 
-class IssuerChallenge(BaseModel):
-    """Challenge issued to a client during registration."""
-
-    id: UUID = Field(default_factory=uuid4)
-    client_public_key_der_b64: str
-    nonce_b64: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
-
-
 class Account(BaseModel):
     """Generic account identified by a public key with a spendable balance."""
 

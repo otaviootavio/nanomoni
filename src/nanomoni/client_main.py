@@ -40,35 +40,6 @@ def _fetch_issuer_public_key(client: httpx.Client, issuer_base: str):
     return load_public_key_der_b64(der_b64), der_b64
 
 
-@log_timing("C_issuer_registration_start")
-def _issuer_registration_start(
-    client: httpx.Client, issuer_base: str, public_key_b64: str
-) -> Dict[str, str]:
-    start_payload = {"client_public_key_der_b64": public_key_b64}
-    r = client.post(f"{issuer_base}/issuer/registration/start", json=start_payload)
-    r.raise_for_status()
-    start_data = r.json()
-    return {
-        "challenge_id": start_data["challenge_id"],
-        "nonce_b64": start_data["nonce_b64"],
-    }
-
-
-@log_timing("C_issuer_registration_complete")
-def _issuer_registration_complete(
-    client: httpx.Client, issuer_base: str, challenge_id: str, signature_b64: str
-) -> Dict[str, Any]:
-    complete_payload = {
-        "challenge_id": challenge_id,
-        "signature_der_b64": signature_b64,
-    }
-    r = client.post(
-        f"{issuer_base}/issuer/registration/complete", json=complete_payload
-    )
-    r.raise_for_status()
-    return r.json()
-
-
 @log_timing("C_decode_certificate")
 def _decode_certificate(response_json: Dict[str, Any]) -> Dict[str, Any]:
     certificate_bytes = base64.b64decode(
@@ -113,18 +84,13 @@ def issuer_register(
     # 0) Fetch issuer public key (PEM/DER) for signature verification
     issuer_pub, issuer_pub_der_b64 = _fetch_issuer_public_key(client, issuer_base)
 
-    # 1) Start registration
-    start_data = _issuer_registration_start(client, issuer_base, public_key_b64)
-    challenge_id = start_data["challenge_id"]
-    nonce_b64 = start_data["nonce_b64"]
+    # 1) Register with issuer
+    reg_payload = {"client_public_key_der_b64": public_key_b64}
+    r = client.post(f"{issuer_base}/issuer/register", json=reg_payload)
+    r.raise_for_status()
+    resp_json = r.json()
 
-    # 2) Sign nonce and complete registration
-    signature_b64 = sign_body(private_key, base64.b64decode(nonce_b64))
-    resp_json = _issuer_registration_complete(
-        client, issuer_base, challenge_id, signature_b64
-    )
-
-    # 3) Decode and validate the returned certificate
+    # 2) Decode and validate the returned certificate
     decoded = _decode_certificate(resp_json)
     _validate_certificate(
         issuer_pub,
@@ -194,33 +160,9 @@ def vendor_register_start(
         "X-Certificate-Signature": cert["certificate_signature_b64"],
         "Accept": "application/json",
     }
-    r = client.post(f"{vendor_base}/vendor/register/start", headers=headers)
+    r = client.post(f"{vendor_base}/vendor/register", headers=headers)
     r.raise_for_status()
     return r.json()
-
-
-@log_timing("C_vendor_register_complete")
-def vendor_register_complete(
-    client: httpx.Client,
-    vendor_base: str,
-    cert: Dict[str, Any],
-    private_key,
-    challenge_der_b64: str,
-) -> None:
-    headers = {
-        "X-Certificate": cert["certificate_b64"],
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    }
-    signature_b64 = sign_body(private_key, base64.b64decode(challenge_der_b64))
-    payload = {"challenge_signature_der_b64": signature_b64}
-    r = client.post(
-        f"{vendor_base}/vendor/register/complete",
-        headers=headers,
-        json=payload,
-    )
-
-    r.raise_for_status()
 
 
 @log_timing("C_vendor_get_user_by_email")
@@ -344,20 +286,10 @@ def main() -> None:
 
         # Vendor registration flow (trust establishment at vendor)
         start_data = vendor_register_start(client, vendor_base_url, cert)
-        challenge_der_b64 = start_data.get("challenge_der_b64")
-        if challenge_der_b64:
-            vendor_register_complete(
-                client,
-                vendor_base_url,
-                cert,
-                private_key,
-                challenge_der_b64,
+        if start_data.get("status") != "trusted":
+            raise RuntimeError(
+                f"Unexpected registration start response: {start_data}"
             )
-        else:
-            if start_data.get("status") != "trusted":
-                raise RuntimeError(
-                    f"Unexpected registration start response: {start_data}"
-                )
 
         # Vendor flow using certificate and per-request signatures
         user = vendor_create_user(
