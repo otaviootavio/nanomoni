@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import os
 
-from pydantic import BaseModel, field_validator
-from cryptography.hazmat.primitives import serialization
+from pydantic import BaseModel, field_validator, ConfigDict
+from nanomoni.crypto.certificates import load_private_key_from_pem
+from cryptography.hazmat.primitives.asymmetric import ec
 
 
 class Settings(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     database_url: str
     database_echo: bool
 
@@ -20,6 +23,8 @@ class Settings(BaseModel):
 
     issuer_private_key_pem: str
 
+    issuer_private_key: ec.EllipticCurvePrivateKey
+
     @field_validator("issuer_private_key_pem")
     @classmethod
     def validate_issuer_private_key_pem(cls, v: str) -> str:
@@ -27,10 +32,7 @@ class Settings(BaseModel):
         if not v:
             raise ValueError("Issuer private key cannot be empty")
         try:
-            serialization.load_pem_private_key(
-                v.encode(),
-                password=None,
-            )
+            load_private_key_from_pem(v)
         except Exception as e:
             raise ValueError(f"Invalid issuer private key PEM: {e}") from e
         return v
@@ -58,4 +60,7 @@ def get_settings() -> Settings:
         app_name=os.environ.get("ISSUER_APP_NAME"),
         app_version=os.environ.get("ISSUER_APP_VERSION"),
         issuer_private_key_pem=os.environ.get("ISSUER_PRIVATE_KEY_PEM"),
+        issuer_private_key=load_private_key_from_pem(
+            os.environ.get("ISSUER_PRIVATE_KEY_PEM")
+        ),
     )

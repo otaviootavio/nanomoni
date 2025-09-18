@@ -47,40 +47,28 @@ class IssuerPublicKeyDTO(BaseModel):
 
 # Payment channel DTOs
 class OpenChannelRequestDTO(BaseModel):
-    """Request to open a payment channel and lock client funds."""
+    """Request to open a payment channel using a client-signed envelope."""
 
     client_public_key_der_b64: str
-    vendor_public_key_der_b64: str
-    amount: int
-    client_signature_b64: str
+    open_payload_b64: str
+    open_signature_b64: str
 
 
 class OpenChannelResponseDTO(BaseModel):
-    """Response with created channel identifiers and channel values."""
+    """Response containing the issuer-signed envelope describing the opened channel."""
 
-    channel_id: UUID
-    computed_id: str
-    salt_b64: str
-    amount: int
-    balance: int
-    paychan_certificate_b64: str
-    paychan_signature_b64: str
-
-    @field_serializer("channel_id")
-    def serialize_channel_id(self, value: UUID) -> str:
-        return str(value)
+    open_envelope_payload_b64: str
+    open_envelope_signature_b64: str
 
 
 class CloseChannelRequestDTO(BaseModel):
-    """Vendor presents client-signed certificate to close the channel, with vendor's consent signature."""
+    """Vendor presents client-signed close envelope plus vendor's consent signature (detached) for closing."""
 
-    computed_id: str
-    owed_amount: int
-    closing_certificate_b64: str
-    closing_signature_b64: str
-    vendor_signature_b64: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
+    close_payload_b64: str
+    client_close_signature_b64: str
+    vendor_close_signature_b64: str
 
 
 class CloseChannelResponseDTO(BaseModel):

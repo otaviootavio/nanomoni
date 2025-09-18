@@ -9,12 +9,11 @@ from cryptography.hazmat.primitives import serialization
 
 from nanomoni.envs.client_env import get_settings
 from nanomoni.crypto.certificates import (
+    generate_envelope,
+    verify_envelope,
+    load_public_key_from_der_b64,
+    Envelope,
     sign_bytes,
-    canonicalize_json,
-    issuer_verify_paychan_certificate_envelope,
-    load_public_key_der_b64,
-    issue_payload_envelope,
-    verify_payload_envelope,
 )
 
 
@@ -101,87 +100,93 @@ def open_payment_channel(
         f"Opening payment channel using public keys: {vendor_public_key_der_b64} and {client_public_key_der_b64}"
     )
 
+    # Build client-signed open envelope
     open_payload = {
         "vendor_public_key_der_b64": vendor_public_key_der_b64,
         "client_public_key_der_b64": client_public_key_der_b64,
         "amount": amount,
     }
-    message_bytes = canonicalize_json(open_payload)
-    client_signature_b64 = sign_bytes(client_private_key, message_bytes)
+    client_open_envelope = generate_envelope(client_private_key, open_payload)
 
     with httpx.Client(timeout=10.0) as client:
         r = client.post(
             f"{issuer_base_url}/issuer/payment-channel/open",
             json={
-                **open_payload,
-                "client_signature_b64": client_signature_b64,
+                "client_public_key_der_b64": client_public_key_der_b64,
+                "open_payload_b64": client_open_envelope.payload_b64,
+                "open_signature_b64": client_open_envelope.signature_b64,
             },
         )
         r.raise_for_status()
         data = r.json()
 
-        # Fetch issuer public key to validate the paychan certificate
+        # Fetch issuer public key to validate the issuer's envelope
         r_pk = client.get(f"{issuer_base_url}/issuer/public-key")
         r_pk.raise_for_status()
         issuer_public_key_der_b64 = r_pk.json()["der_b64"]
-        issuer_public_key = load_public_key_der_b64(issuer_public_key_der_b64)
+        issuer_public_key = load_public_key_from_der_b64(issuer_public_key_der_b64)
 
-        # Verify and parse the paychan certificate
-        cert_b64 = data["paychan_certificate_b64"]
-        sig_b64 = data["paychan_signature_b64"]
-        payload = issuer_verify_paychan_certificate_envelope(
-            issuer_public_key, cert_b64, sig_b64
+        # Verify and parse the issuer envelope
+        issuer_envelope = Envelope(
+            payload_b64=data["open_envelope_payload_b64"],
+            signature_b64=data["open_envelope_signature_b64"],
         )
+        verify_envelope(issuer_public_key, issuer_envelope)
+        opened_payload_bytes = base64.b64decode(issuer_envelope.payload_b64)
+        opened_payload = json.loads(opened_payload_bytes.decode("utf-8"))
 
         print(
-            "Payment channel opened and certificate verified:",
-            {
-                "channel_id": data["channel_id"],
-                "computed_id": data["computed_id"],
-                "salt_b64": data["salt_b64"],
-                "amount": data["amount"],
-                "balance": data["balance"],
-                "paychan_payload": payload.model_dump(),
-            },
+            "Payment channel opened and issuer envelope verified:",
+            opened_payload,
         )
         return (
-            data["computed_id"],
-            data["salt_b64"],
-            data["amount"],
-            data["balance"],
+            opened_payload["computed_id"],
+            opened_payload["salt_b64"],
+            opened_payload["amount"],
+            opened_payload["balance"],
         )
 
 
 def client_create_off_tx_to_vendor(
     computed_id: str,
     client_private_key_pem: str,
-    amount: int,
+    owed_amount: int,
+    client_public_key_der_b64: str,
+    vendor_public_key_der_b64: str,
 ) -> tuple[str, str]:
-    """Client creates an off-chain payment transaction envelope for vendor.
+    """Client creates an off-chain close request envelope for vendor.
 
-    Payload fields: {"computed_id", "amount"}
-    Returns: (certificate_b64, signature_b64)
+    Payload fields: {"computed_id", "client_public_key_der_b64", "vendor_public_key_der_b64", "owed_amount"}
+    Returns: (payload_b64, signature_b64)
     """
     client_private_key = serialization.load_pem_private_key(
         client_private_key_pem.encode(), password=None
     )
-    payload = {"computed_id": computed_id, "amount": amount}
-    return issue_payload_envelope(client_private_key, payload)
+    payload = {
+        "computed_id": computed_id,
+        "client_public_key_der_b64": client_public_key_der_b64,
+        "vendor_public_key_der_b64": vendor_public_key_der_b64,
+        "owed_amount": owed_amount,
+    }
+    envelope = generate_envelope(client_private_key, payload)
+    return envelope.payload_b64, envelope.signature_b64
 
 
 def vendor_validate_client_off_tx(
     issuer_base_url: str,
     vendor_private_key_pem: str,
     client_public_key_der_b64: str,
-    certificate_b64: str,
+    payload_b64: str,
     signature_b64: str,
 ) -> Dict[str, Any]:
     """Vendor validates client's off-chain payment envelope using client's public key.
 
     Returns the decoded payload dict on success.
     """
-    client_public_key = load_public_key_der_b64(client_public_key_der_b64)
-    payload = verify_payload_envelope(client_public_key, certificate_b64, signature_b64)
+    client_public_key = load_public_key_from_der_b64(client_public_key_der_b64)
+    envelope = Envelope(payload_b64=payload_b64, signature_b64=signature_b64)
+    verify_envelope(client_public_key, envelope)
+    payload = json.loads(base64.b64decode(payload_b64).decode("utf-8"))
     print("Validated client off-chain tx:", payload)
     return payload
 
@@ -190,31 +195,27 @@ def vendor_close_pay_chan_using_off_tx(
     issuer_base_url: str,
     computed_id: str,
     owed_amount: int,
-    closing_certificate_b64: str,
-    closing_signature_b64: str,
+    close_payload_b64: str,
+    client_close_signature_b64: str,
     vendor_private_key_pem: str,
     client_public_key_der_b64: str,
     vendor_public_key_der_b64: str,
 ) -> Dict[str, Any]:
-    """Vendor signs the off-chain certificate and submits close request to issuer."""
+    """Vendor signs the client's close envelope payload and submits close request to issuer."""
     vendor_private_key = serialization.load_pem_private_key(
         vendor_private_key_pem.encode(), password=None
     )
-    # Sign over the canonical payload JSON (not the envelope bytes)
-    certificate_bytes = base64.b64decode(closing_certificate_b64)
-    payload_dict = json.loads(certificate_bytes.decode("utf-8"))
-    canonical_bytes = canonicalize_json(payload_dict)
-    vendor_signature_b64 = sign_bytes(vendor_private_key, canonical_bytes)
+    # Sign the exact payload bytes embedded in the client's envelope
+    payload_bytes = base64.b64decode(close_payload_b64)
+    vendor_close_signature_b64 = sign_bytes(vendor_private_key, payload_bytes)
 
     with httpx.Client(timeout=10.0) as client:
         r = client.post(
             f"{issuer_base_url}/issuer/payment-channel/close",
             json={
-                "computed_id": computed_id,
-                "owed_amount": owed_amount,
-                "closing_certificate_b64": closing_certificate_b64,
-                "closing_signature_b64": closing_signature_b64,
-                "vendor_signature_b64": vendor_signature_b64,
+                "close_payload_b64": close_payload_b64,
+                "client_close_signature_b64": client_close_signature_b64,
+                "vendor_close_signature_b64": vendor_close_signature_b64,
                 "client_public_key_der_b64": client_public_key_der_b64,
                 "vendor_public_key_der_b64": vendor_public_key_der_b64,
             },
@@ -238,9 +239,6 @@ def main() -> None:
         issuer_base_url, vendor_private_key_pem, client_private_key_pem, 10
     )
 
-    client_off_tx = client_create_off_tx_to_vendor(
-        computed_id, client_private_key_pem, 10
-    )
     # Compute DER b64 public keys from PEMs for submission to close endpoint
     vendor_public_key_der_b64 = base64.b64encode(
         serialization.load_pem_private_key(
@@ -263,6 +261,14 @@ def main() -> None:
         )
     ).decode("utf-8")
 
+    # 2) Client sends an off-chain payment to the vendor; vendor verifies it
+    client_off_tx = client_create_off_tx_to_vendor(
+        computed_id,
+        client_private_key_pem,
+        10,
+        client_public_key_der_b64,
+        vendor_public_key_der_b64,
+    )
     vendor_validate_client_off_tx(
         issuer_base_url,
         vendor_private_key_pem,
@@ -271,6 +277,7 @@ def main() -> None:
         client_off_tx[1],
     )
 
+    # 3) Vendor closes the channel using the client's off-chain certificate
     vendor_close_pay_chan_using_off_tx(
         issuer_base_url,
         computed_id,

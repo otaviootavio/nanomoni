@@ -72,5 +72,5 @@ def get_payment_channel_service() -> PaymentChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaymentChannelService(
-        account_repo, channel_repo, settings.issuer_private_key_pem
+        account_repo, channel_repo, settings.issuer_private_key
     )

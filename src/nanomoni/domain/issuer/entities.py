@@ -71,8 +71,9 @@ class PaymentChannel(BaseModel):
     amount: int
     balance: int = 0
     is_closed: bool = False
-    closing_certificate_b64: Optional[str] = None
-    vendor_closing_signature_b64: Optional[str] = None
+    close_payload_b64: Optional[str] = None
+    client_close_signature_b64: Optional[str] = None
+    vendor_close_signature_b64: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 
@@ -87,10 +88,3 @@ class PaymentChannel(BaseModel):
     @field_serializer("closed_at")
     def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
         return value.isoformat() if value else None
-
-
-class PaymentChannelCertificatePayload(BaseModel):
-    """Signed payload for closing a payment channel."""
-
-    computed_id: str
-    amount: int

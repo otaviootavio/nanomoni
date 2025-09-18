@@ -159,11 +159,12 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     async def mark_closed(
         self,
         computed_id: str,
-        closing_certificate_b64: str,
+        close_payload_b64: str,
+        client_close_signature_b64: str,
         *,
         amount: int,
         balance: int,
-        vendor_signature_b64: str,
+        vendor_close_signature_b64: str,
     ) -> PaymentChannel:
         existing = await self.get_by_computed_id(computed_id)
         if not existing:
@@ -171,8 +172,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if existing.is_closed:
             return existing
         existing.is_closed = True
-        existing.closing_certificate_b64 = closing_certificate_b64
-        existing.vendor_closing_signature_b64 = vendor_signature_b64
+        existing.close_payload_b64 = close_payload_b64
+        existing.client_close_signature_b64 = client_close_signature_b64
+        existing.vendor_close_signature_b64 = vendor_close_signature_b64
         from datetime import datetime, timezone
 
         existing.closed_at = datetime.now(timezone.utc)
