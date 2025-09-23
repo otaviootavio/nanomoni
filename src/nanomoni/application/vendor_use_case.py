@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 from uuid import UUID
+import httpx
 
 from ..domain.vendor.entities import User, Task, OffChainTx
 from ..domain.vendor.user_repository import UserRepository
@@ -231,8 +232,30 @@ class TaskService:
 class PaymentService:
     """Service for handling off-chain payment transactions."""
 
-    def __init__(self, off_chain_tx_repository: OffChainTxRepository):
+    def __init__(self, off_chain_tx_repository: OffChainTxRepository, issuer_base_url: str):
         self.off_chain_tx_repository = off_chain_tx_repository
+        self.issuer_base_url = issuer_base_url
+
+    async def _verify_payment_channel_exists(self, computed_id: str) -> None:
+        """Verify that the payment channel exists on the issuer side."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{self.issuer_base_url}/issuer/payment-channel/{computed_id}"
+                )
+                response.raise_for_status()
+                channel_data = response.json()
+                
+                # Check if channel is closed
+                if channel_data.get("is_closed", False):
+                    raise ValueError("Payment channel is closed")
+                    
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise ValueError("Payment channel not found on issuer")
+            raise ValueError(f"Failed to verify payment channel: {e}")
+        except httpx.RequestError as e:
+            raise ValueError(f"Could not connect to issuer: {e}")
 
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
@@ -248,6 +271,10 @@ class PaymentService:
             payload.computed_id
         )
         prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
+
+        # 3.1) If this is the first payment for this channel, verify it exists on issuer
+        if latest_tx is None:
+            await self._verify_payment_channel_exists(payload.computed_id)
 
         # 4) Check for double spending - owed amount must be increasing
         if payload.owed_amount <= prev_owed_amount:

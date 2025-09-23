@@ -60,4 +60,5 @@ def get_task_service() -> TaskService:
 
 def get_payment_service() -> PaymentService:
     off_chain_tx_repository = get_off_chain_tx_repository()
-    return PaymentService(off_chain_tx_repository)
+    settings = get_settings_dependency()
+    return PaymentService(off_chain_tx_repository, settings.issuer_base_url)

@@ -78,12 +78,13 @@ async def close_payment_channel(
 
 
 @router.get(
-    "/payment-channel/",
+    "/payment-channel/{computed_id}",
     response_model=PaymentChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
 async def get_payment_channel(
-    payload: GetPaymentChannelRequestDTO,
+    computed_id: str,
     service: PaymentChannelService = Depends(get_payment_channel_service),
 ) -> PaymentChannelResponseDTO:
+    payload = GetPaymentChannelRequestDTO(computed_id=computed_id)
     return await service.get_channel(payload)

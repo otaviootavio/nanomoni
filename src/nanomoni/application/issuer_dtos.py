@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from uuid import UUID
+from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 
 class RegistrationRequestDTO(BaseModel):
@@ -67,4 +69,28 @@ class GetPaymentChannelRequestDTO(BaseModel):
 class PaymentChannelResponseDTO(BaseModel):
     """Response with payment channel details."""
 
-    channel_id: UUID
+    id: UUID
+    computed_id: str
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    salt_b64: str
+    amount: int
+    balance: int
+    is_closed: bool
+    close_payload_b64: Optional[str] = None
+    client_close_signature_b64: Optional[str] = None
+    vendor_close_signature_b64: Optional[str] = None
+    created_at: datetime
+    closed_at: Optional[datetime] = None
+
+    @field_serializer("id")
+    def serialize_id(self, value: UUID) -> str:
+        return str(value)
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return value.isoformat()
+
+    @field_serializer("closed_at")
+    def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
+        return value.isoformat() if value else None

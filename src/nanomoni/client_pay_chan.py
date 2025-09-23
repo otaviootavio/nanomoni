@@ -31,7 +31,7 @@ def register_into_issuer_using_private_key(
     )
     public_key_der_b64 = base64.b64encode(public_key_der).decode("utf-8")
 
-    print(f"Registering into issuer using public key: {public_key_der_b64}")
+    print(f"Registering into issuer using public key")
 
     with httpx.Client(timeout=10.0) as client:
         # 1) Register with issuer by sending public key
@@ -71,7 +71,7 @@ def open_payment_channel(
     client_public_key_der_b64 = base64.b64encode(client_public_key_der).decode("utf-8")
 
     print(
-        f"Opening payment channel using public keys: {vendor_public_key_der_b64} and {client_public_key_der_b64}"
+        f"Opening payment channel using public keys."
     )
 
     # Build client-signed open envelope
@@ -110,8 +110,7 @@ def open_payment_channel(
         opened_payload = json.loads(opened_payload_bytes.decode("utf-8"))
 
         print(
-            "Payment channel opened and issuer envelope verified:",
-            opened_payload,
+            "Payment channel opened and issuer envelope verified"
         )
         return (
             opened_payload["computed_id"],
@@ -200,7 +199,7 @@ def send_payment_to_vendor(
             )
             r.raise_for_status()
             response_data = r.json()
-            print(f"Payment successfully processed by vendor: {response_data}")
+            print(f"Payment successfully processed by vendor.")
             return response_data
         except httpx.HTTPStatusError as e:
             if e.response is not None:
@@ -289,7 +288,7 @@ def main() -> None:
         client_off_tx_0,
         client_public_key_der_b64,
     )
-    print("First payment processed by vendor:", vendor_response_0)
+    print("First payment processed by vendor")
 
     # 2.1) Client sends another off-chain payment to the vendor API
     client_off_tx_1 = client_create_off_tx_to_vendor(
@@ -306,7 +305,7 @@ def main() -> None:
         client_off_tx_1,
         client_public_key_der_b64,
     )
-    print("Second payment processed by vendor:", vendor_response_1)
+    print("Second payment processed by vendor.")
 
     # 3) Vendor closes the channel using the client's latest off-chain tx
     # The vendor would use the stored transaction data from vendor_response_1

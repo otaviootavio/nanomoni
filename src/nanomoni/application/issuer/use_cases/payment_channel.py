@@ -239,10 +239,4 @@ class PaymentChannelService:
         channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
         if not channel:
             raise ValueError("Payment channel not found")
-        return PaymentChannelResponseDTO(
-            channel_id=channel.id,
-            computed_id=channel.computed_id,
-            salt_b64=channel.salt_b64,
-            amount=channel.amount,
-            balance=channel.balance,
-        )
+        return PaymentChannelResponseDTO(**channel.model_dump())

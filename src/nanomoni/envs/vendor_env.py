@@ -59,14 +59,14 @@ def _register_vendor_with_issuer(
     )
     public_key_der_b64 = base64.b64encode(public_key_der).decode("utf-8")
 
-    print(f"Registering vendor into issuer using public key: {public_key_der_b64}")
+    print(f"Registering vendor into issuer using public key.")
 
     try:
         with httpx.Client(timeout=10.0) as client:
             reg_payload = {"client_public_key_der_b64": public_key_der_b64}
             r = client.post(f"{issuer_base_url}/issuer/register", json=reg_payload)
             r.raise_for_status()
-            print("Vendor registered with issuer successfully:", r.json())
+            print("Vendor registered with issuer successfully.")
     except httpx.HTTPStatusError as e:
         if e.response is not None and e.response.status_code == 400:
             try:
