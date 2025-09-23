@@ -1,4 +1,4 @@
-"""Vendor domain entities: User and Task."""
+"""Vendor domain entities: User, Task, and OffChainTx."""
 
 from __future__ import annotations
 
@@ -108,16 +108,9 @@ class Task(BaseModel):
 
     def fail(self) -> None:
         """Mark task as failed."""
-        if self.status == "completed":
-            raise ValueError("Cannot fail a completed task.")
+        if self.status == "failed":
+            raise ValueError("Task is already failed.")
         self.status = "failed"
-        self.updated_at = datetime.now(timezone.utc)
-
-    def reset(self) -> None:
-        """Reset the task to pending status."""
-        if self.status in ["completed", "failed"]:
-            raise ValueError("Cannot reset a completed or failed task.")
-        self.status = "pending"
         self.updated_at = datetime.now(timezone.utc)
 
     def update_details(
@@ -131,3 +124,28 @@ class Task(BaseModel):
         if description is not _sentinel:
             self.description = description
         self.updated_at = datetime.now(timezone.utc)
+
+
+class OffChainTx(BaseModel):
+    """Off-chain transaction entity representing a payment channel transaction."""
+
+    id: UUID = Field(default_factory=uuid4)
+    computed_id: str = Field(..., description="Payment channel computed ID")
+    client_public_key_der_b64: str = Field(
+        ..., description="Client's public key in DER format (base64)"
+    )
+    vendor_public_key_der_b64: str = Field(
+        ..., description="Vendor's public key in DER format (base64)"
+    )
+    owed_amount: int = Field(..., ge=0, description="Amount owed to vendor")
+    payload_b64: str = Field(..., description="Base64-encoded payload")
+    signature_b64: str = Field(..., description="Base64-encoded signature")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_serializer("id")
+    def serialize_id(self, value: UUID) -> str:
+        return str(value)
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return value.isoformat()

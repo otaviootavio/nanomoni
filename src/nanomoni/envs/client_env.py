@@ -1,17 +1,32 @@
 from __future__ import annotations
 
+import base64
 import os
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, computed_field, field_validator
 from cryptography.hazmat.primitives import serialization
 from urllib.parse import urlparse
 
 
 class Settings(BaseModel):
     client_private_key_pem: str
-    vendor_private_key_pem: str
     vendor_base_url: str
     issuer_base_url: str
+
+    @computed_field
+    @property
+    def client_public_key_der_b64(self) -> str:
+        """DER-encoded base64 public key."""
+        private_key = serialization.load_pem_private_key(
+            self.client_private_key_pem.encode(),
+            password=None,
+        )
+        public_key = private_key.public_key()
+        public_key_der = public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return base64.b64encode(public_key_der).decode("utf-8")
 
     @field_validator("client_private_key_pem")
     @classmethod
@@ -26,20 +41,6 @@ class Settings(BaseModel):
             )
         except Exception as e:
             raise ValueError(f"Invalid client private key PEM: {e}") from e
-        return v
-
-    @field_validator("vendor_private_key_pem")
-    @classmethod
-    def validate_vendor_private_key_pem(cls, v: str) -> str:
-        if not v:
-            raise ValueError("Vendor private key cannot be empty")
-        try:
-            serialization.load_pem_private_key(
-                v.encode(),
-                password=None,
-            )
-        except Exception as e:
-            raise ValueError(f"Invalid vendor private key PEM: {e}") from e
         return v
 
     @field_validator("vendor_base_url")
@@ -70,7 +71,6 @@ class Settings(BaseModel):
 def get_settings() -> Settings:
     return Settings(
         client_private_key_pem=os.environ.get("CLIENT_PRIVATE_KEY_PEM"),
-        vendor_private_key_pem=os.environ.get("VENDOR_PRIVATE_KEY_PEM"),
         vendor_base_url=os.environ.get("VENDOR_BASE_URL"),
         issuer_base_url=os.environ.get("ISSUER_BASE_URL"),
     )

@@ -3,6 +3,4 @@
 
 sleep 10
 
-poetry run python -m src.nanomoni.client_main
-
-echo "All 10 client runs completed." 
+poetry run python -m src.nanomoni.client_pay_chan

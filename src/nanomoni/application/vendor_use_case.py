@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from ..domain.vendor.entities import User, Task
-from ..domain.vendor.repositories import (
-    UserRepository,
-    TaskRepository,
-)
+from ..domain.vendor.entities import User, Task, OffChainTx
+from ..domain.vendor.user_repository import UserRepository
+from ..domain.vendor.task_repository import TaskRepository
+from ..domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from .vendor_dtos import (
     CreateUserDTO,
     UpdateUserDTO,
@@ -17,6 +16,13 @@ from .vendor_dtos import (
     CreateTaskDTO,
     UpdateTaskDTO,
     TaskResponseDTO,
+    ReceivePaymentDTO,
+    OffChainTxResponseDTO,
+)
+from ..crypto.certificates import (
+    verify_envelope,
+    load_public_key_from_der_b64,
+    deserialize_off_chain_tx,
 )
 
 
@@ -220,3 +226,60 @@ class TaskService:
         task.fail()
         updated = await self.task_repository.update(task)
         return TaskResponseDTO(**updated.model_dump())
+
+
+class PaymentService:
+    """Service for handling off-chain payment transactions."""
+
+    def __init__(self, off_chain_tx_repository: OffChainTxRepository):
+        self.off_chain_tx_repository = off_chain_tx_repository
+
+    async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
+        """Receive and validate an off-chain payment from a client."""
+        # 1) Verify client's signature
+        client_public_key = load_public_key_from_der_b64(dto.client_public_key_der_b64)
+        verify_envelope(client_public_key, dto.envelope)
+
+        # 2) Decode and validate payload
+        payload = deserialize_off_chain_tx(dto.envelope)
+
+        # 3) Get the latest transaction for this payment channel to check for double spending
+        latest_tx = await self.off_chain_tx_repository.get_latest_by_computed_id(
+            payload.computed_id
+        )
+        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
+
+        # 4) Check for double spending - owed amount must be increasing
+        if payload.owed_amount <= prev_owed_amount:
+            raise ValueError(
+                f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
+            )
+
+        # 5) Create and store the off-chain transaction
+        off_chain_tx = OffChainTx(
+            computed_id=payload.computed_id,
+            client_public_key_der_b64=payload.client_public_key_der_b64,
+            vendor_public_key_der_b64=payload.vendor_public_key_der_b64,
+            owed_amount=payload.owed_amount,
+            payload_b64=dto.envelope.payload_b64,
+            signature_b64=dto.envelope.signature_b64,
+        )
+
+        # Save to repository
+        created_tx = await self.off_chain_tx_repository.create(off_chain_tx)
+
+        return OffChainTxResponseDTO(**created_tx.model_dump())
+
+    async def get_payment_by_id(self, tx_id: UUID) -> Optional[OffChainTxResponseDTO]:
+        """Get an off-chain transaction by ID."""
+        tx = await self.off_chain_tx_repository.get_by_id(tx_id)
+        if not tx:
+            return None
+        return OffChainTxResponseDTO(**tx.model_dump())
+
+    async def get_payments_by_channel(
+        self, computed_id: str
+    ) -> List[OffChainTxResponseDTO]:
+        """Get all payments for a payment channel."""
+        txs = await self.off_chain_tx_repository.get_by_computed_id(computed_id)
+        return [OffChainTxResponseDTO(**tx.model_dump()) for tx in txs]

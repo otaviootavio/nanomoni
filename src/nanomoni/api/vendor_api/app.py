@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from ...middleware.ecdsa import ECDSASignatureMiddleware
+# from ...middleware.ecdsa import ECDSASignatureMiddleware
+
+import base64
+from cryptography.hazmat.primitives import serialization
 
 from ...envs.vendor_env import get_settings
 from ...infrastructure.database import get_database_client
-from .routers import auth, users, tasks
+from .routers import users, tasks, payments
 
 settings = get_settings()
 
@@ -43,21 +46,21 @@ def create_app() -> FastAPI:
         "/docs",
         "/redoc",
         "/openapi.json",
-        "/api/v1/issuer/",
-        "/api/v1/vendor/register/start",
-        "/api/v1/vendor/register/complete",
+        "/api/v1/users",
+        "/api/v1/tasks",
+        "/api/v1/payments",
     ]
-    app.add_middleware(
-        ECDSASignatureMiddleware,
-        issuer_base_url=settings.issuer_base_url,
-        db_client=db_client,
-        skip_paths=skip_paths,
-    )
+    # app.add_middleware(
+    #     ECDSASignatureMiddleware,
+    #     issuer_base_url=settings.issuer_base_url,
+    #     db_client=db_client,
+    #     skip_paths=skip_paths,
+    # )
 
     # Include routers
     app.include_router(users.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
-    app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(payments.router, prefix="/api/v1")
 
     @app.get("/")
     async def root():
@@ -75,6 +78,23 @@ def create_app() -> FastAPI:
             "status": "healthy",
             "service": f"{settings.app_name} Vendor",
             "version": settings.app_version,
+        }
+
+    @app.get("/api/v1/vendor/public-key")
+    async def get_vendor_public_key():
+        """Return the vendor public key configured via environment settings."""
+
+        public_key = serialization.load_pem_public_key(
+            settings.vendor_public_key_pem.encode()
+        )
+        der_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        public_key_der_b64 = base64.b64encode(der_bytes).decode()
+
+        return {
+            "public_key_der_b64": public_key_der_b64,
         }
 
     return app

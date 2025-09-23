@@ -49,6 +49,16 @@ class CloseChannelRequestPayload(BaseModel):
     owed_amount: int
 
 
+class OffChainTxPayload(CloseChannelRequestPayload):
+    """Payload for an off-chain transaction from client to vendor.
+
+    This has the same structure as a close channel request because it represents
+    a client-signed statement of the channel's final state.
+    """
+
+    pass
+
+
 class CloseChannelResponsePayload(BaseModel):
     """Payload carried by the issuer-signed envelope after closing a channel."""
 
@@ -138,6 +148,13 @@ def deserialize_close_channel_request(envelope: Envelope) -> CloseChannelRequest
     payload_bytes = base64.b64decode(envelope.payload_b64, validate=True)
     data = json.loads(payload_bytes.decode("utf-8"))
     return CloseChannelRequestPayload.model_validate(data)
+
+
+def deserialize_off_chain_tx(envelope: Envelope) -> OffChainTxPayload:
+    """Decode and validate an off-chain tx envelope payload."""
+    payload_bytes = base64.b64decode(envelope.payload_b64, validate=True)
+    data = json.loads(payload_bytes.decode("utf-8"))
+    return OffChainTxPayload.model_validate(data)
 
 
 def serialize_close_channel_response(

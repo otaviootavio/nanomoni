@@ -31,7 +31,7 @@ def main() -> None:
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.api_debug,
-        log_level="trace",
+        log_level="info",
     )
 
 
