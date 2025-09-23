@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from cryptography.exceptions import InvalidSignature
 
-from ....application.vendor_dtos import ReceivePaymentDTO, OffChainTxResponseDTO
+from ....application.vendor_dtos import (
+    ReceivePaymentDTO,
+    OffChainTxResponseDTO,
+    CloseChannelDTO,
+)
 from ....application.vendor_use_case import PaymentService
 from ..dependencies import get_payment_service
 
@@ -45,13 +49,29 @@ async def receive_payment(
 async def get_payment(
     payment_id: UUID, payment_service: PaymentService = Depends(get_payment_service)
 ) -> OffChainTxResponseDTO:
-    """Get an off-chain payment by ID."""
-    payment = await payment_service.get_payment_by_id(payment_id)
-    if not payment:
+    # TODO: implement retrieval by id if needed
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
+
+@router.post(
+    "/close",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def close_channel(
+    payload: CloseChannelDTO,
+    payment_service: PaymentService = Depends(get_payment_service),
+):
+    try:
+        await payment_service.close_channel(payload)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to close channel: {str(e)}",
         )
-    return payment
 
 
 @router.get("/channel/{computed_id}", response_model=List[OffChainTxResponseDTO])

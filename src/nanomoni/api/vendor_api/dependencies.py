@@ -93,4 +93,6 @@ def get_payment_service(
         off_chain_tx_repository=off_chain_tx_repository,
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,
+        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
+        vendor_private_key_pem=settings.vendor_private_key_pem,
     )

@@ -43,6 +43,13 @@ class OffChainTxRepository(ABC):
         pass
 
     @abstractmethod
+    async def overwrite(
+        self, existing_tx_id: UUID, new_off_chain_tx: OffChainTx
+    ) -> OffChainTx:
+        """Overwrite an existing transaction with new data, keeping the same ID."""
+        pass
+
+    @abstractmethod
     async def delete(self, tx_id: UUID) -> bool:
         """Delete an off-chain transaction."""
         pass

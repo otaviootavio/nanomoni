@@ -36,3 +36,17 @@ class PaymentChannelRepository(ABC):
     async def update(self, payment_channel: PaymentChannel) -> PaymentChannel:
         """Update an existing payment_channel."""
         pass
+
+    @abstractmethod
+    async def mark_closed(
+        self,
+        computed_id: str,
+        close_payload_b64: str,
+        client_close_signature_b64: str,
+        *,
+        amount: int,
+        balance: int,
+        vendor_close_signature_b64: str,
+    ) -> PaymentChannel:
+        """Mark a payment channel as closed, persisting close payload and signatures."""
+        pass

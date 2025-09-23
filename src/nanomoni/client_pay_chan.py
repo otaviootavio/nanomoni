@@ -221,37 +221,15 @@ def send_payment_to_vendor(
             raise
 
 
-# def vendor_close_pay_chan_using_off_tx(
-#     issuer_base_url: str,
-#     close_payload_b64: str,
-#     client_close_signature_b64: str,
-#     vendor_private_key_pem: str,
-#     client_public_key_der_b64: str,
-#     vendor_public_key_der_b64: str,
-# ) -> Dict[str, Any]:
-#     """Vendor signs the client's close envelope payload and submits close request to issuer."""
-#     vendor_private_key = serialization.load_pem_private_key(
-#         vendor_private_key_pem.encode(), password=None
-#     )
-#     # Sign the exact payload bytes embedded in the client's envelope
-#     payload_bytes = base64.b64decode(close_payload_b64)
-#     vendor_close_signature_b64 = sign_bytes(vendor_private_key, payload_bytes)
-
-#     with httpx.Client(timeout=10.0) as client:
-#         r = client.post(
-#             f"{issuer_base_url}/issuer/payment-channel/close",
-#             json={
-#                 "close_payload_b64": close_payload_b64,
-#                 "client_close_signature_b64": client_close_signature_b64,
-#                 "vendor_close_signature_b64": vendor_close_signature_b64,
-#                 "client_public_key_der_b64": client_public_key_der_b64,
-#                 "vendor_public_key_der_b64": vendor_public_key_der_b64,
-#             },
-#         )
-#         r.raise_for_status()
-#         data = r.json()
-#         print("Channel closed:", data)
-#         return data
+def request_vendor_close_channel(vendor_base_url: str, computed_id: str) -> None:
+    """Ask the vendor to close the payment channel for the given computed_id."""
+    with httpx.Client(timeout=10.0) as client:
+        r = client.post(
+            f"{vendor_base_url}/payments/close",
+            json={"computed_id": computed_id},
+        )
+        r.raise_for_status()
+        print(f"Requested vendor to close channel {computed_id}")
 
 
 def main() -> None:
@@ -276,12 +254,12 @@ def main() -> None:
     # in wich consider the balance as a hard-limit for the sum
     # of the amount of continuous payments.
     computed_id, salt_b64, amount, balance = open_payment_channel(
-        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 100
+        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 1234
     )
 
     # Loop to send 10,000 off-chain payments to the vendor API
     last_vendor_response = None
-    for i in range(1, 101):
+    for i in range(1, 501):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
             client_private_key_pem,
@@ -297,17 +275,8 @@ def main() -> None:
             client_public_key_der_b64,
         )
 
-    # 3) Vendor closes the channel using the client's latest off-chain tx
-    # The vendor would use the stored transaction data from vendor_response_1
-    # to close the payment channel with the issuer when needed
-    # vendor_close_pay_chan_using_off_tx(
-    #     issuer_base_url,
-    #     client_off_tx_1.payload_b64,
-    #     client_off_tx_1.signature_b64,
-    #     vendor_private_key_pem,
-    #     client_public_key_der_b64,
-    #     vendor_public_key_der_b64,
-    # )
+    # After sending all micropayments, request the vendor to close the channel
+    request_vendor_close_channel(vendor_base_url, computed_id)
 
 
 if __name__ == "__main__":

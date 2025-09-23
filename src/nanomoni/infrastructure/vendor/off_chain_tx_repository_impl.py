@@ -68,9 +68,48 @@ class OffChainTxRepositoryImpl(OffChainTxRepository):
         return txs
 
     async def update(self, off_chain_tx: OffChainTx) -> OffChainTx:
+        # Simple update: store the transaction
         tx_key = f"off_chain_tx:{off_chain_tx.id}"
         await self.store.set(tx_key, off_chain_tx.model_dump_json())
+
+        # Update the sorted sets
+        created_ts = off_chain_tx.created_at.timestamp()
+        await self.store.zadd("off_chain_txs:all", {str(off_chain_tx.id): created_ts})
+        await self.store.zadd(
+            f"off_chain_txs:by_computed_id:{off_chain_tx.computed_id}",
+            {str(off_chain_tx.id): created_ts},
+        )
+
         return off_chain_tx
+
+    async def overwrite(
+        self, existing_tx_id: UUID, new_off_chain_tx: OffChainTx
+    ) -> OffChainTx:
+        # Create a new transaction object with the existing ID
+        overwritten_tx = OffChainTx(
+            id=existing_tx_id,  # Reuse the existing ID
+            computed_id=new_off_chain_tx.computed_id,
+            client_public_key_der_b64=new_off_chain_tx.client_public_key_der_b64,
+            vendor_public_key_der_b64=new_off_chain_tx.vendor_public_key_der_b64,
+            owed_amount=new_off_chain_tx.owed_amount,
+            payload_b64=new_off_chain_tx.payload_b64,
+            client_signature_b64=new_off_chain_tx.client_signature_b64,
+            created_at=new_off_chain_tx.created_at,
+        )
+
+        # Redis SET will overwrite the existing key
+        tx_key = f"off_chain_tx:{existing_tx_id}"
+        await self.store.set(tx_key, overwritten_tx.model_dump_json())
+
+        # Update the sorted sets with new timestamp
+        created_ts = overwritten_tx.created_at.timestamp()
+        await self.store.zadd("off_chain_txs:all", {str(existing_tx_id): created_ts})
+        await self.store.zadd(
+            f"off_chain_txs:by_computed_id:{overwritten_tx.computed_id}",
+            {str(existing_tx_id): created_ts},
+        )
+
+        return overwritten_tx
 
     async def delete(self, tx_id: UUID) -> bool:
         tx_key = f"off_chain_tx:{tx_id}"

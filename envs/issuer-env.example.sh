@@ -1,7 +1,11 @@
 # Issuer environment variables
 
 # Database settings (Redis)
-export ISSUER_DATABASE_URL="redis://redis-issuer:6380/0"
+# For docker compose
+export ISSUER_DATABASE_URL="redis://redis-issuer:6379/0"
+
+# For local development, without docker compose
+# export ISSUER_DATABASE_URL="redis://localhost:6380/0"
 export ISSUER_DATABASE_ECHO="false"
 
 # API settings
@@ -16,7 +20,10 @@ export ISSUER_APP_VERSION="1.0.0"
 
 # Issuer private key (PEM format)
 export ISSUER_PRIVATE_KEY_PEM="-----BEGIN PRIVATE KEY-----
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+CCCcccCCCcccCCCcccCCCcccCCCcccCCCcccCCCcccCCCcccCCCcccCCCcccCCCT
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 -----END PRIVATE KEY-----"
+
+# Alternatively, you can generate the private key dynamically using: 
+# export ISSUER_PRIVATE_KEY_PEM="$(openssl ecparam -genkey -name secp256k1 | openssl pkcs8 -topk8 -nocrypt)" 

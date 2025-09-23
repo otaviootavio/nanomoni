@@ -99,3 +99,31 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
                 )
 
         return payment_channel
+
+    async def mark_closed(
+        self,
+        computed_id: str,
+        close_payload_b64: str,
+        client_close_signature_b64: str,
+        vendor_close_signature_b64: str,
+        *,
+        amount: int,
+        balance: int,
+    ) -> PaymentChannel:
+        channel = await self.get_by_computed_id(computed_id)
+        if not channel:
+            raise ValueError("Payment channel not found")
+        if channel.is_closed:
+            return channel
+
+        channel.is_closed = True
+        channel.close_payload_b64 = close_payload_b64
+        channel.client_close_signature_b64 = client_close_signature_b64
+        channel.vendor_close_signature_b64 = vendor_close_signature_b64
+        channel.amount = amount
+        channel.balance = balance
+        from datetime import datetime, timezone
+
+        channel.closed_at = datetime.now(timezone.utc)
+
+        return await self.update(channel)

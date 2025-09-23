@@ -139,7 +139,9 @@ class OffChainTx(BaseModel):
     )
     owed_amount: int = Field(..., ge=0, description="Amount owed to vendor")
     payload_b64: str = Field(..., description="Base64-encoded payload")
-    signature_b64: str = Field(..., description="Base64-encoded signature")
+    client_signature_b64: str = Field(
+        ..., description="Base64-encoded client signature"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_serializer("id")

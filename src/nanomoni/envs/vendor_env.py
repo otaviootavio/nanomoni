@@ -23,6 +23,7 @@ class Settings(BaseModel):
     issuer_base_url: str
     vendor_private_key_pem: str
     vendor_public_key_pem: str
+    vendor_public_key_der_b64: str
 
     @field_validator("vendor_private_key_pem")
     @classmethod
@@ -108,6 +109,13 @@ def get_settings() -> Settings:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode()
 
+        vendor_public_key_der_b64 = base64.b64encode(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        ).decode("utf-8")
+
     return Settings(
         database_url=os.environ.get("VENDOR_DATABASE_URL"),
         database_echo=database_echo_str.lower() == "true"
@@ -126,4 +134,5 @@ def get_settings() -> Settings:
         issuer_base_url=issuer_base_url,
         vendor_private_key_pem=vendor_private_key_pem,
         vendor_public_key_pem=vendor_public_key_pem,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
     )

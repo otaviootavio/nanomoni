@@ -140,3 +140,9 @@ class PaginatedResponse(BaseModel):
     limit: int
     has_next: bool
     has_previous: bool
+
+
+class CloseChannelDTO(BaseModel):
+    """DTO for requesting a close of a payment channel by its computed ID."""
+
+    computed_id: str
