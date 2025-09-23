@@ -60,7 +60,7 @@ def _register_vendor_with_issuer(
     )
     public_key_der_b64 = base64.b64encode(public_key_der).decode("utf-8")
 
-    print(f"Registering vendor into issuer using public key.")
+    print("Registering vendor into issuer using public key.")
 
     try:
         with httpx.Client(timeout=10.0) as client:

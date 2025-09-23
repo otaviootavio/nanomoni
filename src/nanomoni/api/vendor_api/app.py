@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# from ...middleware.ecdsa import ECDSASignatureMiddleware
 
 import base64
 from cryptography.hazmat.primitives import serialization
 
 from ...envs.vendor_env import get_settings
-from ...infrastructure.database import get_database_client
 from .routers import users, tasks, payments
 
 settings = get_settings()
@@ -35,28 +33,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # Database client for caching issuer public key
-    db_client = get_database_client(settings)
-
-    # Add ECDSA signature verification middleware, skipping registration endpoints
-    skip_paths = [
-        "/",
-        "/health",
-        "/docs",
-        "/redoc",
-        "/openapi.json",
-        "/api/v1/users",
-        "/api/v1/tasks",
-        "/api/v1/payments",
-    ]
-    # app.add_middleware(
-    #     ECDSASignatureMiddleware,
-    #     issuer_base_url=settings.issuer_base_url,
-    #     db_client=db_client,
-    #     skip_paths=skip_paths,
-    # )
-
     # Include routers
     app.include_router(users.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")

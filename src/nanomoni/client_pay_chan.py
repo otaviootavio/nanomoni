@@ -31,7 +31,7 @@ def register_into_issuer_using_private_key(
     )
     public_key_der_b64 = base64.b64encode(public_key_der).decode("utf-8")
 
-    print(f"Registering into issuer using public key")
+    print("Registering into issuer using public key")
 
     with httpx.Client(timeout=10.0) as client:
         # 1) Register with issuer by sending public key
@@ -70,7 +70,7 @@ def open_payment_channel(
     )
     client_public_key_der_b64 = base64.b64encode(client_public_key_der).decode("utf-8")
 
-    print(f"Opening payment channel using public keys.")
+    print("Opening payment channel using public keys.")
 
     # Build client-signed open envelope
     open_payload = {
@@ -258,7 +258,6 @@ def main() -> None:
     )
 
     # Loop to send 10,000 off-chain payments to the vendor API
-    last_vendor_response = None
     for i in range(1, 501):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
@@ -269,7 +268,7 @@ def main() -> None:
         )
 
         # Send payment to vendor API
-        last_vendor_response = send_payment_to_vendor(
+        send_payment_to_vendor(
             vendor_base_url,
             client_off_tx,
             client_public_key_der_b64,

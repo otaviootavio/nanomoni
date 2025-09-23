@@ -207,13 +207,13 @@ class PaymentChannelService:
             )
             await self.account_repo.upsert(vendor_acc)
 
-                # Pay vendor owed_amount
+            # Pay vendor owed_amount
         vendor_acc = await self.account_repo.update_balance(
             close_payload.vendor_public_key_der_b64, close_payload.owed_amount
         )
         # Return the remainder to client
         remainder = channel.amount - close_payload.owed_amount
-        
+
         client_acc = await self.account_repo.update_balance(
             close_payload.client_public_key_der_b64, remainder
         )
