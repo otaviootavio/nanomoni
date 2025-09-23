@@ -70,9 +70,7 @@ def open_payment_channel(
     )
     client_public_key_der_b64 = base64.b64encode(client_public_key_der).decode("utf-8")
 
-    print(
-        f"Opening payment channel using public keys."
-    )
+    print(f"Opening payment channel using public keys.")
 
     # Build client-signed open envelope
     open_payload = {
@@ -109,9 +107,7 @@ def open_payment_channel(
         opened_payload_bytes = base64.b64decode(issuer_envelope.payload_b64)
         opened_payload = json.loads(opened_payload_bytes.decode("utf-8"))
 
-        print(
-            "Payment channel opened and issuer envelope verified"
-        )
+        print("Payment channel opened and issuer envelope verified")
         return (
             opened_payload["computed_id"],
             opened_payload["salt_b64"],
@@ -199,7 +195,17 @@ def send_payment_to_vendor(
             )
             r.raise_for_status()
             response_data = r.json()
-            print(f"Payment successfully processed by vendor.")
+
+            # Parse and log payment details
+            payment_id = response_data.get("id")
+            computed_id = response_data.get("computed_id")
+            owed_amount = response_data.get("owed_amount")
+            created_at = response_data.get("created_at")
+
+            print(
+                f"Payment successfully processed by vendor. Payment ID: {payment_id}, Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
+            )
+
             return response_data
         except httpx.HTTPStatusError as e:
             if e.response is not None:
@@ -270,42 +276,26 @@ def main() -> None:
     # in wich consider the balance as a hard-limit for the sum
     # of the amount of continuous payments.
     computed_id, salt_b64, amount, balance = open_payment_channel(
-        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 10
+        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 100
     )
 
-    # 2) Client sends an off-chain payment to the vendor API
-    client_off_tx_0 = client_create_off_tx_to_vendor(
-        computed_id,
-        client_private_key_pem,
-        1,  # First payment, owed_amount=1
-        client_public_key_der_b64,
-        vendor_public_key_der_b64,
-    )
+    # Loop to send 10,000 off-chain payments to the vendor API
+    last_vendor_response = None
+    for i in range(1, 101):
+        client_off_tx = client_create_off_tx_to_vendor(
+            computed_id,
+            client_private_key_pem,
+            i,  # Cumulative owed_amount
+            client_public_key_der_b64,
+            vendor_public_key_der_b64,
+        )
 
-    # Send first payment to vendor API
-    vendor_response_0 = send_payment_to_vendor(
-        vendor_base_url,
-        client_off_tx_0,
-        client_public_key_der_b64,
-    )
-    print("First payment processed by vendor")
-
-    # 2.1) Client sends another off-chain payment to the vendor API
-    client_off_tx_1 = client_create_off_tx_to_vendor(
-        computed_id,
-        client_private_key_pem,
-        2,  # Second payment, cumulative owed_amount=2
-        client_public_key_der_b64,
-        vendor_public_key_der_b64,
-    )
-
-    # Send second payment to vendor API
-    vendor_response_1 = send_payment_to_vendor(
-        vendor_base_url,
-        client_off_tx_1,
-        client_public_key_der_b64,
-    )
-    print("Second payment processed by vendor.")
+        # Send payment to vendor API
+        last_vendor_response = send_payment_to_vendor(
+            vendor_base_url,
+            client_off_tx,
+            client_public_key_der_b64,
+        )
 
     # 3) Vendor closes the channel using the client's latest off-chain tx
     # The vendor would use the stored transaction data from vendor_response_1

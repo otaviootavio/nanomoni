@@ -1,64 +1,96 @@
-"""Dependency injection for Vendor FastAPI."""
+"""FastAPI dependencies for the vendor API."""
 
 from __future__ import annotations
 
-from functools import lru_cache
+from fastapi import Depends
 
-from ...envs.vendor_env import get_settings, Settings
-from ...infrastructure.database import get_database_client, DatabaseClient
-from ...infrastructure.storage import RedisKeyValueStore
-from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
-from ...infrastructure.vendor.task_repository_impl import TaskRepositoryImpl
+from ...application.vendor_use_case import PaymentService, TaskService, UserService
+from ...domain.vendor.off_chain_tx_repository import OffChainTxRepository
+from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ...domain.vendor.task_repository import TaskRepository
+from ...domain.vendor.user_repository import UserRepository
+from ...infrastructure.database import DatabaseClient, get_database_client
+from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
 from ...infrastructure.vendor.off_chain_tx_repository_impl import (
     OffChainTxRepositoryImpl,
 )
-from ...application.vendor_use_case import UserService, TaskService, PaymentService
+from ...infrastructure.vendor.payment_channel_repository_impl import (
+    PaymentChannelRepositoryImpl,
+)
+from ...infrastructure.vendor.task_repository_impl import TaskRepositoryImpl
+from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
+from ...envs.vendor_env import Settings, get_settings
 
 
-@lru_cache()
-def get_settings_dependency() -> Settings:
-    return get_settings()
-
-
-@lru_cache()
-def get_database_client_dependency() -> DatabaseClient:
-    settings = get_settings_dependency()
+def get_database_client_with_settings(
+    settings: Settings = Depends(get_settings),
+) -> DatabaseClient:
+    """Get database client with settings."""
     return get_database_client(settings)
 
 
-@lru_cache()
-def get_store_dependency() -> RedisKeyValueStore:
-    db_client = get_database_client_dependency()
+def get_key_value_store(
+    db_client: DatabaseClient = Depends(get_database_client_with_settings),
+) -> KeyValueStore:
+    """Get key-value store."""
     return RedisKeyValueStore(db_client)
 
 
-def get_user_repository() -> UserRepositoryImpl:
-    store = get_store_dependency()
+def get_user_repository(
+    store: KeyValueStore = Depends(get_key_value_store),
+) -> UserRepository:
+    """Get user repository."""
     return UserRepositoryImpl(store)
 
 
-def get_task_repository() -> TaskRepositoryImpl:
-    store = get_store_dependency()
+def get_task_repository(
+    store: KeyValueStore = Depends(get_key_value_store),
+) -> TaskRepository:
+    """Get task repository."""
     return TaskRepositoryImpl(store)
 
 
-def get_off_chain_tx_repository() -> OffChainTxRepositoryImpl:
-    store = get_store_dependency()
+def get_off_chain_tx_repository(
+    store: KeyValueStore = Depends(get_key_value_store),
+) -> OffChainTxRepository:
+    """Get off-chain transaction repository."""
     return OffChainTxRepositoryImpl(store)
 
 
-def get_user_service() -> UserService:
-    user_repository = get_user_repository()
+def get_payment_channel_repository(
+    store: KeyValueStore = Depends(get_key_value_store),
+) -> PaymentChannelRepository:
+    """Get payment channel repository."""
+    return PaymentChannelRepositoryImpl(store)
+
+
+def get_user_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> UserService:
+    """Get user service."""
     return UserService(user_repository)
 
 
-def get_task_service() -> TaskService:
-    task_repository = get_task_repository()
-    user_repository = get_user_repository()
+def get_task_service(
+    task_repository: TaskRepository = Depends(get_task_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> TaskService:
+    """Get task service."""
     return TaskService(task_repository, user_repository)
 
 
-def get_payment_service() -> PaymentService:
-    off_chain_tx_repository = get_off_chain_tx_repository()
-    settings = get_settings_dependency()
-    return PaymentService(off_chain_tx_repository, settings.issuer_base_url)
+def get_payment_service(
+    off_chain_tx_repository: OffChainTxRepository = Depends(
+        get_off_chain_tx_repository
+    ),
+    payment_channel_repository: PaymentChannelRepository = Depends(
+        get_payment_channel_repository
+    ),
+    settings: Settings = Depends(get_settings),
+) -> PaymentService:
+    """Get payment service."""
+    return PaymentService(
+        off_chain_tx_repository=off_chain_tx_repository,
+        payment_channel_repository=payment_channel_repository,
+        issuer_base_url=settings.issuer_base_url,
+    )

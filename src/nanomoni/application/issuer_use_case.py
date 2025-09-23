@@ -41,13 +41,13 @@ class IssuerService:
         return IssuerPublicKeyDTO(der_b64=der_b64)
 
     async def register(self, dto: RegistrationRequestDTO) -> RegistrationResponseDTO:
-        # Register client with default balance 100 if not already present
+        # Register client with default balance 1000000 if not already present
         account = await self.account_repo.get_by_public_key(
             dto.client_public_key_der_b64
         )
         if not account:
             account = Account(
-                public_key_der_b64=dto.client_public_key_der_b64, balance=100
+                public_key_der_b64=dto.client_public_key_der_b64, balance=1000000
             )
             await self.account_repo.upsert(account)
 

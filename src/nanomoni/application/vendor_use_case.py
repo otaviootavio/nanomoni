@@ -6,10 +6,13 @@ from typing import List, Optional
 from uuid import UUID
 import httpx
 
-from ..domain.vendor.entities import User, Task, OffChainTx
+from pydantic import ValidationError
+
+from ..domain.vendor.entities import User, Task, OffChainTx, PaymentChannel
 from ..domain.vendor.user_repository import UserRepository
 from ..domain.vendor.task_repository import TaskRepository
 from ..domain.vendor.off_chain_tx_repository import OffChainTxRepository
+from ..domain.vendor.payment_channel_repository import PaymentChannelRepository
 from .vendor_dtos import (
     CreateUserDTO,
     UpdateUserDTO,
@@ -232,30 +235,51 @@ class TaskService:
 class PaymentService:
     """Service for handling off-chain payment transactions."""
 
-    def __init__(self, off_chain_tx_repository: OffChainTxRepository, issuer_base_url: str):
+    def __init__(
+        self,
+        off_chain_tx_repository: OffChainTxRepository,
+        payment_channel_repository: PaymentChannelRepository,
+        issuer_base_url: str,
+    ):
         self.off_chain_tx_repository = off_chain_tx_repository
+        self.payment_channel_repository = payment_channel_repository
         self.issuer_base_url = issuer_base_url
 
-    async def _verify_payment_channel_exists(self, computed_id: str) -> None:
-        """Verify that the payment channel exists on the issuer side."""
+    async def _verify_payment_channel(self, computed_id: str) -> PaymentChannel:
+        """
+        Verify that the payment channel exists on the issuer side, stores it,
+        and returns the channel entity.
+        """
         try:
+            # TODO
+            # Extract this request as a client on the infrastructure folder
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     f"{self.issuer_base_url}/issuer/payment-channel/{computed_id}"
                 )
                 response.raise_for_status()
                 channel_data = response.json()
-                
+
+                # Safely deserialize using the entity
+                payment_channel = PaymentChannel.model_validate(channel_data)
+
+                # Store the incoming payment channel
+                await self.payment_channel_repository.create(payment_channel)
+
                 # Check if channel is closed
-                if channel_data.get("is_closed", False):
+                if payment_channel.is_closed:
                     raise ValueError("Payment channel is closed")
-                    
+
+                return payment_channel
+
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 raise ValueError("Payment channel not found on issuer")
             raise ValueError(f"Failed to verify payment channel: {e}")
         except httpx.RequestError as e:
             raise ValueError(f"Could not connect to issuer: {e}")
+        except ValidationError as e:
+            raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
@@ -273,8 +297,16 @@ class PaymentService:
         prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
 
         # 3.1) If this is the first payment for this channel, verify it exists on issuer
+        payment_channel: Optional[PaymentChannel] = None
         if latest_tx is None:
-            await self._verify_payment_channel_exists(payload.computed_id)
+            payment_channel = await self._verify_payment_channel(payload.computed_id)
+        else:
+            payment_channel = await self.payment_channel_repository.get_by_computed_id(
+                payload.computed_id
+            )
+
+        if not payment_channel:
+            raise ValueError("Payment channel could not be found or verified.")
 
         # 4) Check for double spending - owed amount must be increasing
         if payload.owed_amount <= prev_owed_amount:
@@ -282,7 +314,13 @@ class PaymentService:
                 f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
             )
 
-        # 5) Create and store the off-chain transaction
+        # 5) Check if the payment channel amount is bigger than the owed_amount
+        if payload.owed_amount > payment_channel.amount:
+            raise ValueError(
+                f"Owed amount {payload.owed_amount} exceeds payment channel amount {payment_channel.amount}"
+            )
+
+        # 6) Create and store the off-chain transaction
         off_chain_tx = OffChainTx(
             computed_id=payload.computed_id,
             client_public_key_der_b64=payload.client_public_key_der_b64,
@@ -293,6 +331,9 @@ class PaymentService:
         )
 
         # Save to repository
+        # Option 1: append
+        # created_tx = await self.off_chain_tx_repository.create(off_chain_tx)
+        # Option 2: override the last one
         created_tx = await self.off_chain_tx_repository.create(off_chain_tx)
 
         return OffChainTxResponseDTO(**created_tx.model_dump())
