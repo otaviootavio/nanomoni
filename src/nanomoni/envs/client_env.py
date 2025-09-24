@@ -14,7 +14,6 @@ class Settings(BaseModel):
     issuer_base_url: str
 
     @computed_field
-    @property
     def client_public_key_der_b64(self) -> str:
         """DER-encoded base64 public key."""
         private_key = serialization.load_pem_private_key(
@@ -69,8 +68,15 @@ class Settings(BaseModel):
 
 
 def get_settings() -> Settings:
+    client_private_key_pem = os.environ.get("CLIENT_PRIVATE_KEY_PEM")
+    vendor_base_url = os.environ.get("VENDOR_BASE_URL")
+    issuer_base_url = os.environ.get("ISSUER_BASE_URL")
+    if not (client_private_key_pem and vendor_base_url and issuer_base_url):
+        raise ValueError(
+            "CLIENT_PRIVATE_KEY_PEM, VENDOR_BASE_URL, and ISSUER_BASE_URL are required"
+        )
     return Settings(
-        client_private_key_pem=os.environ.get("CLIENT_PRIVATE_KEY_PEM"),
-        vendor_base_url=os.environ.get("VENDOR_BASE_URL"),
-        issuer_base_url=os.environ.get("ISSUER_BASE_URL"),
+        client_private_key_pem=client_private_key_pem,
+        vendor_base_url=vendor_base_url,
+        issuer_base_url=issuer_base_url,
     )

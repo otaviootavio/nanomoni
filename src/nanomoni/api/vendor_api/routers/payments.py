@@ -61,7 +61,7 @@ async def get_payment(
 async def close_channel(
     payload: CloseChannelDTO,
     payment_service: PaymentService = Depends(get_payment_service),
-):
+) -> Response:
     try:
         await payment_service.close_channel(payload)
         return Response(status_code=status.HTTP_204_NO_CONTENT)

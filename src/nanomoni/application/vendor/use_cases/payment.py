@@ -16,6 +16,7 @@ from ....crypto.certificates import (
     load_public_key_from_der_b64,
     sign_bytes,
     verify_envelope,
+    DERB64,
 )
 from ....domain.vendor.entities import OffChainTx, PaymentChannel
 from ....domain.vendor.off_chain_tx_repository import OffChainTxRepository
@@ -90,7 +91,9 @@ class PaymentService:
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
         # 1) Verify client's signature
-        client_public_key = load_public_key_from_der_b64(dto.client_public_key_der_b64)
+        client_public_key = load_public_key_from_der_b64(
+            DERB64(dto.client_public_key_der_b64)
+        )
         verify_envelope(client_public_key, dto.envelope)
 
         # 2) Decode and validate payload

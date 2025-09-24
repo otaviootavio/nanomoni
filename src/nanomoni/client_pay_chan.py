@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Dict, Any
+from typing import Dict, Any, cast
 
 import httpx
 from cryptography.hazmat.primitives import serialization
@@ -12,18 +12,20 @@ from nanomoni.crypto.certificates import (
     generate_envelope,
     verify_envelope,
     load_public_key_from_der_b64,
+    load_private_key_from_pem,
     Envelope,
     deserialize_off_chain_tx,
     OffChainTxPayload,
+    PayloadB64,
+    SignatureB64,
+    DERB64,
 )
 
 
 def register_into_issuer_using_private_key(
     issuer_base_url: str, private_key_pem: str
 ) -> Dict[str, Any]:
-    private_key = serialization.load_pem_private_key(
-        private_key_pem.encode(), password=None
-    )
+    private_key = load_private_key_from_pem(private_key_pem)
     public_key = private_key.public_key()
     public_key_der = public_key.public_bytes(
         encoding=serialization.Encoding.DER,
@@ -58,9 +60,7 @@ def open_payment_channel(
     client_private_key_pem: str,
     amount: int,
 ) -> tuple[str, str, int, int]:
-    client_private_key = serialization.load_pem_private_key(
-        client_private_key_pem.encode(), password=None
-    )
+    client_private_key = load_private_key_from_pem(client_private_key_pem)
 
     client_public_key = client_private_key.public_key()
 
@@ -96,12 +96,14 @@ def open_payment_channel(
         r_pk = client.get(f"{issuer_base_url}/issuer/public-key")
         r_pk.raise_for_status()
         issuer_public_key_der_b64 = r_pk.json()["der_b64"]
-        issuer_public_key = load_public_key_from_der_b64(issuer_public_key_der_b64)
+        issuer_public_key = load_public_key_from_der_b64(
+            DERB64(issuer_public_key_der_b64)
+        )
 
         # Verify and parse the issuer envelope
         issuer_envelope = Envelope(
-            payload_b64=data["open_envelope_payload_b64"],
-            signature_b64=data["open_envelope_signature_b64"],
+            payload_b64=PayloadB64(data["open_envelope_payload_b64"]),
+            signature_b64=SignatureB64(data["open_envelope_signature_b64"]),
         )
         verify_envelope(issuer_public_key, issuer_envelope)
         opened_payload_bytes = base64.b64decode(issuer_envelope.payload_b64)
@@ -128,18 +130,16 @@ def client_create_off_tx_to_vendor(
     Payload fields: {"computed_id", "client_public_key_der_b64", "vendor_public_key_der_b64", "owed_amount"}
     Returns: Envelope
     """
-    client_private_key = serialization.load_pem_private_key(
-        client_private_key_pem.encode(), password=None
+    client_private_key = load_private_key_from_pem(client_private_key_pem)
+
+    payload = OffChainTxPayload(
+        computed_id=computed_id,
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        owed_amount=owed_amount,
     )
 
-    payload: OffChainTxPayload = {
-        "computed_id": computed_id,
-        "client_public_key_der_b64": client_public_key_der_b64,
-        "vendor_public_key_der_b64": vendor_public_key_der_b64,
-        "owed_amount": owed_amount,
-    }
-
-    envelope = generate_envelope(client_private_key, payload)
+    envelope = generate_envelope(client_private_key, payload.model_dump())
     return envelope
 
 
@@ -153,8 +153,10 @@ def vendor_validate_client_off_tx(
 
     Returns the envelope on success.
     """
-    client_public_key = load_public_key_from_der_b64(client_public_key_der_b64)
-    envelope = Envelope(payload_b64=payload_b64, signature_b64=signature_b64)
+    client_public_key = load_public_key_from_der_b64(DERB64(client_public_key_der_b64))
+    envelope = Envelope(
+        payload_b64=PayloadB64(payload_b64), signature_b64=SignatureB64(signature_b64)
+    )
 
     # 1) Verify client's signature
     verify_envelope(client_public_key, envelope)
@@ -237,7 +239,7 @@ def main() -> None:
     issuer_base_url = settings.issuer_base_url
     vendor_base_url = settings.vendor_base_url
     client_private_key_pem = settings.client_private_key_pem
-    client_public_key_der_b64 = settings.client_public_key_der_b64
+    client_public_key_der_b64: str = cast(str, settings.client_public_key_der_b64)
 
     register_into_issuer_using_private_key(issuer_base_url, client_private_key_pem)
 
@@ -258,7 +260,7 @@ def main() -> None:
     )
 
     # Loop to send 10,000 off-chain payments to the vendor API
-    for i in range(1, 501):
+    for i in range(1, 100):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
             client_private_key_pem,

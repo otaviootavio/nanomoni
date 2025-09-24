@@ -97,12 +97,18 @@ def verify_signature_bytes(
 def load_public_key_from_der_b64(der_b64: DERB64) -> ec.EllipticCurvePublicKey:
     """Load a cryptography public key object from base64-encoded DER (SubjectPublicKeyInfo)."""
     der = base64.b64decode(der_b64, validate=True)
-    return serialization.load_der_public_key(der)
+    key = serialization.load_der_public_key(der)
+    if not isinstance(key, ec.EllipticCurvePublicKey):
+        raise TypeError("Expected an EllipticCurve public key")
+    return key
 
 
 def load_private_key_from_pem(pem_str: str) -> ec.EllipticCurvePrivateKey:
     """Load a cryptography private key object from a PEM-formatted string."""
-    return serialization.load_pem_private_key(pem_str.encode(), password=None)
+    key = serialization.load_pem_private_key(pem_str.encode(), password=None)
+    if not isinstance(key, ec.EllipticCurvePrivateKey):
+        raise TypeError("Expected an EllipticCurve private key")
+    return key
 
 
 def generate_envelope(

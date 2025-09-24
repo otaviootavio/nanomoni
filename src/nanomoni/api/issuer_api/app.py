@@ -31,14 +31,14 @@ def create_issuer_app() -> FastAPI:
     app.include_router(registration.router, prefix="/api/v1/issuer")
 
     @app.get("/")
-    async def root():
+    async def root() -> dict[str, str]:
         return {
             "message": f"Welcome to {settings.app_name} Issuer API",
             "docs": "/docs",
         }
 
     @app.get("/health")
-    async def health_check():
+    async def health_check() -> dict[str, str]:
         return {"status": "healthy", "service": f"{settings.app_name} Issuer"}
 
     return app

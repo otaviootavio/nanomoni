@@ -44,23 +44,30 @@ def get_settings() -> Settings:
     api_cors_origins_str = os.environ.get("ISSUER_API_CORS_ORIGINS")
     api_port_str = os.environ.get("ISSUER_API_PORT")
 
+    database_url = os.environ.get("ISSUER_DATABASE_URL")
+    if database_url is None:
+        raise ValueError("ISSUER_DATABASE_URL is required")
+    api_host = os.environ.get("ISSUER_API_HOST") or "0.0.0.0"
+    api_port = int(api_port_str) if api_port_str is not None else 8000
+    database_echo = (database_echo_str or "false").lower() == "true"
+    api_debug = (api_debug_str or "false").lower() == "true"
+    api_cors_origins = api_cors_origins_str.split(",") if api_cors_origins_str else []
+    app_name = os.environ.get("ISSUER_APP_NAME") or "NanoMoni"
+    app_version = os.environ.get("ISSUER_APP_VERSION") or "0.1.0"
+
+    issuer_private_key_pem = os.environ.get("ISSUER_PRIVATE_KEY_PEM")
+    if issuer_private_key_pem is None:
+        raise ValueError("ISSUER_PRIVATE_KEY_PEM is required")
+
     return Settings(
-        database_url=os.environ.get("ISSUER_DATABASE_URL"),
-        database_echo=database_echo_str.lower() == "true"
-        if database_echo_str is not None
-        else None,
-        api_host=os.environ.get("ISSUER_API_HOST"),
-        api_port=int(api_port_str) if api_port_str is not None else None,
-        api_debug=api_debug_str.lower() == "true"
-        if api_debug_str is not None
-        else None,
-        api_cors_origins=api_cors_origins_str.split(",")
-        if api_cors_origins_str is not None
-        else None,
-        app_name=os.environ.get("ISSUER_APP_NAME"),
-        app_version=os.environ.get("ISSUER_APP_VERSION"),
-        issuer_private_key_pem=os.environ.get("ISSUER_PRIVATE_KEY_PEM"),
-        issuer_private_key=load_private_key_from_pem(
-            os.environ.get("ISSUER_PRIVATE_KEY_PEM")
-        ),
+        database_url=database_url,
+        database_echo=database_echo,
+        api_host=api_host,
+        api_port=api_port,
+        api_debug=api_debug,
+        api_cors_origins=api_cors_origins,
+        app_name=app_name,
+        app_version=app_version,
+        issuer_private_key_pem=issuer_private_key_pem,
+        issuer_private_key=load_private_key_from_pem(issuer_private_key_pem),
     )

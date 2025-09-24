@@ -30,6 +30,7 @@ from ....crypto.certificates import (
     OpenChannelResponsePayload,
     deserialize_close_channel_request,
     CloseChannelRequestPayload,
+    DERB64,
 )
 
 
@@ -60,7 +61,9 @@ class PaymentChannelService:
 
     async def open_channel(self, dto: OpenChannelRequestDTO) -> OpenChannelResponseDTO:
         # Deserialize and verify client-provided open-channel envelope
-        client_public_key = load_public_key_from_der_b64(dto.client_public_key_der_b64)
+        client_public_key = load_public_key_from_der_b64(
+            DERB64(dto.client_public_key_der_b64)
+        )
         client_envelope: Envelope = Envelope(
             payload_b64=PayloadB64(dto.open_payload_b64),
             signature_b64=SignatureB64(dto.open_signature_b64),
@@ -150,7 +153,7 @@ class PaymentChannelService:
     ) -> CloseChannelResponseDTO:
         # Deserialize and verify client close-channel envelope (client signature)
         client_public_key: ec.EllipticCurvePublicKey = load_public_key_from_der_b64(
-            dto.client_public_key_der_b64
+            DERB64(dto.client_public_key_der_b64)
         )
         client_envelope: Envelope = Envelope(
             payload_b64=PayloadB64(dto.close_payload_b64),
@@ -165,7 +168,7 @@ class PaymentChannelService:
 
         # Deserialize and verify vendor close-channel envelope (vendor signature)
         vendor_public_key: ec.EllipticCurvePublicKey = load_public_key_from_der_b64(
-            dto.vendor_public_key_der_b64
+            DERB64(dto.vendor_public_key_der_b64)
         )
         vendor_envelope: Envelope = Envelope(
             payload_b64=PayloadB64(dto.close_payload_b64),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer, EmailStr
@@ -50,7 +50,9 @@ class User(BaseModel):
         self.is_active = True
         self.updated_at = datetime.now(timezone.utc)
 
-    def update_details(self, name: Optional[str] = None, email: Optional[str] = None):
+    def update_details(
+        self, name: Optional[str] = None, email: Optional[str] = None
+    ) -> None:
         """Update user's name and/or email."""
         if name:
             self.name = name
@@ -114,7 +116,9 @@ class Task(BaseModel):
         self.updated_at = datetime.now(timezone.utc)
 
     def update_details(
-        self, title: Optional[str] = None, description: object = _sentinel
+        self,
+        title: Optional[str] = None,
+        description: Union[str, None, object] = _sentinel,
     ) -> None:
         """Update task's title and/or description."""
         if self.status in ["completed", "failed"]:
@@ -122,7 +126,7 @@ class Task(BaseModel):
         if title:
             self.title = title
         if description is not _sentinel:
-            self.description = description
+            self.description = cast(Optional[str], description)
         self.updated_at = datetime.now(timezone.utc)
 
 

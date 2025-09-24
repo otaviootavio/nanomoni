@@ -39,7 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(payments.router, prefix="/api/v1")
 
     @app.get("/")
-    async def root():
+    async def root() -> dict[str, str]:
         """Root endpoint."""
         return {
             "message": f"Welcome to {settings.app_name} Vendor API",
@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/health")
-    async def health_check():
+    async def health_check() -> dict[str, str]:
         """Health check endpoint."""
         return {
             "status": "healthy",
@@ -57,7 +57,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/v1/vendor/public-key")
-    async def get_vendor_public_key():
+    async def get_vendor_public_key() -> dict[str, str]:
         """Return the vendor public key configured via environment settings."""
 
         public_key = serialization.load_pem_public_key(
