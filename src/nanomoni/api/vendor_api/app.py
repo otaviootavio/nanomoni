@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import base64
 from cryptography.hazmat.primitives import serialization
 
-from ...envs.vendor_env import get_settings
+from ...envs.vendor_env import get_settings, register_vendor_with_issuer
 from .routers import users, tasks, payments
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await register_vendor_with_issuer(settings)
+    yield
 
 
 def create_app() -> FastAPI:
@@ -23,6 +31,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
 
     # Add CORS middleware

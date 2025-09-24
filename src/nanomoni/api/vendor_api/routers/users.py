@@ -79,7 +79,9 @@ async def update_user(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{user_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_user(
     user_id: UUID, user_service: UserService = Depends(get_user_service)
 ) -> None:

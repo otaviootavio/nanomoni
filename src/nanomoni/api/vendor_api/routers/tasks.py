@@ -74,7 +74,9 @@ async def update_task(
     return task
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{task_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_task(
     task_id: UUID, task_service: TaskService = Depends(get_task_service)
 ) -> None:

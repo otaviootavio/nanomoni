@@ -6,7 +6,6 @@ import httpx
 
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
-from typing import Optional
 
 
 class Settings(BaseModel):
@@ -41,32 +40,25 @@ class Settings(BaseModel):
         return v
 
 
-def _register_vendor_with_issuer(
-    issuer_base_url: Optional[str], vendor_private_key_pem: Optional[str]
-) -> None:
-    if not issuer_base_url or not vendor_private_key_pem:
+async def register_vendor_with_issuer(settings: Settings) -> None:
+    """Register the vendor with the issuer using its public key."""
+    if not settings.issuer_base_url or not settings.vendor_private_key_pem:
         print(
             "Skipping vendor registration with issuer: "
             "issuer_base_url or vendor_private_key_pem not set."
         )
         return
 
-    private_key = serialization.load_pem_private_key(
-        vendor_private_key_pem.encode(), password=None
-    )
-    public_key = private_key.public_key()
-    public_key_der = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    public_key_der_b64 = base64.b64encode(public_key_der).decode("utf-8")
-
     print("Registering vendor into issuer using public key.")
 
     try:
-        with httpx.Client(timeout=10.0) as client:
-            reg_payload = {"client_public_key_der_b64": public_key_der_b64}
-            r = client.post(f"{issuer_base_url}/issuer/register", json=reg_payload)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            reg_payload = {
+                "client_public_key_der_b64": settings.vendor_public_key_der_b64
+            }
+            r = await client.post(
+                f"{settings.issuer_base_url}/issuer/register", json=reg_payload
+            )
             r.raise_for_status()
             print("Vendor registered with issuer successfully.")
     except httpx.HTTPStatusError as e:
@@ -81,7 +73,7 @@ def _register_vendor_with_issuer(
         print(f"Error registering vendor with issuer: {e}")
     except httpx.RequestError as e:
         print(
-            f"Could not connect to issuer at {issuer_base_url} to register vendor: {e}"
+            f"Could not connect to issuer at {settings.issuer_base_url} to register vendor: {e}"
         )
     except Exception as e:
         print(f"An unexpected error occurred during vendor registration: {e}")
@@ -95,8 +87,6 @@ def get_settings() -> Settings:
 
     vendor_private_key_pem = os.environ.get("VENDOR_PRIVATE_KEY_PEM")
     issuer_base_url = os.environ.get("ISSUER_BASE_URL")
-
-    _register_vendor_with_issuer(issuer_base_url, vendor_private_key_pem)
 
     database_url = os.environ.get("VENDOR_DATABASE_URL")
     if database_url is None:

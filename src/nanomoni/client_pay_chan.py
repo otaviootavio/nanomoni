@@ -260,7 +260,7 @@ def main() -> None:
     )
 
     # Loop to send 10,000 off-chain payments to the vendor API
-    for i in range(1, 100):
+    for i in range(1, 10000):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
             client_private_key_pem,
