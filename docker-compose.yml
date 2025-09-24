@@ -1,0 +1,49 @@
+services:
+  client:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.client
+    networks:
+      - app-network
+
+  issuer:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.issuer
+    ports:
+      - 8001:8001
+    depends_on:
+      - redis-issuer
+    networks:
+      - app-network
+
+  vendor:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.vendor
+    ports:
+      - 8000:8000
+    depends_on:
+      - redis-vendor
+    networks:
+      - app-network
+
+  redis-vendor:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - 6379:6379
+    networks:
+      - app-network
+
+  redis-issuer:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - 6380:6379
+    networks:
+      - app-network
+
+networks:
+  app-network:
+      

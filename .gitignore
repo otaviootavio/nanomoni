@@ -1,4 +1,4 @@
-envs/env.sh
+envs/env.**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,41 @@
+FROM python:3.9.23-slim
+
+# Python
+ENV PYTHONFAULTHANDLER=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONHASHSEED=random \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    PIP_DEFAULT_TIMEOUT=100
+
+# Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR='/var/cache/pypoetry' \
+    POETRY_HOME='/usr/local'
+
+# Application environment variables
+ENV VENDOR_DATABASE_ECHO=${VENDOR_DATABASE_ECHO} \
+    VENDOR_API_HOST=${VENDOR_API_HOST} \
+    VENDOR_API_PORT=${VENDOR_API_PORT} \
+    VENDOR_API_DEBUG=${VENDOR_API_DEBUG} \
+    VENDOR_API_CORS_ORIGINS=${VENDOR_API_CORS_ORIGINS} \
+    VENDOR_APP_NAME=${VENDOR_APP_NAME} \
+    VENDOR_APP_VERSION=${VENDOR_APP_VERSION} \
+    VENDOR_ISSUER_BASE_URL=${VENDOR_ISSUER_BASE_URL}
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN pip install pipx
+RUN pipx install poetry==2.1.3
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock /app/
+COPY . /app
+
+RUN poetry install
+
+RUN chmod +x scripts/vendor-entrypoint.sh
+
+ENTRYPOINT ["bash", "scripts/vendor-entrypoint.sh"] 
