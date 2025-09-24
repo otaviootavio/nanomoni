@@ -7,11 +7,11 @@ from functools import lru_cache
 from ...envs.issuer_env import get_settings, Settings
 from ...infrastructure.database import get_database_client, DatabaseClient
 from ...infrastructure.storage import RedisKeyValueStore
-from ...infrastructure.issuer.repositories import (
-    AccountRepositoryImpl,
+from ...infrastructure.issuer.account_repository_impl import AccountRepositoryImpl
+from ...infrastructure.issuer.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
 )
-from ...application.issuer_use_case import IssuerService
+from ...application.issuer.use_cases.registration import RegistrationService
 from ...application.issuer.use_cases.payment_channel import PaymentChannelService
 
 
@@ -42,10 +42,10 @@ def get_payment_channel_repository() -> PaymentChannelRepositoryImpl:
     return PaymentChannelRepositoryImpl(store)
 
 
-def get_issuer_service() -> IssuerService:
+def get_issuer_service() -> RegistrationService:
     account_repo = get_account_repository()
     settings = get_settings_dependency()
-    return IssuerService(
+    return RegistrationService(
         settings.issuer_private_key_pem,
         account_repo,
     )

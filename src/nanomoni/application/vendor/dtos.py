@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
-from ..crypto.certificates import Envelope
+from ...crypto.certificates import Envelope
 
 
 class CreateUserDTO(BaseModel):

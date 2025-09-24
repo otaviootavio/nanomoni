@@ -7,8 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ....application.vendor_dtos import CreateUserDTO, UpdateUserDTO, UserResponseDTO
-from ....application.vendor_use_case import UserService
+from ....application.vendor.dtos import CreateUserDTO, UpdateUserDTO, UserResponseDTO
+from ....application.vendor.use_cases.user import UserService
 from ..dependencies import get_user_service
 
 router = APIRouter(prefix="/users", tags=["users"])

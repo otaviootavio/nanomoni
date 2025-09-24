@@ -6,18 +6,18 @@ import base64
 
 from cryptography.hazmat.primitives import serialization
 
-from ..domain.issuer.entities import Account
-from ..domain.issuer.repositories import (
+from ....domain.issuer.entities import Account
+from ....domain.issuer.repositories import (
     AccountRepository,
 )
-from .issuer_dtos import (
+from ..dtos import (
     RegistrationRequestDTO,
     RegistrationResponseDTO,
     IssuerPublicKeyDTO,
 )
 
 
-class IssuerService:
+class RegistrationService:
     """Service orchestrating issuer registration flow."""
 
     def __init__(

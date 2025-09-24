@@ -11,7 +11,7 @@ from ....domain.issuer.repositories import (
     PaymentChannelRepository,
     AccountRepository,
 )
-from ...issuer_dtos import (
+from ..dtos import (
     OpenChannelRequestDTO,
     OpenChannelResponseDTO,
     CloseChannelRequestDTO,

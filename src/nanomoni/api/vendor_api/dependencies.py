@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from fastapi import Depends
 
-from ...application.vendor_use_case import PaymentService, TaskService, UserService
+from ...application.vendor.use_cases.payment import PaymentService
+from ...application.vendor.use_cases.task import TaskService
+from ...application.vendor.use_cases.user import UserService
 from ...domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ...domain.vendor.task_repository import TaskRepository

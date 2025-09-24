@@ -7,8 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from ....application.vendor_dtos import CreateTaskDTO, UpdateTaskDTO, TaskResponseDTO
-from ....application.vendor_use_case import TaskService
+from ....application.vendor.dtos import CreateTaskDTO, UpdateTaskDTO, TaskResponseDTO
+from ....application.vendor.use_cases.task import TaskService
 from ..dependencies import get_task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])

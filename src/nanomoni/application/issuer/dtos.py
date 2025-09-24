@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from uuid import UUID
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, field_serializer
 
@@ -23,6 +23,8 @@ class RegistrationResponseDTO(BaseModel):
 
 
 class IssuerPublicKeyDTO(BaseModel):
+    """Issuer public key DTO."""
+
     der_b64: str
 
 

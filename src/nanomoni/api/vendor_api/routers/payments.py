@@ -8,12 +8,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from cryptography.exceptions import InvalidSignature
 
-from ....application.vendor_dtos import (
+from ....application.vendor.dtos import (
     ReceivePaymentDTO,
     OffChainTxResponseDTO,
     CloseChannelDTO,
 )
-from ....application.vendor_use_case import PaymentService
+from ....application.vendor.use_cases.payment import PaymentService
 from ..dependencies import get_payment_service
 
 router = APIRouter(prefix="/payments", tags=["payments"])
