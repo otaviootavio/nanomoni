@@ -47,7 +47,7 @@ class RegistrationService:
         )
         if not account:
             account = Account(
-                public_key_der_b64=dto.client_public_key_der_b64, balance=1000000
+                public_key_der_b64=dto.client_public_key_der_b64, balance=10000000
             )
             await self.account_repo.upsert(account)
 

@@ -256,11 +256,11 @@ def main() -> None:
     # in wich consider the balance as a hard-limit for the sum
     # of the amount of continuous payments.
     computed_id, salt_b64, amount, balance = open_payment_channel(
-        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 1234
+        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 1000000
     )
 
     # Loop to send 10,000 off-chain payments to the vendor API
-    for i in range(1, 10000):
+    for i in range(1, 100):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
             client_private_key_pem,
