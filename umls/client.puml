@@ -1,0 +1,34 @@
+@startuml Client_Static_Compact
+
+!theme plain
+left to right direction
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+skinparam padding 0
+skinparam BoxPadding 2
+skinparam RectanglePadding 3
+skinparam RectangleBorderThickness 1
+skinparam Shadowing false
+skinparam Nodesep 10
+skinparam Ranksep 10
+
+rectangle "Client Context" #FFF9E6 {
+    rectangle "Client Orchestration" as client_orchestration #FFECB3 {
+        file "**client_pay_chan.py**\n\n• register_into_issuer_using_private_key()\n• open_payment_channel()\n• client_create_off_tx_to_vendor()\n• vendor_validate_client_off_tx()\n• send_payment_to_vendor()\n• request_vendor_close_channel()\n• main()"
+    }
+
+    rectangle "HTTP Clients (SDK)" as http_clients #E8F4F8 {
+        rectangle "infrastructure/http" {
+            file "http_client.py\nHttpClient"
+        }
+        rectangle "infrastructure/issuer" {
+            file "issuer_client.py\nIssuerClient"
+        }
+        rectangle "infrastructure/vendor" {
+            file "vendor_client.py\nVendorClient"
+        }
+    }
+    client_orchestration -[hidden]down-> http_clients
+}
+
+@enduml

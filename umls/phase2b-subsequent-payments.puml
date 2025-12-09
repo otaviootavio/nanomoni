@@ -1,0 +1,35 @@
+@startuml Phase2b_Subsequent_Payments
+
+!theme plain
+autonumber
+
+actor "Client" as Client
+participant "Vendor API" as Vendor
+database "Vendor DB\n(Redis)" as VendorDB
+
+loop for each subsequent payment (i = 2 to 9_999)
+
+    Client -> Client: Build OffChainTxPayload\n    (computed_id, client_pk, vendor_pk, owed_amount = i)
+    Client -> Client: Wrap payload in Envelope\n    signed with client private key
+
+    Client -> Vendor: POST /api/v1/payments/receive\n    Envelope<OffChainTxPayload>
+    activate Vendor
+
+    Vendor -> Vendor: Verify envelope & deserialize payload
+
+    Vendor -> VendorDB: Get latest OffChainTx\n    for computed_id
+    VendorDB --> Vendor: previous_tx\n    (owed_amount = i - 1)
+
+    Vendor -> VendorDB: Get cached PaymentChannel\n    by computed_id
+    VendorDB --> Vendor: PaymentChannel
+
+    Vendor -> Vendor: Validate payment & channel\n    (owed_amount increasing, <= amount, keys & vendor match)
+
+    Vendor -> VendorDB: OVERWRITE latest OffChainTx\n    for computed_id
+    
+    Vendor --> Client: 201 Created\n    OffChainTxSummary
+    deactivate Vendor
+
+end
+
+@enduml

@@ -1,0 +1,25 @@
+@startuml Phase1a_Registration
+
+!theme plain
+autonumber
+
+actor "Client" as Client
+participant "Issuer API" as Issuer
+database "Issuer DB\n(Redis)" as IssuerDB
+
+Client -> Client: Generate key pair\n(private_key, client_pk)
+
+Client -> Issuer: POST /api/v1/issuer/register\nRegistrationRequest
+activate Issuer
+
+Issuer -> Issuer: Receive request & basic validation
+
+Issuer -> IssuerDB: Get Account by client_pk
+IssuerDB --> Issuer: Account? (existing or none)
+
+Issuer -> IssuerDB: Create Account with initial balance\nif not exists
+
+Issuer --> Client: 201 Created\nRegistrationResponse
+deactivate Issuer
+
+@enduml

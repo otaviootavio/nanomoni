@@ -1,0 +1,37 @@
+@startuml Phase1b_Channel_Opening
+
+!theme plain
+autonumber
+
+actor "Client" as Client
+participant "Issuer API" as Issuer
+database "Issuer DB\n(Redis)" as IssuerDB
+
+Client -> Client: Get vendor_pk\nGET /api/v1/vendor/public-key
+
+Client -> Client: Build OpenChannelRequestPayload\n(client_pk, vendor_pk, amount)
+Client -> Client: Wrap payload in Envelope\nsigned with client private key
+
+Client -> Issuer: POST /api/v1/issuer/payment-channel/open\nEnvelope<OpenChannelRequestPayload>
+activate Issuer
+
+Issuer -> Issuer: Verify client envelope & deserialize payload
+
+
+Issuer -> IssuerDB: Get client Account\nby client_pk
+IssuerDB --> Issuer: Account
+
+Issuer -> IssuerDB: Ensure vendor Account exists\nby vendor_pk
+
+Issuer -> Issuer: Check amount > 0\nand client balance >= amount
+Issuer -> IssuerDB: Deduct amount from client Account
+
+Issuer -> Issuer: Generate random salt (32 bytes)\nCompute computed_id = SHA256(client_pk || vendor_pk || salt)
+Issuer -> IssuerDB: CREATE PaymentChannel\n(computed_id, client_pk, vendor_pk, salt, amount, balance=0)
+
+Issuer -> Issuer: Build OpenChannelResponsePayload\nand wrap in Envelope signed by issuer
+
+Issuer --> Client: 201 Created\nOpenChannelResponseEnvelope
+deactivate Issuer
+
+@enduml

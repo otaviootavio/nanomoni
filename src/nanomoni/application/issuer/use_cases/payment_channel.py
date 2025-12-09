@@ -25,12 +25,14 @@ from ....crypto.certificates import (
     PayloadB64,
     SignatureB64,
     verify_envelope,
-    serialize_open_channel_response,
-    deserialize_open_channel_request,
-    OpenChannelResponsePayload,
-    deserialize_close_channel_request,
-    CloseChannelRequestPayload,
     DERB64,
+)
+from ....application.shared.payment_channel_payloads import (
+    OpenChannelResponsePayload,
+    CloseChannelRequestPayload,
+    deserialize_open_channel_request,
+    deserialize_close_channel_request,
+    serialize_open_channel_response,
 )
 
 

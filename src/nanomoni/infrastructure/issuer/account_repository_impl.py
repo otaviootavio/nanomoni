@@ -15,33 +15,25 @@ class AccountRepositoryImpl(AccountRepository):
     def __init__(self, store: KeyValueStore):
         self.store = store
 
-    @staticmethod
-    def _pk_key(public_key_der_b64: str) -> str:
-        return f"account:pk:{public_key_der_b64}"
-
     async def upsert(self, account: Account) -> Account:
-        pk_key = self._pk_key(account.public_key_der_b64)
-        account_id = await self.store.get(pk_key)
-        # Always store entity keyed by id and index by pk
-        account_key = f"account:{account.id if account_id is None else account_id}"
-        if account_id is None:
-            await self.store.set(pk_key, str(account.id))
-            account_key = f"account:{account.id}"
+        """
+        Store accounts keyed directly by their public key to avoid an extra
+        indirection (pk -> id -> entity).
+
+        Key layout:
+          - account:{public_key_der_b64} -> Account JSON
+        """
+        account_key = f"account:{account.public_key_der_b64}"
         await self.store.set(account_key, account.model_dump_json())
+        # Return the stored/normalized representation
+        stored_raw = await self.store.get(account_key)
         return (
-            account
-            if account_id is None
-            else Account.model_validate_json(
-                await self.store.get(account_key)  # type: ignore[arg-type]
-            )
+            account if stored_raw is None else Account.model_validate_json(stored_raw)
         )
 
     async def get_by_public_key(self, public_key_der_b64: str) -> Optional[Account]:
-        pk_key = self._pk_key(public_key_der_b64)
-        account_id = await self.store.get(pk_key)
-        if not account_id:
-            return None
-        data = await self.store.get(f"account:{account_id}")
+        account_key = f"account:{public_key_der_b64}"
+        data = await self.store.get(account_key)
         if not data:
             return None
         return Account.model_validate_json(data)

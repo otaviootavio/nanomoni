@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+import json
+
+from cryptography.hazmat.primitives.asymmetric import ec
+from pydantic import BaseModel
+
+from ...crypto.certificates import Envelope, generate_envelope, envelope_payload_bytes
+
+
+class OpenChannelRequestPayload(BaseModel):
+    """Payload carried by the client-signed open-channel request envelope."""
+
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    amount: int
+
+
+class OpenChannelResponsePayload(BaseModel):
+    """Payload carried by the issuer-signed envelope returned after opening a channel."""
+
+    computed_id: str
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    salt_b64: str
+    amount: int
+    balance: int
+
+
+class CloseChannelRequestPayload(BaseModel):
+    """Payload carried by the client-signed close-channel request envelope."""
+
+    computed_id: str
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    owed_amount: int
+
+
+class OffChainTxPayload(CloseChannelRequestPayload):
+    """Payload for an off-chain transaction from client to vendor.
+
+    This has the same structure as a close channel request because it represents
+    a client-signed statement of the channel's final state.
+    """
+
+    pass
+
+
+def deserialize_open_channel_request(envelope: Envelope) -> OpenChannelRequestPayload:
+    """Decode and validate an open-channel request envelope payload."""
+    payload_bytes = envelope_payload_bytes(envelope)
+    data = json.loads(payload_bytes.decode("utf-8"))
+    return OpenChannelRequestPayload.model_validate(data)
+
+
+def serialize_open_channel_response(
+    private_key: ec.EllipticCurvePrivateKey, payload: OpenChannelResponsePayload
+) -> Envelope:
+    """Serialize and sign the issuer's open-channel response payload into an envelope."""
+    return generate_envelope(private_key, payload.model_dump())
+
+
+def deserialize_close_channel_request(
+    envelope: Envelope,
+) -> CloseChannelRequestPayload:
+    """Decode and validate a close-channel request envelope payload."""
+    payload_bytes = envelope_payload_bytes(envelope)
+    data = json.loads(payload_bytes.decode("utf-8"))
+    return CloseChannelRequestPayload.model_validate(data)
+
+
+def deserialize_off_chain_tx(envelope: Envelope) -> OffChainTxPayload:
+    """Decode and validate an off-chain tx envelope payload."""
+    payload_bytes = envelope_payload_bytes(envelope)
+    data = json.loads(payload_bytes.decode("utf-8"))
+    return OffChainTxPayload.model_validate(data)

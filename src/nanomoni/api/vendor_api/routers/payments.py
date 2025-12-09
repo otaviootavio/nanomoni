@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import List
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from cryptography.exceptions import InvalidSignature
@@ -43,14 +42,6 @@ async def receive_payment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process payment: {str(e)}",
         )
-
-
-@router.get("/{payment_id}", response_model=OffChainTxResponseDTO)
-async def get_payment(
-    payment_id: UUID, payment_service: PaymentService = Depends(get_payment_service)
-) -> OffChainTxResponseDTO:
-    # TODO: implement retrieval by id if needed
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
 
 
 @router.post(

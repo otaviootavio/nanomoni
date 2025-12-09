@@ -1,0 +1,33 @@
+@startuml Phase3b_Issuer_Settlement
+
+!theme plain
+autonumber
+
+actor "Client" as Client
+participant "Vendor API" as Vendor
+database "Vendor DB\n(Redis)" as VendorDB
+participant "Issuer API" as Issuer
+database "Issuer DB\n(Redis)" as IssuerDB
+
+Vendor -> Issuer: POST /api/v1/issuer/payment-channel/close\nCloseChannelCertificate
+activate Issuer
+
+Issuer -> Issuer: Receive & validate certificate\n(parse request, validate client & vendor signatures)
+
+Issuer -> IssuerDB: Get PaymentChannel from computed_id
+IssuerDB --> Issuer: PaymentChannel
+
+Issuer -> Issuer: Validate settlement logic\n(0 <= owed_amount <= amount, channel open, keys match)
+
+Issuer -> IssuerDB: UPDATE vendor Account\nbalance += owed_amount
+Issuer -> IssuerDB: UPDATE client Account\nbalance += (amount - owed_amount)
+Issuer -> IssuerDB: UPDATE PaymentChannel\n{is_closed: true, balance: owed_amount, closed_at: now}
+
+Issuer --> Vendor: 200 OK\nCloseChannelResponse
+deactivate Issuer
+
+Vendor -> VendorDB: UPDATE PaymentChannel\n(is_closed: true)
+Vendor --> Client: 204 No Content
+deactivate Vendor
+
+@enduml

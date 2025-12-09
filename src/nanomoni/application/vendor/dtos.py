@@ -107,24 +107,16 @@ class ReceivePaymentDTO(BaseModel):
     """DTO for receiving an off-chain payment."""
 
     envelope: Envelope = Field(..., description="Signed payment envelope from client")
-    client_public_key_der_b64: str = Field(
-        ..., description="Client's public key in DER format (base64)"
-    )
 
 
 class OffChainTxResponseDTO(BaseModel):
     """DTO for returning off-chain transaction data."""
 
-    id: UUID
     computed_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     owed_amount: int
     created_at: datetime
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:

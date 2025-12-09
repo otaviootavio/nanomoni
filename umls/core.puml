@@ -1,0 +1,40 @@
+@startuml Shared_Kernel_Compact
+
+!theme plain
+left to right direction
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+skinparam padding 0
+skinparam BoxPadding 2
+skinparam RectanglePadding 3
+skinparam RectangleBorderThickness 1
+skinparam Shadowing false
+skinparam Nodesep 10
+skinparam Ranksep 10
+
+rectangle "Shared Kernel" #EEEEEE {
+    rectangle "Cryptographic Utilities" as crypto #E0E0E0 {
+        rectangle "crypto/" {
+            file "**certificates.py**\nEnvelope\njson_to_bytes()\ngenerate_envelope()\nverify_envelope()\nverify_signature_bytes()\nload_public_key_from_der_b64()\nload_private_key_from_pem()\nenvelope_payload_bytes()"
+        }
+    }
+
+    rectangle "Shared Protocol Models" as proto #E0E0E0 {
+        rectangle "application/shared" {
+            file "**payment_channel_payloads.py**\nOpenChannelRequestPayload\nOpenChannelResponsePayload\nCloseChannelRequestPayload\nOffChainTxPayload"
+        }
+    }
+    
+    rectangle "Infrastructure Utilities" as infra #E0E0E0 {
+        rectangle "infrastructure/" {
+            file "**database.py**\nDatabaseClient\nget_database_client()"
+            file "**storage.py**\nKeyValueStore\nRedisKeyValueStore"
+            file "**http/http_client.py**\nHttpClient"
+        }
+    }
+    
+    crypto -[hidden]down-> proto
+    proto -[hidden]down-> infra
+}
+
+@enduml

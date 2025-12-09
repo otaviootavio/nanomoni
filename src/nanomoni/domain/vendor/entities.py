@@ -131,9 +131,8 @@ class Task(BaseModel):
 
 
 class OffChainTx(BaseModel):
-    """Off-chain transaction entity representing a payment channel transaction."""
+    """Off-chain transaction entity representing the latest payment channel state."""
 
-    id: UUID = Field(default_factory=uuid4)
     computed_id: str = Field(..., description="Payment channel computed ID")
     client_public_key_der_b64: str = Field(
         ..., description="Client's public key in DER format (base64)"
@@ -147,10 +146,6 @@ class OffChainTx(BaseModel):
         ..., description="Base64-encoded client signature"
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:

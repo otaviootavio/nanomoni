@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from uuid import UUID
 
 from .entities import OffChainTx
 
@@ -14,17 +13,15 @@ class OffChainTxRepository(ABC):
 
     @abstractmethod
     async def create(self, off_chain_tx: OffChainTx) -> OffChainTx:
-        """Create a new off-chain transaction."""
-        pass
-
-    @abstractmethod
-    async def get_by_id(self, tx_id: UUID) -> Optional[OffChainTx]:
-        """Get off-chain transaction by ID."""
+        """Create (or upsert) the latest off-chain transaction for a channel."""
         pass
 
     @abstractmethod
     async def get_by_computed_id(self, computed_id: str) -> List[OffChainTx]:
-        """Get all off-chain transactions for a payment channel by computed ID."""
+        """
+        Get the latest off-chain transaction for a payment channel by computed ID
+        as a single-element list (or empty if none).
+        """
         pass
 
     @abstractmethod
@@ -33,23 +30,13 @@ class OffChainTxRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[OffChainTx]:
-        """Get all off-chain transactions with pagination."""
-        pass
-
-    @abstractmethod
-    async def update(self, off_chain_tx: OffChainTx) -> OffChainTx:
-        """Update an existing off-chain transaction."""
-        pass
-
-    @abstractmethod
-    async def overwrite(
-        self, existing_tx_id: UUID, new_off_chain_tx: OffChainTx
+    async def overwrite_latest(
+        self, computed_id: str, new_off_chain_tx: OffChainTx
     ) -> OffChainTx:
-        """Overwrite an existing transaction with new data, keeping the same ID."""
+        """Overwrite the latest transaction for a channel."""
         pass
 
     @abstractmethod
-    async def delete(self, tx_id: UUID) -> bool:
-        """Delete an off-chain transaction."""
+    async def delete_by_computed_id(self, computed_id: str) -> bool:
+        """Delete the latest off-chain transaction for a channel, if it exists."""
         pass

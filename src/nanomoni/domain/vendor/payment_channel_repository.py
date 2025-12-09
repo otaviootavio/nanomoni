@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from uuid import UUID
 
 from .entities import PaymentChannel
 
@@ -15,11 +14,6 @@ class PaymentChannelRepository(ABC):
     @abstractmethod
     async def create(self, payment_channel: PaymentChannel) -> PaymentChannel:
         """Create a new payment_channel."""
-        pass
-
-    @abstractmethod
-    async def get_by_id(self, channel_id: UUID) -> Optional[PaymentChannel]:
-        """Get payment_channel by ID."""
         pass
 
     @abstractmethod

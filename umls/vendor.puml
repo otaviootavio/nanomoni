@@ -1,0 +1,55 @@
+@startuml Vendor_Static_Compact
+
+!theme plain
+left to right direction
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+skinparam padding 0
+skinparam BoxPadding 2
+skinparam RectanglePadding 3
+skinparam RectangleBorderThickness 1
+skinparam Shadowing false
+skinparam Nodesep 10
+skinparam Ranksep 10
+
+
+rectangle "Vendor Context" #E6FFE6 {
+    rectangle "Entry\n**main.py**" as entry #CCFFCC
+    
+    rectangle "API Layer" as api #E8F4F8 {
+        rectangle "api/vendor_api" {
+            file "app.py\ndependencies.py" as api_files
+            rectangle "routers/" {
+                file "users.py\ntasks.py\npayments.py"
+            }
+        }
+    }
+    
+    rectangle "Application Layer" as app #FFF8DC {
+        rectangle "application/vendor" {
+            file "dtos.py"
+            rectangle "use_cases/" {
+                file "user.py\ntask.py\npayment.py"
+            }
+        }
+    }
+    
+    rectangle "Domain Layer" as domain #FFFACD {
+        rectangle "domain/vendor" {
+            file "**entities.py**\nUser \nTask\nOffChainTx\nPaymentChannel" #FFFFE0
+            file "user_repository.py\ntask_repository.py\noff_chain_tx_repository.py\npayment_channel_repository.py"
+        }
+    }
+    
+    rectangle "Infrastructure Layer" as infra #E8F4F8 {
+        rectangle "infrastructure/vendor" {
+            file "user_repository_impl.py\ntask_repository_impl.py\noff_chain_tx_repository_impl.py\npayment_channel_repository_impl.py\nvendor_client.py"
+        }
+    }
+    
+    ' Hidden links to force 2-row layout
+    entry -[hidden]down-> domain
+    api -[hidden]down-> infra
+}
+
+@enduml

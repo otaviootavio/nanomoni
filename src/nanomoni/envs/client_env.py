@@ -13,7 +13,8 @@ class Settings(BaseModel):
     vendor_base_url: str
     issuer_base_url: str
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def client_public_key_der_b64(self) -> str:
         """DER-encoded base64 public key."""
         private_key = serialization.load_pem_private_key(

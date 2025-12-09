@@ -1,0 +1,54 @@
+@startuml Issuer_Static_Compact
+
+!theme plain
+left to right direction
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+skinparam padding 0
+skinparam BoxPadding 2
+skinparam RectanglePadding 3
+skinparam RectangleBorderThickness 1
+skinparam Shadowing false
+skinparam Nodesep 10
+skinparam Ranksep 10
+
+rectangle "Issuer Context" #FFE6E6 {
+    rectangle "Entry\n**issuer_main.py**" as entry #FFCCCC
+    
+    rectangle "API Layer" as api #E8F4F8 {
+        rectangle "api/issuer_api" {
+            file "app.py\ndependencies.py" as api_files
+            rectangle "routers/" {
+                file "registration.py\npayment_channel.py"
+            }
+        }
+    }
+    
+    rectangle "Application Layer" as app #FFF8DC {
+        rectangle "application/issuer" {
+            file "dtos.py"
+            rectangle "use_cases/" {
+                file "registration.py\npayment_channel.py"
+            }
+        }
+    }
+    
+    rectangle "Domain Layer" as domain #FFFACD {
+        rectangle "domain/issuer" {
+            file "**entities.py**\nAccount\nPaymentChannel" #FFFFE0
+            file "**repositories.py**\nAccountRepository\nPaymentChannelRepository" #FFFFE0
+        }
+    }
+    
+    rectangle "Infrastructure Layer" as infra #E8F4F8 {
+        rectangle "infrastructure/issuer" {
+            file "account_repository_impl.py\npayment_channel_repository_impl.py\nissuer_client.py"
+        }
+    }
+    
+    entry -[hidden]down-> domain
+    api -[hidden]down-> infra
+}
+
+@enduml
+@enduml
