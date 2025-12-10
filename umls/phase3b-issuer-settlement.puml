@@ -9,7 +9,7 @@ database "Vendor DB\n(Redis)" as VendorDB
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Vendor -> Issuer: POST /api/v1/issuer/payment-channel/close\nCloseChannelCertificate
+Vendor -> Issuer: POST /api/v1/issuer/channels/{channel_id}/settlements\nCloseChannelCertificate
 activate Issuer
 
 Issuer -> Issuer: Receive & validate certificate\n(parse request, validate client & vendor signatures)

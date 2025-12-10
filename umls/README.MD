@@ -194,7 +194,7 @@ note right: Storage optimization:\nOnly keep latest payment state
 Client doesn't sign a new closure request. The last off-chain payment signature will be reused for settlement.
 
 **Flow:**
-1. Client sends POST /payments/close with computed_id: "abc123"
+1. Client sends POST /api/v1/vendor/channels/{channel_id}/closure-requests with computed_id: "abc123"
 2. Vendor retrieves PaymentChannel from local DB
 3. Vendor retrieves latest OffChainTx (contains client signature from last payment)
 4. Vendor loads vendor private key
@@ -217,7 +217,7 @@ Vendor now has both signatures needed for settlement:
 
 **Request to Issuer:**
 ```
-POST /payment-channel/close
+POST /api/v1/issuer/channels/{channel_id}/settlements
 {
   client_public_key,
   vendor_public_key,

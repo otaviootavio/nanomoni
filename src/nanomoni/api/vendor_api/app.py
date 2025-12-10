@@ -43,9 +43,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     # Include routers
-    app.include_router(users.router, prefix="/api/v1")
-    app.include_router(tasks.router, prefix="/api/v1")
-    app.include_router(payments.router, prefix="/api/v1")
+    app.include_router(users.router, prefix="/api/v1/vendor")
+    app.include_router(tasks.router, prefix="/api/v1/vendor")
+    app.include_router(payments.router, prefix="/api/v1/vendor")
 
     @app.get("/")
     async def root() -> dict[str, str]:
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
             "version": settings.app_version,
         }
 
-    @app.get("/api/v1/vendor/public-key")
+    @app.get("/api/v1/vendor/keys/public")
     async def get_vendor_public_key() -> dict[str, str]:
         """Return the vendor public key configured via environment settings."""
 

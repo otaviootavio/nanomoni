@@ -13,11 +13,11 @@ from ....application.issuer.dtos import (
 from ..dependencies import get_payment_channel_service
 from ....application.issuer.use_cases.payment_channel import PaymentChannelService
 
-router = APIRouter(tags=["issuer"])
+router = APIRouter(tags=["channels"])
 
 
 @router.post(
-    "/payment-channel/open",
+    "/channels",
     response_model=OpenChannelResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
@@ -32,11 +32,12 @@ async def open_payment_channel(
 
 
 @router.post(
-    "/payment-channel/close",
+    "/channels/{channel_id}/settlements",
     response_model=CloseChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
 async def close_payment_channel(
+    channel_id: str,
     payload: CloseChannelRequestDTO,
     service: PaymentChannelService = Depends(get_payment_channel_service),
 ) -> CloseChannelResponseDTO:
@@ -47,13 +48,13 @@ async def close_payment_channel(
 
 
 @router.get(
-    "/payment-channel/{computed_id}",
+    "/channels/{channel_id}",
     response_model=PaymentChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
 async def get_payment_channel(
-    computed_id: str,
+    channel_id: str,
     service: PaymentChannelService = Depends(get_payment_channel_service),
 ) -> PaymentChannelResponseDTO:
-    payload = GetPaymentChannelRequestDTO(computed_id=computed_id)
+    payload = GetPaymentChannelRequestDTO(computed_id=channel_id)
     return await service.get_channel(payload)

@@ -17,11 +17,15 @@ class VendorClient:
 
     def get_vendor_public_key(self) -> str:
         """Fetch the vendor's public key (DER b64) from the vendor API."""
-        resp = self._http.get("/vendor/public-key")
+        resp = self._http.get("/vendor/keys/public")
         data = resp.json()
         return data["public_key_der_b64"]
 
-    def send_off_chain_payment(self, envelope: Envelope) -> Dict[str, Any]:
+    def send_off_chain_payment(
+        self,
+        computed_id: str,
+        envelope: Envelope,
+    ) -> Dict[str, Any]:
         """Send an off-chain payment envelope to the vendor."""
         payload = {
             "envelope": {
@@ -29,12 +33,14 @@ class VendorClient:
                 "signature_b64": envelope.signature_b64,
             }
         }
-        resp = self._http.post("/payments/receive", json=payload)
+        path = f"/vendor/channels/{computed_id}/payments"
+        resp = self._http.post(path, json=payload)
         return resp.json()
 
     def request_close_channel(self, dto: CloseChannelDTO) -> None:
         """Ask the vendor to close a payment channel."""
-        self._http.post("/payments/close", json=dto.model_dump())
+        path = f"/vendor/channels/{dto.computed_id}/closure-requests"
+        self._http.post(path, json=dto.model_dump())
 
     def close(self) -> None:
         self._http.close()

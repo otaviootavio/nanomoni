@@ -57,7 +57,7 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
                 "client_public_key_der_b64": settings.vendor_public_key_der_b64
             }
             r = await client.post(
-                f"{settings.issuer_base_url}/issuer/register", json=reg_payload
+                f"{settings.issuer_base_url}/issuer/accounts", json=reg_payload
             )
             r.raise_for_status()
             print("Vendor registered with issuer successfully.")

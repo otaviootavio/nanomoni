@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Path
 from cryptography.exceptions import InvalidSignature
 
 from ....application.vendor.dtos import (
@@ -15,16 +15,17 @@ from ....application.vendor.dtos import (
 from ....application.vendor.use_cases.payment import PaymentService
 from ..dependencies import get_payment_service
 
-router = APIRouter(prefix="/payments", tags=["payments"])
+router = APIRouter(prefix="/channels", tags=["channels"])
 
 
 @router.post(
-    "/receive",
+    "/{channel_id}/payments",
     response_model=OffChainTxResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
 async def receive_payment(
     payment_data: ReceivePaymentDTO,
+    channel_id: str = Path(..., description="Payment channel identifier"),
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> OffChainTxResponseDTO:
     """Receive and validate an off-chain payment from a client."""
@@ -45,12 +46,13 @@ async def receive_payment(
 
 
 @router.post(
-    "/close",
+    "/{channel_id}/closure-requests",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def close_channel(
     payload: CloseChannelDTO,
+    channel_id: str = Path(..., description="Payment channel identifier"),
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> Response:
     try:
@@ -63,12 +65,13 @@ async def close_channel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to close channel: {str(e)}",
         )
-
-
-@router.get("/channel/{computed_id}", response_model=List[OffChainTxResponseDTO])
+@router.get(
+    "/{channel_id}/payments",
+    response_model=List[OffChainTxResponseDTO],
+)
 async def get_payments_by_channel(
-    computed_id: str,
+    channel_id: str,
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> List[OffChainTxResponseDTO]:
     """Get all payments for a specific payment channel."""
-    return await payment_service.get_payments_by_channel(computed_id)
+    return await payment_service.get_payments_by_channel(channel_id)

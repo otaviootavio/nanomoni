@@ -27,29 +27,32 @@ class IssuerClient:
         self._http = HttpClient(base_url, timeout=timeout)
 
     def register(self, dto: RegistrationRequestDTO) -> RegistrationResponseDTO:
-        resp = self._http.post("/issuer/register", json=dto.model_dump())
+        resp = self._http.post("/issuer/accounts", json=dto.model_dump())
         return RegistrationResponseDTO.model_validate(resp.json())
 
     def get_public_key(self) -> IssuerPublicKeyDTO:
-        resp = self._http.get("/issuer/public-key")
+        resp = self._http.get("/issuer/keys/public")
         return IssuerPublicKeyDTO.model_validate(resp.json())
 
     def open_payment_channel(
         self, dto: OpenChannelRequestDTO
     ) -> OpenChannelResponseDTO:
-        resp = self._http.post("/issuer/payment-channel/open", json=dto.model_dump())
+        resp = self._http.post("/issuer/channels", json=dto.model_dump())
         return OpenChannelResponseDTO.model_validate(resp.json())
 
     def close_payment_channel(
-        self, dto: CloseChannelRequestDTO
+        self,
+        computed_id: str,
+        dto: CloseChannelRequestDTO,
     ) -> CloseChannelResponseDTO:
-        resp = self._http.post("/issuer/payment-channel/close", json=dto.model_dump())
+        path = f"/issuer/channels/{computed_id}/settlements"
+        resp = self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 
     def get_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaymentChannelResponseDTO:
-        path = f"/issuer/payment-channel/{dto.computed_id}"
+        path = f"/issuer/channels/{dto.computed_id}"
         resp = self._http.get(path)
         return PaymentChannelResponseDTO.model_validate(resp.json())
 

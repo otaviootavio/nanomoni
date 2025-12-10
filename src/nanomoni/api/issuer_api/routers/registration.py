@@ -14,7 +14,7 @@ router = APIRouter(tags=["issuer"])
 
 
 @router.post(
-    "/register",
+    "/accounts",
     response_model=RegistrationResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
@@ -29,7 +29,7 @@ async def register(
 
 
 @router.get(
-    "/public-key",
+    "/keys/public",
     response_model=IssuerPublicKeyDTO,
     status_code=status.HTTP_200_OK,
 )

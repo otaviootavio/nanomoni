@@ -12,7 +12,7 @@ database "Issuer DB\n(Redis)" as IssuerDB
 Client -> Client: Build OffChainTxPayload\n(computed_id, client_pk, vendor_pk, owed_amount)
 Client -> Client: Wrap payload in Envelope\nsigned with client private key
 
-Client -> Vendor: POST /api/v1/payments/receive\nEnvelope<OffChainTxPayload>
+Client -> Vendor: POST /api/v1/vendor/channels/{channel_id}/payments\nEnvelope<OffChainTxPayload>
 activate Vendor
 
 Vendor -> Vendor: Verify envelope & deserialize payload
@@ -20,7 +20,7 @@ Vendor -> Vendor: Verify envelope & deserialize payload
 Vendor -> VendorDB: Get latest OffChainTx\nfor computed_id
 VendorDB --> Vendor: none (first payment)
 
-Vendor -> Issuer: GET /api/v1/issuer/payment-channel/{computed_id}
+Vendor -> Issuer: GET /api/v1/issuer/channels/{channel_id}
 activate Issuer
 Issuer -> IssuerDB: Get PaymentChannel from computed_id
 IssuerDB --> Issuer: PaymentChannel

@@ -7,7 +7,7 @@ actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
 
-Client -> Vendor: POST /api/v1/payments/close\nCloseChannelRequest\n(computed_id)
+Client -> Vendor: POST /api/v1/vendor/channels/{channel_id}/closure-requests\nCloseChannelRequest\n(computed_id)
 activate Vendor
 
 Vendor -> VendorDB: Get PaymentChannel from computed_id

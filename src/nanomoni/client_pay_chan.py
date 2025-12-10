@@ -166,6 +166,7 @@ def vendor_validate_client_off_tx(
 
 def send_payment_to_vendor(
     vendor_base_url: str,
+    computed_id: str,
     client_off_tx_envelope: Envelope,
 ) -> Dict[str, Any]:
     """Send an off-chain payment to the vendor API for processing.
@@ -173,7 +174,10 @@ def send_payment_to_vendor(
     Returns the vendor's response with the processed transaction details.
     """
     with VendorClient(vendor_base_url) as vendor_client:
-        response_data = vendor_client.send_off_chain_payment(client_off_tx_envelope)
+        response_data = vendor_client.send_off_chain_payment(
+            computed_id,
+            client_off_tx_envelope,
+        )
 
         # Parse and log payment details (latest state for this channel)
         computed_id = response_data.get("computed_id")
@@ -231,6 +235,7 @@ def main() -> None:
         # Send payment to vendor API
         send_payment_to_vendor(
             vendor_base_url,
+            computed_id,
             client_off_tx,
         )
 

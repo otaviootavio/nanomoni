@@ -7,12 +7,12 @@ actor "Client" as Client
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Get vendor_pk\nGET /api/v1/vendor/public-key
+Client -> Client: Get vendor_pk\nGET /api/v1/vendor/keys/public
 
 Client -> Client: Build OpenChannelRequestPayload\n(client_pk, vendor_pk, amount)
 Client -> Client: Wrap payload in Envelope\nsigned with client private key
 
-Client -> Issuer: POST /api/v1/issuer/payment-channel/open\nEnvelope<OpenChannelRequestPayload>
+Client -> Issuer: POST /api/v1/issuer/channels\nEnvelope<OpenChannelRequestPayload>
 activate Issuer
 
 Issuer -> Issuer: Verify client envelope & deserialize payload

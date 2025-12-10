@@ -64,7 +64,7 @@ class PaymentService:
             # Extract this request as a client on the infrastructure folder
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    f"{self.issuer_base_url}/issuer/payment-channel/{computed_id}"
+                    f"{self.issuer_base_url}/issuer/channels/{computed_id}"
                 )
                 response.raise_for_status()
                 channel_data = response.json()
@@ -236,7 +236,7 @@ class PaymentService:
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
-                f"{self.issuer_base_url}/issuer/payment-channel/close",
+                f"{self.issuer_base_url}/issuer/channels/{latest_tx.computed_id}/settlements",
                 json=request_body,
             )
             resp.raise_for_status()
