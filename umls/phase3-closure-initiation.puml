@@ -1,0 +1,45 @@
+@startuml Phase3a_Closure_Initiation
+
+!theme plain
+autonumber
+
+actor "Client" as Client
+participant "Vendor API" as Vendor
+database "Vendor DB\n(Redis)" as VendorDB
+
+Client -> Vendor: POST \n/api/v1/vendor/channels/{channel_id}/closure-requests\nCloseChannelRequest\n(computed_id)
+activate Vendor
+
+Vendor -> VendorDB: Get PaymentChannel \nfrom computed_id
+VendorDB --> Vendor: PaymentChannel
+
+Vendor -> VendorDB: Get latest OffChainTx \nfrom computed_id
+VendorDB --> Vendor: OffChainTx
+
+Vendor -> Vendor: Validate channel & payments\n(exists, open, latest_tx found)
+
+Vendor -> Vendor: Build CloseChannelRequestPayload\nfrom latest OffChainTx
+Vendor -> Vendor: Wrap payload in Envelope\nsigned with vendor private key
+
+Vendor -> Issuer: POST \n/api/v1/issuer/channels/{channel_id}/settlements\nEnvelope<CloseChannelRequestPayload>
+activate Issuer
+
+Issuer -> Issuer: Receive & validate envelope\n(parse request, \nvalidate client & \nvendor signatures)
+
+Issuer -> IssuerDB: Get PaymentChannel \nfrom computed_id
+IssuerDB --> Issuer: PaymentChannel
+
+Issuer -> Issuer: Validate settlement logic\n(0 <= owed_amount <= amount, \nchannel open, keys match)
+
+Issuer -> IssuerDB: UPDATE vendor Account\nbalance += owed_amount
+Issuer -> IssuerDB: UPDATE client Account\nbalance += (amount - owed_amount)
+Issuer -> IssuerDB: UPDATE PaymentChannel\n{is_closed: true, \nbalance: owed_amount, \nclosed_at: now}
+
+Issuer --> Vendor: 200 OK\nCloseChannelResponse
+deactivate Issuer
+
+Vendor -> VendorDB: UPDATE PaymentChannel\n(is_closed: true)
+Vendor --> Client: 204 No Content
+deactivate Vendor
+
+@enduml

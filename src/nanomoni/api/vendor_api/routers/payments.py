@@ -65,6 +65,8 @@ async def close_channel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to close channel: {str(e)}",
         )
+
+
 @router.get(
     "/{channel_id}/payments",
     response_model=List[OffChainTxResponseDTO],

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Type
+from typing import Optional, Type
 from types import TracebackType
 
-from ...application.vendor.dtos import CloseChannelDTO
+from ...application.vendor.dtos import (
+    CloseChannelDTO,
+    OffChainTxResponseDTO,
+    ReceivePaymentDTO,
+    VendorPublicKeyDTO,
+)
 from ..http.http_client import HttpClient
-from ...crypto.certificates import Envelope
 
 
 class VendorClient:
@@ -15,27 +19,29 @@ class VendorClient:
         # vendor_base_url is expected to already contain any API prefix (e.g. /api/v1)
         self._http = HttpClient(base_url, timeout=timeout)
 
-    def get_vendor_public_key(self) -> str:
-        """Fetch the vendor's public key (DER b64) from the vendor API."""
+    def get_vendor_public_key(self) -> VendorPublicKeyDTO:
+        """Fetch the vendor's public key (DER b64) from the vendor API.
+
+        The JSON response is validated into ``VendorPublicKeyDTO`` to ensure
+        runtime contract compliance.
+        """
         resp = self._http.get("/vendor/keys/public")
-        data = resp.json()
-        return data["public_key_der_b64"]
+        return VendorPublicKeyDTO.model_validate(resp.json())
 
     def send_off_chain_payment(
         self,
         computed_id: str,
-        envelope: Envelope,
-    ) -> Dict[str, Any]:
-        """Send an off-chain payment envelope to the vendor."""
-        payload = {
-            "envelope": {
-                "payload_b64": envelope.payload_b64,
-                "signature_b64": envelope.signature_b64,
-            }
-        }
+        dto: ReceivePaymentDTO,
+    ) -> OffChainTxResponseDTO:
+        """Send an off-chain payment to the vendor API.
+
+        Uses ``ReceivePaymentDTO`` as the request body and validates the response
+        as ``OffChainTxResponseDTO`` to keep this client aligned with the
+        vendor API contract.
+        """
         path = f"/vendor/channels/{computed_id}/payments"
-        resp = self._http.post(path, json=payload)
-        return resp.json()
+        resp = self._http.post(path, json=dto.model_dump())
+        return OffChainTxResponseDTO.model_validate(resp.json())
 
     def request_close_channel(self, dto: CloseChannelDTO) -> None:
         """Ask the vendor to close a payment channel."""

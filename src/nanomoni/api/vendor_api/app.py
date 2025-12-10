@@ -11,6 +11,7 @@ import base64
 from cryptography.hazmat.primitives import serialization
 
 from ...envs.vendor_env import get_settings, register_vendor_with_issuer
+from ...application.vendor.dtos import VendorPublicKeyDTO
 from .routers import users, tasks, payments
 
 settings = get_settings()
@@ -65,8 +66,11 @@ def create_app() -> FastAPI:
             "version": settings.app_version,
         }
 
-    @app.get("/api/v1/vendor/keys/public")
-    async def get_vendor_public_key() -> dict[str, str]:
+    @app.get(
+        "/api/v1/vendor/keys/public",
+        response_model=VendorPublicKeyDTO,
+    )
+    async def get_vendor_public_key() -> VendorPublicKeyDTO:
         """Return the vendor public key configured via environment settings."""
 
         public_key = serialization.load_pem_public_key(
@@ -78,9 +82,7 @@ def create_app() -> FastAPI:
         )
         public_key_der_b64 = base64.b64encode(der_bytes).decode()
 
-        return {
-            "public_key_der_b64": public_key_der_b64,
-        }
+        return VendorPublicKeyDTO(public_key_der_b64=public_key_der_b64)
 
     return app
 

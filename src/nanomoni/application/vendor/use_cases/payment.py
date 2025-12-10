@@ -11,6 +11,10 @@ from ....application.shared.payment_channel_payloads import (
     CloseChannelRequestPayload,
     deserialize_off_chain_tx,
 )
+from ....application.issuer.dtos import (
+    CloseChannelRequestDTO,
+    GetPaymentChannelRequestDTO,
+)
 from ....crypto.certificates import (
     json_to_bytes,
     load_private_key_from_pem,
@@ -22,6 +26,7 @@ from ....crypto.certificates import (
 from ....domain.vendor.entities import OffChainTx, PaymentChannel
 from ....domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import (
     CloseChannelDTO,
     OffChainTxResponseDTO,
@@ -60,14 +65,10 @@ class PaymentService:
         after a fully validated first payment in receive_payment.
         """
         try:
-            # TODO
-            # Extract this request as a client on the infrastructure folder
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{self.issuer_base_url}/issuer/channels/{computed_id}"
-                )
-                response.raise_for_status()
-                channel_data = response.json()
+            async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
+                dto = GetPaymentChannelRequestDTO(computed_id=computed_id)
+                issuer_channel = await issuer_client.get_payment_channel(dto)
+                channel_data = issuer_channel.model_dump()
 
                 # Safely deserialize using the entity
                 payment_channel = PaymentChannel.model_validate(channel_data)
@@ -227,19 +228,19 @@ class PaymentService:
         vendor_close_signature_b64 = sign_bytes(vendor_private_key, payload_bytes)
 
         # 5) Send close request to issuer
-        request_body = {
-            "client_public_key_der_b64": latest_tx.client_public_key_der_b64,
-            "vendor_public_key_der_b64": latest_tx.vendor_public_key_der_b64,
-            "close_payload_b64": latest_tx.payload_b64,
-            "client_close_signature_b64": latest_tx.client_signature_b64,
-            "vendor_close_signature_b64": vendor_close_signature_b64,
-        }
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{self.issuer_base_url}/issuer/channels/{latest_tx.computed_id}/settlements",
-                json=request_body,
+        request_dto = CloseChannelRequestDTO(
+            client_public_key_der_b64=latest_tx.client_public_key_der_b64,
+            vendor_public_key_der_b64=latest_tx.vendor_public_key_der_b64,
+            close_payload_b64=latest_tx.payload_b64,
+            client_close_signature_b64=latest_tx.client_signature_b64,
+            vendor_close_signature_b64=vendor_close_signature_b64,
+        )
+
+        async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
+            await issuer_client.close_payment_channel(
+                latest_tx.computed_id,
+                request_dto,
             )
-            resp.raise_for_status()
 
         # 6) Mark closed locally
         await self.payment_channel_repository.mark_closed(

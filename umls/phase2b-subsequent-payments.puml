@@ -23,7 +23,7 @@ loop for each subsequent payment (i = 2 to 9_999)
     Vendor -> VendorDB: Get cached PaymentChannel\n    by computed_id
     VendorDB --> Vendor: PaymentChannel
 
-    Vendor -> Vendor: Validate payment & channel\n    (owed_amount increasing, <= amount, keys & vendor match)
+    Vendor -> Vendor: Validate payment & channel\n    (owed_amount increasing, <= amount, \nkeys & vendor match)
 
     Vendor -> VendorDB: OVERWRITE latest OffChainTx\n    for computed_id
     

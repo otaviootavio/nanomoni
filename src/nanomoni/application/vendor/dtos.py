@@ -134,6 +134,12 @@ class PaginatedResponse(BaseModel):
     has_previous: bool
 
 
+class VendorPublicKeyDTO(BaseModel):
+    """DTO for returning the vendor's public key in DER base64 format."""
+
+    public_key_der_b64: str
+
+
 class CloseChannelDTO(BaseModel):
     """DTO for requesting a close of a payment channel by its computed ID."""
 

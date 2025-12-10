@@ -27,7 +27,7 @@ IssuerDB --> Issuer: PaymentChannel
 Issuer --> Vendor: PaymentChannel
 deactivate Issuer
 
-Vendor -> Vendor: Validate channel & payment\n(open, correct vendor_pk, owed_amount within amount)
+Vendor -> Vendor: Validate channel & payment\n(open, correct vendor_pk, \nowed_amount within amount)
 
 Vendor -> VendorDB: Cache PaymentChannel locally
 

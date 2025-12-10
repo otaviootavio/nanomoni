@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Dict, Any
 
 from cryptography.hazmat.primitives import serialization
 
@@ -25,14 +24,18 @@ from nanomoni.application.issuer.dtos import (
     RegistrationRequestDTO,
     OpenChannelRequestDTO,
 )
-from nanomoni.application.vendor.dtos import CloseChannelDTO
+from nanomoni.application.vendor.dtos import (
+    CloseChannelDTO,
+    OffChainTxResponseDTO,
+    ReceivePaymentDTO,
+)
 from nanomoni.infrastructure.issuer.issuer_client import IssuerClient
 from nanomoni.infrastructure.vendor.vendor_client import VendorClient
 
 
 def register_into_issuer_using_private_key(
     issuer_base_url: str, private_key_pem: str
-) -> Dict[str, Any]:
+) -> dict[str, object]:
     private_key = load_private_key_from_pem(private_key_pem)
     public_key = private_key.public_key()
     public_key_der = public_key.public_bytes(
@@ -168,27 +171,26 @@ def send_payment_to_vendor(
     vendor_base_url: str,
     computed_id: str,
     client_off_tx_envelope: Envelope,
-) -> Dict[str, Any]:
+) -> OffChainTxResponseDTO:
     """Send an off-chain payment to the vendor API for processing.
 
     Returns the vendor's response with the processed transaction details.
     """
     with VendorClient(vendor_base_url) as vendor_client:
-        response_data = vendor_client.send_off_chain_payment(
-            computed_id,
-            client_off_tx_envelope,
-        )
+        request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
+        response_dto = vendor_client.send_off_chain_payment(computed_id, request_dto)
 
         # Parse and log payment details (latest state for this channel)
-        computed_id = response_data.get("computed_id")
-        owed_amount = response_data.get("owed_amount")
-        created_at = response_data.get("created_at")
+        computed_id = response_dto.computed_id
+        owed_amount = response_dto.owed_amount
+        created_at = response_dto.created_at
 
         print(
-            f"Payment successfully processed by vendor. Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
+            "Payment successfully processed by vendor. "
+            f"Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
         )
 
-        return response_data
+        return response_dto
 
 
 def request_vendor_close_channel(vendor_base_url: str, computed_id: str) -> None:
@@ -210,7 +212,8 @@ def main() -> None:
 
     # Get vendor public key
     with VendorClient(vendor_base_url) as vendor_client:
-        vendor_public_key_der_b64 = vendor_client.get_vendor_public_key()
+        vendor_pk_dto = vendor_client.get_vendor_public_key()
+        vendor_public_key_der_b64 = vendor_pk_dto.public_key_der_b64
 
     # TODO
     # This datas are not used for now

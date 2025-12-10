@@ -7,6 +7,9 @@ import httpx
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 
+from nanomoni.application.issuer.dtos import RegistrationRequestDTO
+from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
+
 
 class Settings(BaseModel):
     database_url: str
@@ -52,14 +55,11 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
     print("Registering vendor into issuer using public key.")
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            reg_payload = {
-                "client_public_key_der_b64": settings.vendor_public_key_der_b64
-            }
-            r = await client.post(
-                f"{settings.issuer_base_url}/issuer/accounts", json=reg_payload
-            )
-            r.raise_for_status()
+        reg_dto = RegistrationRequestDTO(
+            client_public_key_der_b64=settings.vendor_public_key_der_b64
+        )
+        async with AsyncIssuerClient(settings.issuer_base_url) as issuer_client:
+            await issuer_client.register(reg_dto)
             print("Vendor registered with issuer successfully.")
     except httpx.HTTPStatusError as e:
         if e.response is not None and e.response.status_code == 400:
