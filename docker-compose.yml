@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.client
+    expose:
+      - "8002"
     networks:
       - app-network
 
@@ -41,6 +43,67 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6380:6379
+    networks:
+      - app-network
+
+  pyroscope:
+    image: grafana/pyroscope:latest
+    command: ["server", "--http-address=:4040"]
+    ports:
+      - 4040:4040
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    depends_on:
+      - pyroscope
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    networks:
+      - app-network
+
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./alloy.config:/etc/alloy/alloy.config:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    pid: host
+    privileged: true
+    depends_on:
+      - pyroscope
+    ports:
+      - 12345:12345
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/alloy.config"]
+    networks:
+      - app-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
     networks:
       - app-network
 

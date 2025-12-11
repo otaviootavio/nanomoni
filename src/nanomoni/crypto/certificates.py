@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from typing import NewType
+from functools import lru_cache
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -41,6 +42,7 @@ def verify_signature_bytes(
     return True
 
 
+@lru_cache(maxsize=128)
 def load_public_key_from_der_b64(der_b64: DERB64) -> ec.EllipticCurvePublicKey:
     """Load a cryptography public key object from base64-encoded DER (SubjectPublicKeyInfo)."""
     der = base64.b64decode(der_b64, validate=True)
@@ -74,6 +76,18 @@ def verify_envelope(public_key: ec.EllipticCurvePublicKey, envelope: Envelope) -
     """Verify a certificate over the decoded payload bytes contained in the envelope."""
     payload_bytes = base64.b64decode(envelope.payload_b64, validate=True)
     return verify_signature_bytes(public_key, payload_bytes, envelope.signature_b64)
+
+
+def verify_envelope_and_get_payload_bytes(
+    public_key: ec.EllipticCurvePublicKey, envelope: Envelope
+) -> bytes:
+    """Verify an envelope and return the decoded payload bytes.
+
+    This avoids decoding the payload separately for verification and deserialization.
+    """
+    payload_bytes = base64.b64decode(envelope.payload_b64, validate=True)
+    verify_signature_bytes(public_key, payload_bytes, envelope.signature_b64)
+    return payload_bytes
 
 
 def envelope_payload_bytes(envelope: Envelope) -> bytes:

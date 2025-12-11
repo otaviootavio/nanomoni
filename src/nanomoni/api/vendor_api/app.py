@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import base64
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+
+from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-import base64
-from cryptography.hazmat.primitives import serialization
-
-from ...envs.vendor_env import get_settings, register_vendor_with_issuer
 from ...application.vendor.dtos import VendorPublicKeyDTO
-from .routers import users, tasks, payments
+from ...envs.vendor_env import get_settings, register_vendor_with_issuer
+from .routers import payments, tasks, users
 
 settings = get_settings()
 
@@ -83,6 +85,11 @@ def create_app() -> FastAPI:
         public_key_der_b64 = base64.b64encode(der_bytes).decode()
 
         return VendorPublicKeyDTO(public_key_der_b64=public_key_der_b64)
+
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        """Expose Prometheus metrics."""
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return app
 

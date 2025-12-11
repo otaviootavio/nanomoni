@@ -18,6 +18,7 @@ class Settings(BaseModel):
     api_host: str
     api_port: int
     api_debug: bool
+    api_workers: int
     api_cors_origins: list[str]
 
     app_name: str
@@ -84,6 +85,7 @@ def get_settings() -> Settings:
     api_debug_str = os.environ.get("VENDOR_API_DEBUG")
     api_cors_origins_str = os.environ.get("VENDOR_API_CORS_ORIGINS")
     api_port_str = os.environ.get("VENDOR_API_PORT")
+    api_workers_str = os.environ.get("VENDOR_API_WORKERS")
 
     vendor_private_key_pem = os.environ.get("VENDOR_PRIVATE_KEY_PEM")
     issuer_base_url = os.environ.get("ISSUER_BASE_URL")
@@ -96,6 +98,7 @@ def get_settings() -> Settings:
     api_port = int(api_port_str) if api_port_str is not None else 8001
     database_echo = (database_echo_str or "false").lower() == "true"
     api_debug = (api_debug_str or "false").lower() == "true"
+    api_workers = int(api_workers_str) if api_workers_str is not None else 1
     api_cors_origins = api_cors_origins_str.split(",") if api_cors_origins_str else []
 
     app_name = os.environ.get("VENDOR_APP_NAME") or "NanoMoni"
@@ -129,6 +132,7 @@ def get_settings() -> Settings:
         api_host=api_host,
         api_port=api_port,
         api_debug=api_debug,
+        api_workers=api_workers,
         api_cors_origins=api_cors_origins,
         app_name=app_name,
         app_version=app_version,

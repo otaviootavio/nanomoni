@@ -25,13 +25,13 @@ from ....crypto.certificates import (
     PayloadB64,
     SignatureB64,
     verify_envelope,
+    verify_envelope_and_get_payload_bytes,
     DERB64,
 )
 from ....application.shared.payment_channel_payloads import (
+    OpenChannelRequestPayload,
     OpenChannelResponsePayload,
     CloseChannelRequestPayload,
-    deserialize_open_channel_request,
-    deserialize_close_channel_request,
     serialize_open_channel_response,
 )
 
@@ -71,12 +71,16 @@ class PaymentChannelService:
             signature_b64=SignatureB64(dto.open_signature_b64),
         )
         try:
-            verify_envelope(client_public_key, client_envelope)
+            payload_bytes = verify_envelope_and_get_payload_bytes(
+                client_public_key, client_envelope
+            )
         except InvalidSignature:
             raise ValueError("Invalid client signature for open channel request")
 
         # Parse payload to structured data
-        open_req_payload = deserialize_open_channel_request(client_envelope)
+        open_req_payload = OpenChannelRequestPayload.model_validate_json(
+            payload_bytes.decode("utf-8")
+        )
 
         # Ensure the declared public key matches the payload
         if open_req_payload.client_public_key_der_b64 != dto.client_public_key_der_b64:
@@ -162,7 +166,9 @@ class PaymentChannelService:
             signature_b64=SignatureB64(dto.client_close_signature_b64),
         )
         try:
-            verify_envelope(client_public_key, client_envelope)
+            client_payload_bytes = verify_envelope_and_get_payload_bytes(
+                client_public_key, client_envelope
+            )
         except InvalidSignature:
             raise ValueError("Invalid closing certificate signature")
         except Exception:
@@ -181,9 +187,11 @@ class PaymentChannelService:
         except InvalidSignature:
             raise ValueError("Invalid vendor signature for closing")
 
-        # Parse and validate the close payload
-        close_payload: CloseChannelRequestPayload = deserialize_close_channel_request(
-            client_envelope
+        # Parse and validate the close payload using already-decoded bytes
+        close_payload: CloseChannelRequestPayload = (
+            CloseChannelRequestPayload.model_validate_json(
+                client_payload_bytes.decode("utf-8")
+            )
         )
 
         # Ensure channel exists

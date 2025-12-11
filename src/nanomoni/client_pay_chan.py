@@ -2,35 +2,53 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import time
 
 from cryptography.hazmat.primitives import serialization
+from prometheus_client import Counter, Histogram, start_http_server
 
-from nanomoni.envs.client_env import get_settings
-from nanomoni.crypto.certificates import (
-    generate_envelope,
-    verify_envelope,
-    load_public_key_from_der_b64,
-    load_private_key_from_pem,
-    Envelope,
-    PayloadB64,
-    SignatureB64,
-    DERB64,
+from nanomoni.application.issuer.dtos import (
+    OpenChannelRequestDTO,
+    RegistrationRequestDTO,
 )
 from nanomoni.application.shared.payment_channel_payloads import (
     OffChainTxPayload,
-    deserialize_off_chain_tx,
-)
-from nanomoni.application.issuer.dtos import (
-    RegistrationRequestDTO,
-    OpenChannelRequestDTO,
+    verify_and_deserialize_off_chain_tx,
 )
 from nanomoni.application.vendor.dtos import (
     CloseChannelDTO,
     OffChainTxResponseDTO,
     ReceivePaymentDTO,
 )
+from nanomoni.crypto.certificates import (
+    DERB64,
+    Envelope,
+    PayloadB64,
+    SignatureB64,
+    generate_envelope,
+    load_private_key_from_pem,
+    load_public_key_from_der_b64,
+    verify_envelope,
+)
+from nanomoni.envs.client_env import get_settings
 from nanomoni.infrastructure.issuer.issuer_client import IssuerClient
 from nanomoni.infrastructure.vendor.vendor_client import VendorClient
+
+
+CLIENT_ID = os.getenv("CLIENT_ID", "default")
+
+client_payment_requests_total = Counter(
+    "client_payment_requests_total",
+    "Total payment requests sent by this client",
+    ["client_id"],
+)
+
+client_payment_request_duration_seconds = Histogram(
+    "client_payment_request_duration_seconds",
+    "Payment request round-trip time from client perspective in seconds",
+    ["client_id"],
+)
 
 
 def register_into_issuer_using_private_key(
@@ -153,13 +171,10 @@ def vendor_validate_client_off_tx(
         payload_b64=PayloadB64(payload_b64), signature_b64=SignatureB64(signature_b64)
     )
 
-    # 1) Verify client's signature
-    verify_envelope(client_public_key, envelope)
+    # 1) Verify client's signature and decode payload in one step
+    payload = verify_and_deserialize_off_chain_tx(client_public_key, envelope)
 
-    # 2) Decode and validate payload
-    payload = deserialize_off_chain_tx(envelope)
-
-    # 3) Check for double spending
+    # 2) Check for double spending
     if payload.owed_amount <= prev_owed_amount:
         raise ValueError(
             f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
@@ -176,21 +191,31 @@ def send_payment_to_vendor(
 
     Returns the vendor's response with the processed transaction details.
     """
-    with VendorClient(vendor_base_url) as vendor_client:
-        request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
-        response_dto = vendor_client.send_off_chain_payment(computed_id, request_dto)
+    start = time.perf_counter()
+    try:
+        with VendorClient(vendor_base_url) as vendor_client:
+            request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
+            response_dto = vendor_client.send_off_chain_payment(
+                computed_id, request_dto
+            )
 
-        # Parse and log payment details (latest state for this channel)
-        computed_id = response_dto.computed_id
-        owed_amount = response_dto.owed_amount
-        created_at = response_dto.created_at
+            # Parse and log payment details (latest state for this channel)
+            computed_id = response_dto.computed_id
+            owed_amount = response_dto.owed_amount
+            created_at = response_dto.created_at
 
-        print(
-            "Payment successfully processed by vendor. "
-            f"Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
+            print(
+                "Payment successfully processed by vendor. "
+                f"Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
+            )
+
+            return response_dto
+    finally:
+        duration = time.perf_counter() - start
+        client_payment_requests_total.labels(client_id=CLIENT_ID).inc()
+        client_payment_request_duration_seconds.labels(client_id=CLIENT_ID).observe(
+            duration
         )
-
-        return response_dto
 
 
 def request_vendor_close_channel(vendor_base_url: str, computed_id: str) -> None:
@@ -225,8 +250,8 @@ def main() -> None:
         issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 1000000
     )
 
-    # Loop to send 10,000 off-chain payments to the vendor API
-    for i in range(1, 10000):
+    # Loop to send 100,000 off-chain payments to the vendor API
+    for i in range(1, 100000):
         client_off_tx = client_create_off_tx_to_vendor(
             computed_id,
             client_private_key_pem,
@@ -247,4 +272,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Expose Prometheus metrics for this client on port 8002
+    start_http_server(8002)
     main()

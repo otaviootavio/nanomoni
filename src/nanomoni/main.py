@@ -26,12 +26,19 @@ def main() -> None:
     print(f"API will be available at: http://{settings.api_host}:{settings.api_port}")
     print(f"API Documentation: http://{settings.api_host}:{settings.api_port}/docs")
 
-    # Run the FastAPI application
+    # Run the FastAPI application.
+    # If debug/reload is enabled, force a single worker (Uvicorn doesn't support
+    # multi-worker with reload). Otherwise, use the configured number of workers
+    # so the app can utilize multiple CPU cores.
+    reload = settings.api_debug
+    workers = 1 if reload else settings.api_workers
+
     uvicorn.run(
         "nanomoni.api.vendor_api.app:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=settings.api_debug,
+        reload=reload,
+        workers=workers,
         log_level="info",
     )
 
