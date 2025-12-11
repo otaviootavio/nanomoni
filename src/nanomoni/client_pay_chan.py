@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import json
 
 from cryptography.hazmat.primitives import serialization
 
@@ -26,7 +25,6 @@ from nanomoni.crypto.certificates import (
     generate_envelope,
     load_private_key_from_pem,
     load_public_key_from_der_b64,
-    verify_envelope,
 )
 from nanomoni.envs.client_env import get_settings
 from nanomoni.infrastructure.issuer.issuer_client import IssuerClient
@@ -91,25 +89,12 @@ def open_payment_channel(
         )
         resp = issuer_client.open_payment_channel(open_dto)
 
-        # 2) Fetch issuer public key to validate the issuer's envelope
-        issuer_pk = issuer_client.get_public_key()
-        issuer_public_key = load_public_key_from_der_b64(DERB64(issuer_pk.der_b64))
-
-        # 3) Verify and parse the issuer envelope
-        issuer_envelope = Envelope(
-            payload_b64=PayloadB64(resp.open_envelope_payload_b64),
-            signature_b64=SignatureB64(resp.open_envelope_signature_b64),
-        )
-        verify_envelope(issuer_public_key, issuer_envelope)
-        opened_payload_bytes = base64.b64decode(issuer_envelope.payload_b64)
-        opened_payload = json.loads(opened_payload_bytes.decode("utf-8"))
-
-        print("Payment channel opened and issuer envelope verified")
+        print("Payment channel opened")
         return (
-            opened_payload["computed_id"],
-            opened_payload["salt_b64"],
-            opened_payload["amount"],
-            opened_payload["balance"],
+            resp.computed_id,
+            resp.salt_b64,
+            resp.amount,
+            resp.balance,
         )
 
 

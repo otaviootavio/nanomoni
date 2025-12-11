@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from ...crypto.certificates import (
     Envelope,
-    generate_envelope,
     envelope_payload_bytes,
     verify_envelope_and_get_payload_bytes,
 )
@@ -18,17 +17,6 @@ class OpenChannelRequestPayload(BaseModel):
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     amount: int
-
-
-class OpenChannelResponsePayload(BaseModel):
-    """Payload carried by the issuer-signed envelope returned after opening a channel."""
-
-    computed_id: str
-    client_public_key_der_b64: str
-    vendor_public_key_der_b64: str
-    salt_b64: str
-    amount: int
-    balance: int
 
 
 class CloseChannelRequestPayload(BaseModel):
@@ -55,13 +43,6 @@ def deserialize_open_channel_request(envelope: Envelope) -> OpenChannelRequestPa
     payload_bytes = envelope_payload_bytes(envelope)
     payload_str = payload_bytes.decode("utf-8")
     return OpenChannelRequestPayload.model_validate_json(payload_str)
-
-
-def serialize_open_channel_response(
-    private_key: ec.EllipticCurvePrivateKey, payload: OpenChannelResponsePayload
-) -> Envelope:
-    """Serialize and sign the issuer's open-channel response payload into an envelope."""
-    return generate_envelope(private_key, payload.model_dump())
 
 
 def deserialize_close_channel_request(

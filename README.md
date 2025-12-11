@@ -103,7 +103,7 @@ mypy src/
 ```
 
 # TODO
-- [] Add cAdvisor + Prometheus + Graphana
+- [x] Add cAdvisor + Prometheus + Graphana
 - [x] Create Kerner component UML
 - [x] Create Issuer component UML
 - [x] Create Client component UML

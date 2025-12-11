@@ -38,10 +38,14 @@ class OpenChannelRequestDTO(BaseModel):
 
 
 class OpenChannelResponseDTO(BaseModel):
-    """Response containing the issuer-signed envelope describing the opened channel."""
+    """Response containing the opened channel details."""
 
-    open_envelope_payload_b64: str
-    open_envelope_signature_b64: str
+    computed_id: str
+    client_public_key_der_b64: str
+    vendor_public_key_der_b64: str
+    salt_b64: str
+    amount: int
+    balance: int
 
 
 class CloseChannelRequestDTO(BaseModel):

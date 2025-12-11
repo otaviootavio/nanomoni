@@ -30,9 +30,7 @@ from ....crypto.certificates import (
 )
 from ....application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
-    OpenChannelResponsePayload,
     CloseChannelRequestPayload,
-    serialize_open_channel_response,
 )
 
 
@@ -136,22 +134,14 @@ class PaymentChannelService:
         )
         created = await self.channel_repo.create(channel)
 
-        # Issue an issuer-signed envelope describing the opened channel
-        response_payload = OpenChannelResponsePayload(
+        # Issue a plain response describing the opened channel
+        return OpenChannelResponseDTO(
             computed_id=created.computed_id,
             client_public_key_der_b64=created.client_public_key_der_b64,
             vendor_public_key_der_b64=created.vendor_public_key_der_b64,
             salt_b64=created.salt_b64,
             amount=created.amount,
             balance=created.balance,
-        )
-        response_envelope = serialize_open_channel_response(
-            self.issuer_private_key, response_payload
-        )
-
-        return OpenChannelResponseDTO(
-            open_envelope_payload_b64=response_envelope.payload_b64,
-            open_envelope_signature_b64=response_envelope.signature_b64,
         )
 
     async def close_channel(

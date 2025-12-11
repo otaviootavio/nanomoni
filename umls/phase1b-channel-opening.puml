@@ -29,9 +29,8 @@ Issuer -> IssuerDB: Deduct amount from client Account
 Issuer -> Issuer: Generate random salt (32 bytes)\nCompute computed_id = SHA256(client_pk || vendor_pk || salt)
 Issuer -> IssuerDB: CREATE PaymentChannel\n(computed_id, client_pk, vendor_pk, salt, amount, balance=0)
 
-Issuer -> Issuer: Build OpenChannelResponsePayload\nand wrap in Envelope signed by issuer
-
-Issuer --> Client: 201 Created\nOpenChannelResponseEnvelope
+Issuer -> Issuer: Build OpenChannelResponsePayload
+Issuer --> Client: 201 Created\nOpenChannelResponsePayload
 deactivate Issuer
 
 @enduml
