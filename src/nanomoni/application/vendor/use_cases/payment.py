@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+import asyncio
+from typing import List, Optional, Tuple
 
 import httpx
 from pydantic import ValidationError
@@ -94,39 +95,84 @@ class PaymentService:
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
-    async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
+    async def receive_payment(
+        self, dto: ReceivePaymentDTO, channel_id: str
+    ) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
         # 1) Decode and validate payload (extract computed_id and key fields)
         payload = deserialize_off_chain_tx(dto.envelope)
 
-        # 1.1) Ensure this payment is explicitly addressed to this vendor
+        # 1.1) Consistency check: URL channel_id must match payload computed_id
+        if payload.computed_id != channel_id:
+            raise ValueError(
+                f"Channel ID in URL ({channel_id}) does not match payload ({payload.computed_id})"
+            )
+
+        # 1.2) Ensure this payment is explicitly addressed to this vendor
         if payload.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
             raise ValueError("Payment not addressed to this vendor")
 
-        # 2) Get the latest transaction for this payment channel to check for double spending
-        latest_tx = await self.off_chain_tx_repository.get_latest_by_computed_id(
-            payload.computed_id
-        )
-        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
+        # PARALLEL EXECUTION BLOCK
+        # We perform signature verification (CPU) and DB/Network Fetch (I/O) in parallel
+        # to optimize wall time latency.
 
-        # 2.1) If this is the first payment for this channel, verify it exists on issuer
-        payment_channel: Optional[PaymentChannel] = None
-        is_first_payment = latest_tx is None
-        if is_first_payment:
-            payment_channel = await self._verify_payment_channel(payload.computed_id)
-        else:
-            payment_channel = await self.payment_channel_repository.get_by_computed_id(
+        def verify_signature_task() -> None:
+            """Optimistically verify signature using the key claimed in the payload."""
+            # Note: We trust this key only AFTER we verify it matches the DB channel later.
+            client_public_key = load_public_key_from_der_b64(
+                DERB64(payload.client_public_key_der_b64)
+            )
+            verify_envelope(client_public_key, dto.envelope)
+
+        async def fetch_data_task() -> Tuple[Optional[OffChainTx], PaymentChannel]:
+            """Fetch latest tx and channel data."""
+            # 2) Get the latest transaction for this payment channel to check for double spending
+            latest_tx = await self.off_chain_tx_repository.get_latest_by_computed_id(
                 payload.computed_id
             )
 
-        if not payment_channel:
-            raise ValueError("Payment channel could not be found or verified.")
+            # 2.1) If this is the first payment for this channel, verify it exists on issuer
+            is_first_payment = latest_tx is None
+            
+            payment_channel: Optional[PaymentChannel] = None
+
+            if is_first_payment:
+                payment_channel = await self._verify_payment_channel(
+                    payload.computed_id
+                )
+            else:
+                payment_channel = (
+                    await self.payment_channel_repository.get_by_computed_id(
+                        payload.computed_id
+                    )
+                )
+
+            if not payment_channel:
+                raise ValueError("Payment channel could not be found or verified.")
+
+            return latest_tx, payment_channel
+
+        # Execute in parallel
+        loop = asyncio.get_running_loop()
+        try:
+            # Wait for both tasks to complete
+            (_, (latest_tx, payment_channel)) = await asyncio.gather(
+                loop.run_in_executor(None, verify_signature_task),
+                fetch_data_task(),
+            )
+        except Exception as e:
+            # If either fails (e.g. invalid signature or DB error), we fail the request
+            raise e
+
+        # END PARALLEL BLOCK
 
         # 2.2) Ensure the channel remains bound to this vendor
         if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
             raise ValueError("Payment channel is not for this vendor")
 
         # 3) Consistency checks between payload and channel keys
+        # CRITICAL SECURITY STEP: Ensure the key we used to verify the signature (payload key)
+        # matches the authoritative key for this channel (db channel key).
         if (
             payload.client_public_key_der_b64
             != payment_channel.client_public_key_der_b64
@@ -139,13 +185,10 @@ class PaymentService:
         ):
             raise ValueError("Mismatched vendor public key for channel")
 
-        # 4) Verify client's signature using the channel-bound public key
-        client_public_key = load_public_key_from_der_b64(
-            DERB64(payment_channel.client_public_key_der_b64)
-        )
-        verify_envelope(client_public_key, dto.envelope)
+        # 4) (Done in parallel) Verify client's signature using the channel-bound public key
 
         # 5) Check for double spending - owed amount must be increasing
+        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
         if payload.owed_amount <= prev_owed_amount:
             raise ValueError(
                 f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
@@ -158,6 +201,7 @@ class PaymentService:
             )
 
         # 6.1) Cache the verified channel locally only after a fully validated first payment
+        is_first_payment = latest_tx is None
         if is_first_payment:
             await self.payment_channel_repository.create(payment_channel)
 

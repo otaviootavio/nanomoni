@@ -46,7 +46,7 @@ async def receive_payment(
     """Receive and validate an off-chain payment from a client."""
     start_time = time.perf_counter()
     try:
-        result = await payment_service.receive_payment(payment_data)
+        result = await payment_service.receive_payment(payment_data, channel_id)
         payment_requests_total.labels(status="success").inc()
         elapsed = time.perf_counter() - start_time
         payment_request_duration_seconds.labels(status="success").observe(elapsed)
