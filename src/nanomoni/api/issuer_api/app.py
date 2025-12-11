@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import (
+    CollectorRegistry,
+    CONTENT_TYPE_LATEST,
+    generate_latest,
+    multiprocess,
+)
 
 from ...envs.issuer_env import get_settings
 from .routers import registration, payment_channel
@@ -41,6 +48,14 @@ def create_issuer_app() -> FastAPI:
     @app.get("/health")
     async def health_check() -> dict[str, str]:
         return {"status": "healthy", "service": f"{settings.app_name} Issuer"}
+
+    @app.get("/metrics")
+    async def metrics() -> Response:
+        """Expose Prometheus metrics (aggregated across all workers if multiprocess is enabled)."""
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+        data = generate_latest(registry)
+        return Response(data, media_type=CONTENT_TYPE_LATEST)
 
     return app
 

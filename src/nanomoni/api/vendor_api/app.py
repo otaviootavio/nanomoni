@@ -10,7 +10,12 @@ from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import (
+    CollectorRegistry,
+    CONTENT_TYPE_LATEST,
+    generate_latest,
+    multiprocess,
+)
 
 from ...application.vendor.dtos import VendorPublicKeyDTO
 from ...envs.vendor_env import get_settings, register_vendor_with_issuer
@@ -88,8 +93,11 @@ def create_app() -> FastAPI:
 
     @app.get("/metrics")
     async def metrics() -> Response:
-        """Expose Prometheus metrics."""
-        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+        """Expose Prometheus metrics (aggregated across all workers if multiprocess is enabled)."""
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+        data = generate_latest(registry)
+        return Response(data, media_type=CONTENT_TYPE_LATEST)
 
     return app
 

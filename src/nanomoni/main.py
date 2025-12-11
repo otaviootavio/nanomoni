@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import uvicorn
 
@@ -14,6 +15,23 @@ if sys.platform != "win32":
         pass  # uvloop not available, continue with default event loop
 
 from .envs.vendor_env import get_settings
+
+
+def _setup_prometheus_multiproc_dir() -> None:
+    """Prepare the Prometheus multiprocess directory before Uvicorn forks workers.
+
+    This ensures each process writes to a clean directory so metrics can be
+    correctly aggregated by the multiprocess collector.
+    """
+    prom_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if not prom_dir:
+        return
+
+    os.makedirs(prom_dir, exist_ok=True)
+    for filename in os.listdir(prom_dir):
+        file_path = os.path.join(prom_dir, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
 
 def main() -> None:
@@ -32,6 +50,8 @@ def main() -> None:
     # so the app can utilize multiple CPU cores.
     reload = settings.api_debug
     workers = 1 if reload else settings.api_workers
+
+    _setup_prometheus_multiproc_dir()
 
     uvicorn.run(
         "nanomoni.api.vendor_api.app:app",
