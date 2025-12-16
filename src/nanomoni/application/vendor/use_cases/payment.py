@@ -152,6 +152,7 @@ class PaymentService:
             )
 
         # 6) Check if the payment channel amount is bigger than the owed_amount
+        # (Optimistic check for fast failure; authoritative check happens atomically in save_if_valid)
         if payload.owed_amount > payment_channel.amount:
             raise ValueError(
                 f"Owed amount {payload.owed_amount} exceeds payment channel amount {payment_channel.amount}"
@@ -159,9 +160,13 @@ class PaymentService:
 
         # 6.1) Cache the verified channel locally only after a fully validated first payment
         if is_first_payment:
-            await self.payment_channel_repository.create(payment_channel)
+            try:
+                await self.payment_channel_repository.create(payment_channel)
+            except ValueError:
+                # Channel already exists (race condition with concurrent requests); ignore
+                pass
 
-        # 7) Create and store the off-chain transaction
+        # 7) Create and store the off-chain transaction atomically
         off_chain_tx = OffChainTx(
             computed_id=payload.computed_id,
             client_public_key_der_b64=payment_channel.client_public_key_der_b64,
@@ -171,20 +176,33 @@ class PaymentService:
             client_signature_b64=dto.envelope.signature_b64,
         )
 
-        # Save to repository
-        # Option 1: append
-        # created_tx = await self.off_chain_tx_repository.create(off_chain_tx)
-        # Option 2: override the last one - optimize storage by keeping only the latest
-        if latest_tx:
-            # Overwrite the existing transaction with new data for this channel
-            created_tx = await self.off_chain_tx_repository.overwrite_latest(
-                payload.computed_id, off_chain_tx
+        # Atomic save with business rule enforcement
+        status, stored_tx = await self.off_chain_tx_repository.save_if_valid(off_chain_tx)
+
+        if status == 2:
+            # Channel missing locally - verify with issuer and create cache, then retry
+            payment_channel = await self._verify_payment_channel(payload.computed_id)
+            try:
+                await self.payment_channel_repository.create(payment_channel)
+            except ValueError:
+                # Channel was created by another concurrent request; ignore
+                pass
+            # Retry the atomic save
+            status, stored_tx = await self.off_chain_tx_repository.save_if_valid(off_chain_tx)
+
+        if status == 1:
+            # Success: transaction was stored
+            if stored_tx is None:
+                raise RuntimeError("Unexpected: save_if_valid returned success but no transaction")
+            return OffChainTxResponseDTO(**stored_tx.model_dump())
+        elif status == 0:
+            # Rejected: amount was not greater than current or exceeded channel capacity
+            current_amt = stored_tx.owed_amount if stored_tx else "unknown"
+            raise ValueError(
+                f"Owed amount must be increasing (race detected). Got {payload.owed_amount}, DB has {current_amt}"
             )
         else:
-            # Create new transaction if this is the first one for this computed_id
-            created_tx = await self.off_chain_tx_repository.create(off_chain_tx)
-
-        return OffChainTxResponseDTO(**created_tx.model_dump())
+            raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
     async def get_payments_by_channel(
         self, computed_id: str

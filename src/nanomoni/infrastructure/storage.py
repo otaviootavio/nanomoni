@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional
+from typing import Any, Awaitable, List, Mapping, Optional, cast
 
 from .database import DatabaseClient
 
@@ -33,6 +33,11 @@ class KeyValueStore(ABC):
 
     @abstractmethod
     async def zrem(self, key: str, member: str) -> int:
+        pass
+
+    @abstractmethod
+    async def eval(self, script: str, keys: List[str], args: List[str]) -> Any:
+        """Execute a Lua script atomically."""
         pass
 
 
@@ -65,3 +70,11 @@ class RedisKeyValueStore(KeyValueStore):
     async def zrem(self, key: str, member: str) -> int:
         async with self._db_client.get_connection() as conn:
             return await conn.zrem(key, member)
+
+    async def eval(self, script: str, keys: List[str], args: List[str]) -> Any:
+        """Execute a Lua script atomically."""
+        async with self._db_client.get_connection() as conn:
+            # redis-py eval signature: script, numkeys, *keys, *args
+            # Cast to ensure mypy recognizes it as awaitable
+            eval_result = conn.eval(script, len(keys), *keys, *args)
+            return await cast(Awaitable[Any], eval_result)

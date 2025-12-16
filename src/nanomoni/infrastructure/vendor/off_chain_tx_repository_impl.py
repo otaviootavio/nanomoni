@@ -71,3 +71,74 @@ class OffChainTxRepositoryImpl(OffChainTxRepository):
 
         await self.store.delete(latest_key)
         return True
+
+    async def save_if_valid(
+        self, off_chain_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Use a Lua script to atomically check and update the transaction.
+        Enforces business rules:
+        - Channel must exist locally
+        - New owed_amount <= channel.amount
+        - New owed_amount > current stored owed_amount
+        """
+        script = """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local new_val = ARGV[1]
+        local new_amount = tonumber(ARGV[2])
+
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        
+        local channel = cjson.decode(channel_raw)
+        local channel_amount = tonumber(channel.amount)
+        if new_amount > channel_amount then
+            -- Channel capacity exceeded - get current tx for error reporting
+            local current_raw = redis.call('GET', latest_key)
+            return {0, current_raw or ''}
+        end
+        
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        end
+        
+        local current = cjson.decode(current_raw)
+        local current_amount = tonumber(current.owed_amount)
+        if new_amount > current_amount then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+        """
+
+        latest_key = f"off_chain_tx:latest:{off_chain_tx.computed_id}"
+        channel_key = f"payment_channel:{off_chain_tx.computed_id}"
+        payload_json = off_chain_tx.model_dump_json()
+
+        result = await self.store.eval(
+            script,
+            keys=[latest_key, channel_key],
+            args=[payload_json, str(off_chain_tx.owed_amount)],
+        )
+
+        # result is a list-like: [code, json_or_empty]
+        code = int(result[0]) if result and result[0] is not None and result[0] != "" else 0
+        payload = result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+
+        if code == 1:
+            # Success: stored the new transaction
+            if payload is None:
+                raise RuntimeError("Unexpected: save_if_valid returned success but no payload")
+            return 1, OffChainTx.model_validate_json(payload)
+        elif code == 0:
+            # Rejected: return current transaction (may be None if no current tx exists)
+            return 0, OffChainTx.model_validate_json(payload) if payload else None
+        else:
+            # code == 2: channel missing
+            return 2, None

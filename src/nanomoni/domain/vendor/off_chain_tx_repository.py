@@ -40,3 +40,15 @@ class OffChainTxRepository(ABC):
     async def delete_by_computed_id(self, computed_id: str) -> bool:
         """Delete the latest off-chain transaction for a channel, if it exists."""
         pass
+
+    @abstractmethod
+    async def save_if_valid(self, off_chain_tx: OffChainTx) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Atomically apply business rules and save the off-chain tx.
+
+        Returns:
+          (1, tx) -> stored (success)
+          (0, tx) -> rejected because new owed_amount not greater or exceeds channel (returns current)
+          (2, None) -> payment channel missing locally (caller should verify/create and retry)
+        """
+        pass
