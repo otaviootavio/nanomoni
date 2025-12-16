@@ -7,14 +7,14 @@ actor "Client" as Client
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Generate key pair\n(private_key, client_pk)
+Client -> Client: Generate key pair
 
-Client -> Issuer: POST /api/v1/issuer/register\nRegistrationRequest
+Client -> Issuer: Register Client\nRegistrationRequest
 activate Issuer
 
 Issuer -> Issuer: Receive request & basic validation
 
-Issuer -> IssuerDB: Get Account by client_pk
+Issuer -> IssuerDB: Get Account
 IssuerDB --> Issuer: Account? (existing or none)
 
 Issuer -> IssuerDB: Create Account with initial balance\nif not exists

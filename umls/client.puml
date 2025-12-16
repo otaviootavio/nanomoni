@@ -5,12 +5,12 @@ left to right direction
 skinparam backgroundColor white
 skinparam componentStyle rectangle
 skinparam padding 0
-skinparam BoxPadding 2
-skinparam RectanglePadding 3
+skinparam BoxPadding 1
+skinparam RectanglePadding 1
 skinparam RectangleBorderThickness 1
 skinparam Shadowing false
-skinparam Nodesep 10
-skinparam Ranksep 10
+skinparam Nodesep 5
+skinparam Ranksep 5
 
 rectangle "Client Context" #FFF9E6 {
     rectangle "Client Orchestration" as client_orchestration #FFECB3 {

@@ -9,25 +9,25 @@ database "Vendor DB\n(Redis)" as VendorDB
 
 loop for each subsequent payment (i = 2 to 9_999)
 
-    Client -> Client: Build OffChainTxPayload\n    (computed_id, client_pk, vendor_pk, owed_amount = i)
+    Client -> Client: Build OffChainTxPayload
     Client -> Client: Wrap payload in Envelope\n    signed with client private key
 
-    Client -> Vendor: POST /api/v1/vendor/channels/{channel_id}/payments\n    Envelope<OffChainTxPayload>
+    Client -> Vendor: Submit Payment\n    Envelope<OffChainTxPayload>
     activate Vendor
 
-    Vendor -> Vendor: Verify envelope & deserialize payload
+    Vendor -> Vendor: Verify envelope &\ndeserialize payload
 
-    Vendor -> VendorDB: Get latest OffChainTx\n    for computed_id
-    VendorDB --> Vendor: previous_tx\n    (owed_amount = i - 1)
+    Vendor -> VendorDB: Get latest OffChainTx
+    VendorDB --> Vendor: previous_tx
 
-    Vendor -> VendorDB: Get cached PaymentChannel\n    by computed_id
+    Vendor -> VendorDB: Get cached PaymentChannel
     VendorDB --> Vendor: PaymentChannel
 
-    Vendor -> Vendor: Validate payment & channel\n    (owed_amount increasing, <= amount, \nkeys & vendor match)
+    Vendor -> Vendor: Validate payment & channel
 
-    Vendor -> VendorDB: OVERWRITE latest OffChainTx\n    for computed_id
+    Vendor -> VendorDB: OVERWRITE latest OffChainTx
     
-    Vendor --> Client: 201 Created\n    OffChainTxSummary
+    Vendor --> Client: 201 Created\n    OffChainTxResponseDTO
     deactivate Vendor
 
 end

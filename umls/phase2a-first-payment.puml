@@ -9,31 +9,31 @@ database "Vendor DB\n(Redis)" as VendorDB
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Build OffChainTxPayload\n(computed_id, client_pk, vendor_pk, owed_amount)
+Client -> Client: Build OffChainTxPayload
 Client -> Client: Wrap payload in Envelope\nsigned with client private key
 
-Client -> Vendor: POST /api/v1/vendor/channels/{channel_id}/payments\nEnvelope<OffChainTxPayload>
+Client -> Vendor: Submit Payment\nEnvelope<OffChainTxPayload>
 activate Vendor
 
-Vendor -> Vendor: Verify envelope & deserialize payload
+Vendor -> Vendor: Verify envelope &\ndeserialize payload
 
-Vendor -> VendorDB: Get latest OffChainTx\nfor computed_id
+Vendor -> VendorDB: Get latest OffChainTx
 VendorDB --> Vendor: none (first payment)
 
-Vendor -> Issuer: GET /api/v1/issuer/channels/{channel_id}
+Vendor -> Issuer: Verify Channel State
 activate Issuer
-Issuer -> IssuerDB: Get PaymentChannel from computed_id
+Issuer -> IssuerDB: Get PaymentChannel
 IssuerDB --> Issuer: PaymentChannel
 Issuer --> Vendor: PaymentChannel
 deactivate Issuer
 
-Vendor -> Vendor: Validate channel & payment\n(open, correct vendor_pk, \nowed_amount within amount)
+Vendor -> Vendor: Validate channel & payment
 
 Vendor -> VendorDB: Cache PaymentChannel locally
 
-Vendor -> VendorDB: CREATE OffChainTx\n(latest state for channel)
+Vendor -> VendorDB: CREATE OffChainTx
 
-Vendor --> Client: 201 Created\nOffChainTxSummary
+Vendor --> Client: 201 Created\nOffChainTxResponseDTO
 deactivate Vendor
 
 @enduml

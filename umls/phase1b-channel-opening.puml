@@ -7,18 +7,18 @@ actor "Client" as Client
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Get vendor_pk\nGET /api/v1/vendor/keys/public
+Client -> Client: Get vendor_pk\nFetch Vendor Public Key
 
-Client -> Client: Build OpenChannelRequestPayload\n(client_pk, vendor_pk, amount)
+Client -> Client: Build OpenChannelRequestPayload
 Client -> Client: Wrap payload in Envelope\nsigned with client private key
 
-Client -> Issuer: POST /api/v1/issuer/channels\nEnvelope<OpenChannelRequestPayload>
+Client -> Issuer: Open Payment Channel\nEnvelope<OpenChannelRequestPayload>
 activate Issuer
 
-Issuer -> Issuer: Verify client envelope & deserialize payload
+Issuer -> Issuer: Verify client envelope &\ndeserialize payload
 
 
-Issuer -> IssuerDB: Get client Account\nby client_pk
+Issuer -> IssuerDB: Get client Account
 IssuerDB --> Issuer: Account
 
 Issuer -> IssuerDB: Ensure vendor Account exists\nby vendor_pk
@@ -26,8 +26,8 @@ Issuer -> IssuerDB: Ensure vendor Account exists\nby vendor_pk
 Issuer -> Issuer: Check amount > 0\nand client balance >= amount
 Issuer -> IssuerDB: Deduct amount from client Account
 
-Issuer -> Issuer: Generate random salt (32 bytes)\nCompute computed_id = SHA256(client_pk || vendor_pk || salt)
-Issuer -> IssuerDB: CREATE PaymentChannel\n(computed_id, client_pk, vendor_pk, salt, amount, balance=0)
+Issuer -> Issuer: Generate random salt\nCompute channel ID
+Issuer -> IssuerDB: CREATE PaymentChannel
 
 Issuer -> Issuer: Build OpenChannelResponsePayload
 Issuer --> Client: 201 Created\nOpenChannelResponsePayload

@@ -33,7 +33,6 @@ rectangle "Shared Kernel" #EEEEEE {
         }
     }
     
-    crypto -[hidden]down-> proto
     proto -[hidden]down-> infra
 }
 
