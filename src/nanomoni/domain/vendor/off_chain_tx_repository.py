@@ -42,7 +42,9 @@ class OffChainTxRepository(ABC):
         pass
 
     @abstractmethod
-    async def save_if_valid(self, off_chain_tx: OffChainTx) -> tuple[int, Optional[OffChainTx]]:
+    async def save_if_valid(
+        self, off_chain_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
         """
         Atomically apply business rules and save the off-chain tx.
 

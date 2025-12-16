@@ -177,7 +177,9 @@ class PaymentService:
         )
 
         # Atomic save with business rule enforcement
-        status, stored_tx = await self.off_chain_tx_repository.save_if_valid(off_chain_tx)
+        status, stored_tx = await self.off_chain_tx_repository.save_if_valid(
+            off_chain_tx
+        )
 
         if status == 2:
             # Channel missing locally - verify with issuer and create cache, then retry
@@ -188,12 +190,16 @@ class PaymentService:
                 # Channel was created by another concurrent request; ignore
                 pass
             # Retry the atomic save
-            status, stored_tx = await self.off_chain_tx_repository.save_if_valid(off_chain_tx)
+            status, stored_tx = await self.off_chain_tx_repository.save_if_valid(
+                off_chain_tx
+            )
 
         if status == 1:
             # Success: transaction was stored
             if stored_tx is None:
-                raise RuntimeError("Unexpected: save_if_valid returned success but no transaction")
+                raise RuntimeError(
+                    "Unexpected: save_if_valid returned success but no transaction"
+                )
             return OffChainTxResponseDTO(**stored_tx.model_dump())
         elif status == 0:
             # Rejected: amount was not greater than current or exceeded channel capacity

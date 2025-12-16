@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
-from typing import AsyncGenerator, Callable, Mapping, Optional
+from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -30,6 +29,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="Minimum number of lost updates expected (default: 0, set to >0 to require lost updates)",
     )
 
+
 @pytest.fixture
 def client_key_pair() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]:
     """Generate a client key pair for testing."""
@@ -48,7 +48,7 @@ def vendor_key_pair() -> tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePubli
 
 @pytest.fixture
 def client_public_key_der_b64(
-    client_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]
+    client_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey],
 ) -> str:
     """Get client public key as DER base64 string."""
     _, public_key = client_key_pair
@@ -63,7 +63,7 @@ def client_public_key_der_b64(
 
 @pytest.fixture
 def vendor_public_key_der_b64(
-    vendor_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]
+    vendor_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey],
 ) -> str:
     """Get vendor public key as DER base64 string."""
     _, public_key = vendor_key_pair
@@ -78,7 +78,7 @@ def vendor_public_key_der_b64(
 
 @pytest.fixture
 def client_private_key_pem(
-    client_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey]
+    client_key_pair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey],
 ) -> str:
     """Get client private key as PEM string."""
     private_key, _ = client_key_pair
@@ -88,6 +88,7 @@ def client_private_key_pem(
         encryption_algorithm=serialization.NoEncryption(),
     )
     return pem.decode("utf-8")
+
 
 class TestDatabaseSettings:
     """Test settings for Redis connection."""
@@ -149,4 +150,3 @@ async def cleanup_redis(redis_db_client: DatabaseClient) -> AsyncGenerator[None,
             await conn.flushdb()
     except Exception:
         pass  # Ignore cleanup errors if Redis not available
-

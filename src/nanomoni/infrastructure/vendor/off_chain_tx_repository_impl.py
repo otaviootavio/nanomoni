@@ -128,13 +128,21 @@ class OffChainTxRepositoryImpl(OffChainTxRepository):
         )
 
         # result is a list-like: [code, json_or_empty]
-        code = int(result[0]) if result and result[0] is not None and result[0] != "" else 0
-        payload = result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        code = (
+            int(result[0])
+            if result and result[0] is not None and result[0] != ""
+            else 0
+        )
+        payload = (
+            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        )
 
         if code == 1:
             # Success: stored the new transaction
             if payload is None:
-                raise RuntimeError("Unexpected: save_if_valid returned success but no payload")
+                raise RuntimeError(
+                    "Unexpected: save_if_valid returned success but no payload"
+                )
             return 1, OffChainTx.model_validate_json(payload)
         elif code == 0:
             # Rejected: return current transaction (may be None if no current tx exists)

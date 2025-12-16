@@ -25,6 +25,8 @@ from nanomoni.infrastructure.vendor.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
 )
 
+from .adaptive_delay_controller import AdaptiveDelayController
+
 
 @pytest.mark.asyncio
 async def test_lost_update_race_condition_statistical(
@@ -54,7 +56,9 @@ async def test_lost_update_race_condition_statistical(
     """
     # Configuration
     iterations = request.config.getoption("--race-iterations", default=1000)
-    min_lost_updates_expected = request.config.getoption("--min-lost-updates", default=0)
+    min_lost_updates_expected = request.config.getoption(
+        "--min-lost-updates", default=0
+    )
 
     # Setup repositories
     off_chain_tx_repo = OffChainTxRepositoryImpl(redis_store)
@@ -78,31 +82,13 @@ async def test_lost_update_race_condition_statistical(
     both_succeeded = 0
 
     # Adaptive Control (PI Controller with Dynamic Gain)
-    # Goal: Maintain Lost Update Rate at 50% (0.5)
-    # Variable: Delay (seconds). Positive = Delay B, Negative = Delay A.
-    current_delay = 0.0
-    
-    # Controller Gains
-    # Start with a larger Kp for exploration, then reduce when we cross zero
-    initial_Kp = 0.001
-    Kp = initial_Kp
-    Ki = 0.0001
-    
-    integral_error = 0.0
-    
-    # Dynamic Gain Logic
-    # We monitor zero crossings of the delay signal (sign changes)
-    # When sign changes, it means we passed the "balance point" (approx 0.0s delay usually)
-    # We reduce Kp to fine-tune.
-    prev_delay_sign = 0 # 0=Init, 1=Pos, -1=Neg
-    gain_reduction_factor = 0.5 # Reduce by 50% on each crossing
-    min_Kp = 0.00005 # Minimum step size (50us)
-    
-    delay_history: list[float] = []
-    
-    print(f"\n=== Lost Update Statistical Test (Adaptive PI + Dynamic Gain) ===")
-    print(f"Running {iterations} iterations with PI controller targeting 50% race rate...")
-    print(f"Initial Kp={Kp}, Dynamic Gain Scheduling Enabled")
+    controller = AdaptiveDelayController()
+
+    print("\n=== Lost Update Statistical Test (Adaptive PI + Dynamic Gain) ===")
+    print(
+        f"Running {iterations} iterations with PI controller targeting 50% race rate..."
+    )
+    print(f"Initial Kp={controller.kp}, Dynamic Gain Scheduling Enabled")
 
     for iteration in range(iterations):
         # Generate unique channel ID for this iteration
@@ -156,6 +142,7 @@ async def test_lost_update_race_condition_statistical(
 
         # Process both payments concurrently with adaptive delay
         # We control the start time of tasks to target the race condition
+        current_delay = controller.current_delay
         if current_delay >= 0:
             # Positive delay: Start A first, then B
             task_a = asyncio.create_task(payment_service.receive_payment(dto_a))
@@ -195,17 +182,17 @@ async def test_lost_update_race_condition_statistical(
         #   To increase Lost (A last), A needs to be later relative to B.
         #   A later = Decrease Delay (Negative).
         #   Error = (Outcome - Target). If Outcome=0, Error=-0.5. Delay += K*(-0.5) (Decrease). Correct.
-        
+
         step_outcome = 0.0
-        
+
         if a_succeeded and b_succeeded:
             both_succeeded += 1
-            if final_owed == 20: # Lost Update (A wins last)
+            if final_owed == 20:  # Lost Update (A wins last)
                 lost_updates += 1
-                step_outcome = 1.0 # "High" value
-            elif final_owed == 25: # Correct (B wins last)
+                step_outcome = 1.0  # "High" value
+            elif final_owed == 25:  # Correct (B wins last)
                 correct_results += 1
-                step_outcome = 0.0 # "Low" value
+                step_outcome = 0.0  # "Low" value
             else:
                 errors += 1
                 # If unexpected, don't change control variable or treat as 0.5 (neutral)
@@ -228,51 +215,21 @@ async def test_lost_update_race_condition_statistical(
             errors += 1
             step_outcome = 0.5
 
-        # Calculate Error
-        error = step_outcome - 0.5
-        
-        # Update Integral
-        integral_error += error
-        
-        # Clamp integral to prevent windup (optional, but good practice)
-        integral_error = max(-100.0, min(100.0, integral_error))
-
-        # PI Update
-        # Using dynamic Kp
-        current_delay += (Kp * error) + (Ki * integral_error)
-        
-        # Dynamic Gain Scheduling (Zero Crossing Detection)
-        # Check if delay sign changed (Zero Crossing detected)
-        # We use a small threshold to avoid noise around 0 exactly
-        current_sign = 0
-        if current_delay > 1e-6:
-            current_sign = 1
-        elif current_delay < -1e-6:
-            current_sign = -1
-            
-        if prev_delay_sign != 0 and current_sign != 0 and current_sign != prev_delay_sign:
-            # Sign changed! We crossed the "root".
-            # Reduce Kp to refine search
-            old_Kp = Kp
-            Kp = max(min_Kp, Kp * gain_reduction_factor)
-            if Kp < old_Kp:
-                print(f"  [Auto-Tune] Zero crossing detected at Iter {iteration}. Reducing Kp: {old_Kp:.6f} -> {Kp:.6f}")
-        
-        if current_sign != 0:
-            prev_delay_sign = current_sign
-            
-        delay_history.append(current_delay)
+        # Update controller
+        controller.update(step_outcome, iteration)
 
         if iteration % 50 == 0:
-            avg_delay = sum(delay_history[-50:]) / len(delay_history[-50:]) if delay_history else 0
-            current_rate = (lost_updates / both_succeeded * 100) if both_succeeded > 0 else 0
+            current_rate = (
+                (lost_updates / both_succeeded * 100) if both_succeeded > 0 else 0
+            )
             print(
-                f"  Iter {iteration}: Delay={current_delay*1000:.3f}ms (Avg: {avg_delay*1000:.3f}ms), "
+                f"  Iter {iteration}: Delay={controller.current_delay * 1000:.3f}ms "
+                f"(Avg: {controller.avg_delay() * 1000:.3f}ms), "
                 f"Rate={current_rate:.1f}% ({lost_updates}/{both_succeeded})"
             )
 
     # Print statistics
-    print(f"\n=== Test Results ===")
+    print("\n=== Test Results ===")
     print(f"Total iterations: {iterations}")
     print(f"Both payments succeeded: {both_succeeded}")
     print(f"Lost updates detected: {lost_updates}")
@@ -282,9 +239,9 @@ async def test_lost_update_race_condition_statistical(
         lost_update_rate = (lost_updates / both_succeeded) * 100
         print(f"Lost update rate: {lost_update_rate:.2f}% (when both succeeded)")
         print(
-            f"\nNote: Lost updates occur when both payments succeed but the final "
-            f"value is 20 (lower) instead of 25 (higher). "
-            f"This indicates a race condition where the higher payment was overwritten."
+            "\nNote: Lost updates occur when both payments succeed but the final "
+            "value is 20 (lower) instead of 25 (higher). "
+            "This indicates a race condition where the higher payment was overwritten."
         )
     else:
         print(
@@ -294,9 +251,7 @@ async def test_lost_update_race_condition_statistical(
 
     # Assertions - make them informative rather than strict
     if min_lost_updates_expected > 0:
-        assert (
-            lost_updates >= min_lost_updates_expected
-        ), (
+        assert lost_updates >= min_lost_updates_expected, (
             f"Expected at least {min_lost_updates_expected} lost updates, "
             f"but only found {lost_updates} out of {both_succeeded} cases where both succeeded. "
             "This may indicate:\n"
