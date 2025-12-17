@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from nanomoni.application.issuer.dtos import (
     OpenChannelRequestDTO,
@@ -100,7 +101,7 @@ def open_payment_channel(
 
 def client_create_off_tx_to_vendor(
     computed_id: str,
-    client_private_key_pem: str,
+    client_private_key: ec.EllipticCurvePrivateKey,
     owed_amount: int,
     client_public_key_der_b64: str,
     vendor_public_key_der_b64: str,
@@ -110,8 +111,6 @@ def client_create_off_tx_to_vendor(
     Payload fields: {"computed_id", "client_public_key_der_b64", "vendor_public_key_der_b64", "owed_amount"}
     Returns: Envelope
     """
-    client_private_key = load_private_key_from_pem(client_private_key_pem)
-
     payload = OffChainTxPayload(
         computed_id=computed_id,
         client_public_key_der_b64=client_public_key_der_b64,
@@ -150,7 +149,7 @@ def vendor_validate_client_off_tx(
 
 
 def send_payment_to_vendor(
-    vendor_base_url: str,
+    vendor_client: VendorClient,
     computed_id: str,
     client_off_tx_envelope: Envelope,
 ) -> OffChainTxResponseDTO:
@@ -158,29 +157,27 @@ def send_payment_to_vendor(
 
     Returns the vendor's response with the processed transaction details.
     """
-    with VendorClient(vendor_base_url) as vendor_client:
-        request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
-        response_dto = vendor_client.send_off_chain_payment(computed_id, request_dto)
+    request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
+    response_dto = vendor_client.send_off_chain_payment(computed_id, request_dto)
 
-        # Parse and log payment details (latest state for this channel)
-        computed_id = response_dto.computed_id
-        owed_amount = response_dto.owed_amount
-        created_at = response_dto.created_at
+    # Parse and log payment details (latest state for this channel)
+    computed_id = response_dto.computed_id
+    owed_amount = response_dto.owed_amount
+    created_at = response_dto.created_at
 
-        print(
-            "Payment successfully processed by vendor. "
-            f"Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
-        )
+    print(
+        "Payment successfully processed by vendor. "
+        f"Channel ID: {computed_id}, Owed Amount: {owed_amount}, Created At: {created_at}"
+    )
 
-        return response_dto
+    return response_dto
 
 
-def request_vendor_close_channel(vendor_base_url: str, computed_id: str) -> None:
+def request_vendor_close_channel(vendor_client: VendorClient, computed_id: str) -> None:
     """Ask the vendor to close the payment channel for the given computed_id."""
-    with VendorClient(vendor_base_url) as vendor_client:
-        dto = CloseChannelDTO(computed_id=computed_id)
-        vendor_client.request_close_channel(dto)
-        print(f"Requested vendor to close channel {computed_id}")
+    dto = CloseChannelDTO(computed_id=computed_id)
+    vendor_client.request_close_channel(dto)
+    print(f"Requested vendor to close channel {computed_id}")
 
 
 def main() -> None:
@@ -190,42 +187,46 @@ def main() -> None:
     client_private_key_pem = settings.client_private_key_pem
     client_public_key_der_b64: str = settings.client_public_key_der_b64
 
+    # Pre-load private
+    client_private_key = load_private_key_from_pem(client_private_key_pem)
+
     register_into_issuer_using_private_key(issuer_base_url, client_private_key_pem)
 
-    # Get vendor public key
+    # Use a single VendorClient session to reuse TCP/SSL connections
     with VendorClient(vendor_base_url) as vendor_client:
+        # Get vendor public key
         vendor_pk_dto = vendor_client.get_vendor_public_key()
         vendor_public_key_der_b64 = vendor_pk_dto.public_key_der_b64
 
-    # TODO
-    # This datas are not used for now
-    # But it may be useful in the future
-    # Ex: the client can open another channel based on a logic
-    # in wich consider the balance as a hard-limit for the sum
-    # of the amount of continuous payments.
-    computed_id, salt_b64, amount, balance = open_payment_channel(
-        issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 50000
-    )
-
-    # Loop to send 100,000 off-chain payments to the vendor API
-    for i in range(1, 5000):
-        client_off_tx = client_create_off_tx_to_vendor(
-            computed_id,
-            client_private_key_pem,
-            i,  # Cumulative owed_amount
-            client_public_key_der_b64,
-            vendor_public_key_der_b64,
+        # TODO
+        # This datas are not used for now
+        # But it may be useful in the future
+        # Ex: the client can open another channel based on a logic
+        # in wich consider the balance as a hard-limit for the sum
+        # of the amount of continuous payments.
+        computed_id, salt_b64, amount, balance = open_payment_channel(
+            issuer_base_url, vendor_public_key_der_b64, client_private_key_pem, 50000
         )
 
-        # Send payment to vendor API
-        send_payment_to_vendor(
-            vendor_base_url,
-            computed_id,
-            client_off_tx,
-        )
+        # Loop to send 100,000 off-chain payments to the vendor API
+        for i in range(1, 50000):
+            client_off_tx = client_create_off_tx_to_vendor(
+                computed_id,
+                client_private_key,
+                i,  # Cumulative owed_amount
+                client_public_key_der_b64,
+                vendor_public_key_der_b64,
+            )
 
-    # After sending all micropayments, request the vendor to close the channel
-    request_vendor_close_channel(vendor_base_url, computed_id)
+            # Send payment to vendor API
+            send_payment_to_vendor(
+                vendor_client,
+                computed_id,
+                client_off_tx,
+            )
+
+        # After sending all micropayments, request the vendor to close the channel
+        request_vendor_close_channel(vendor_client, computed_id)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
 import time
 
 from cryptography.exceptions import InvalidSignature
@@ -94,15 +93,3 @@ async def close_channel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to close channel: {str(e)}",
         )
-
-
-@router.get(
-    "/{channel_id}/payments",
-    response_model=List[OffChainTxResponseDTO],
-)
-async def get_payments_by_channel(
-    channel_id: str,
-    payment_service: PaymentService = Depends(get_payment_service),
-) -> List[OffChainTxResponseDTO]:
-    """Get all payments for a specific payment channel."""
-    return await payment_service.get_payments_by_channel(channel_id)

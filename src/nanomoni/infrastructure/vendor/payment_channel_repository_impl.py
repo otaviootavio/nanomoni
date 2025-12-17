@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ...domain.vendor.entities import PaymentChannel
+from ...domain.vendor.entities import PaymentChannel, OffChainTx
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ..storage import KeyValueStore
 
@@ -15,7 +15,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     def __init__(self, store: KeyValueStore):
         self.store = store
 
-    async def create(self, payment_channel: PaymentChannel) -> PaymentChannel:
+    async def save_channel(self, payment_channel: PaymentChannel) -> PaymentChannel:
         """
         Store vendor-side cached channels keyed directly by computed_id to
         avoid extra lookups.
@@ -29,7 +29,13 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if existing is not None:
             raise ValueError("Payment channel with this computed_id already exists")
 
-        await self.store.set(channel_key, payment_channel.model_dump_json())
+        # Ensure latest_tx is None when caching for the first time
+        payment_channel.latest_tx = None
+        # Exclude latest_tx from storage to avoid leaking aggregate structure
+        # into the static metadata key
+        await self.store.set(
+            channel_key, payment_channel.model_dump_json(exclude={"latest_tx"})
+        )
 
         created_ts = payment_channel.created_at.timestamp()
         await self.store.zadd(
@@ -48,11 +54,163 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         return payment_channel
 
     async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
+        """
+        Get the full channel aggregate (metadata + latest tx).
+        Uses MGET to fetch both keys in a single round trip.
+        """
         channel_key = f"payment_channel:{computed_id}"
-        data = await self.store.get(channel_key)
-        if not data:
+        tx_key = f"off_chain_tx:latest:{computed_id}"
+
+        results = await self.store.mget([channel_key, tx_key])
+
+        channel_json = results[0]
+        tx_json = results[1]
+
+        if not channel_json:
             return None
-        return PaymentChannel.model_validate_json(data)
+
+        channel = PaymentChannel.model_validate_json(channel_json)
+
+        if tx_json:
+            channel.latest_tx = OffChainTx.model_validate_json(tx_json)
+        else:
+            channel.latest_tx = None
+
+        return channel
+
+    async def save_payment(
+        self, channel: PaymentChannel, new_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Atomically update the channel's latest transaction using Lua script.
+        """
+        script = """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local new_val = ARGV[1]
+        local new_amount = tonumber(ARGV[2])
+        local channel_amount = tonumber(ARGV[3])
+
+        -- Check channel existence (fast check via key existence or just rely on channel_amount)
+        -- Since we pass channel_amount, we assume the caller verified the channel exists locally.
+        -- But for strictness, we can check if the channel key exists.
+        local channel_exists = redis.call('EXISTS', channel_key)
+        if channel_exists == 0 then
+            return {2, ''}
+        end
+        
+        if new_amount > channel_amount then
+            -- Channel capacity exceeded - get current tx for error reporting
+            local current_raw = redis.call('GET', latest_key)
+            return {0, current_raw or ''}
+        end
+        
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        end
+        
+        local current = cjson.decode(current_raw)
+        local current_amount = tonumber(current.owed_amount)
+        if new_amount > current_amount then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+        """
+
+        latest_key = f"off_chain_tx:latest:{new_tx.computed_id}"
+        channel_key = f"payment_channel:{new_tx.computed_id}"
+        payload_json = new_tx.model_dump_json()
+
+        result = await self.store.eval(
+            script,
+            keys=[latest_key, channel_key],
+            args=[payload_json, str(new_tx.owed_amount), str(channel.amount)],
+        )
+
+        code = (
+            int(result[0])
+            if result and result[0] is not None and result[0] != ""
+            else 0
+        )
+        payload = (
+            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        )
+
+        if code == 1:
+            if payload is None:
+                raise RuntimeError(
+                    "Unexpected: save_payment returned success but no payload"
+                )
+            return 1, OffChainTx.model_validate_json(payload)
+        elif code == 0:
+            return 0, OffChainTx.model_validate_json(payload) if payload else None
+        else:
+            return 2, None
+
+    async def save_channel_and_initial_payment(
+        self, channel: PaymentChannel, initial_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Atomically save channel metadata AND the first transaction.
+        """
+        script = """
+        local channel_key = KEYS[1]
+        local latest_key = KEYS[2]
+        local channel_json = ARGV[1]
+        local tx_json = ARGV[2]
+        local created_ts = tonumber(ARGV[3])
+        local computed_id = ARGV[4]
+        
+        -- Check if channel already exists
+        if redis.call('EXISTS', channel_key) == 1 then
+            return {0, ''}
+        end
+        
+        -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
+        if redis.call('EXISTS', latest_key) == 1 then
+            return {0, ''}
+        end
+        
+        -- 1. Save Channel Metadata
+        redis.call('SET', channel_key, channel_json)
+        
+        -- 2. Save Initial Transaction
+        redis.call('SET', latest_key, tx_json)
+        
+        -- 3. Update Indices
+        redis.call('ZADD', 'payment_channels:all', created_ts, computed_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, computed_id)
+        
+        return {1, tx_json}
+        """
+
+        channel_key = f"payment_channel:{channel.computed_id}"
+        latest_key = f"off_chain_tx:latest:{channel.computed_id}"
+
+        # Prepare channel JSON (excluding latest_tx as per our pattern)
+        channel.latest_tx = None
+        channel_json = channel.model_dump_json(exclude={"latest_tx"})
+        tx_json = initial_tx.model_dump_json()
+        created_ts = channel.created_at.timestamp()
+
+        result = await self.store.eval(
+            script,
+            keys=[channel_key, latest_key],
+            args=[channel_json, tx_json, str(created_ts), channel.computed_id],
+        )
+
+        code = int(result[0])
+        # payload = result[1]
+
+        if code == 1:
+            return 1, initial_tx
+        else:
+            # Race condition: channel or tx already exists
+            return 0, None
 
     async def get_all(self, skip: int = 0, limit: int = 100) -> List[PaymentChannel]:
         ids: list[str] = await self.store.zrevrange(

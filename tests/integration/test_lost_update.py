@@ -18,9 +18,6 @@ from nanomoni.application.vendor.use_cases.payment import PaymentService
 from nanomoni.crypto.certificates import generate_envelope
 from nanomoni.domain.vendor.entities import OffChainTx, PaymentChannel
 from nanomoni.infrastructure.storage import RedisKeyValueStore
-from nanomoni.infrastructure.vendor.off_chain_tx_repository_impl import (
-    OffChainTxRepositoryImpl,
-)
 from nanomoni.infrastructure.vendor.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
 )
@@ -61,12 +58,10 @@ async def test_lost_update_race_condition_statistical(
     )
 
     # Setup repositories
-    off_chain_tx_repo = OffChainTxRepositoryImpl(redis_store)
     payment_channel_repo = PaymentChannelRepositoryImpl(redis_store)
 
     # Create PaymentService
     payment_service = PaymentService(
-        off_chain_tx_repository=off_chain_tx_repo,
         payment_channel_repository=payment_channel_repo,
         issuer_base_url="http://mock-issuer",  # Not used since we pre-create channels
         vendor_public_key_der_b64=vendor_public_key_der_b64,
@@ -106,7 +101,7 @@ async def test_lost_update_race_condition_statistical(
         )
 
         # Seed the repository with the channel
-        await payment_channel_repo.create(payment_channel)
+        await payment_channel_repo.save_channel(payment_channel)
 
         # Create initial transaction with owed_amount=10
         initial_tx = OffChainTx(
@@ -117,7 +112,7 @@ async def test_lost_update_race_condition_statistical(
             payload_b64="initial_payload",
             client_signature_b64="initial_signature",
         )
-        await off_chain_tx_repo.create(initial_tx)
+        await payment_channel_repo.save_payment(payment_channel, initial_tx)
 
         # Create two payment envelopes
         # Payload A: owed=20
@@ -164,7 +159,8 @@ async def test_lost_update_race_condition_statistical(
         result_a, result_b = results
 
         # Check final state
-        final_tx = await off_chain_tx_repo.get_latest_by_computed_id(computed_id)
+        final_channel = await payment_channel_repo.get_by_computed_id(computed_id)
+        final_tx = final_channel.latest_tx if final_channel else None
         final_owed = final_tx.owed_amount if final_tx else None
 
         # Analyze results

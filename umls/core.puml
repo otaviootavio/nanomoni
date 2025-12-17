@@ -15,13 +15,13 @@ skinparam Ranksep 10
 rectangle "Shared Kernel" #EEEEEE {
     rectangle "Cryptographic Utilities" as crypto #E0E0E0 {
         rectangle "crypto/" {
-            file "**certificates.py**\nEnvelope\njson_to_bytes()\ngenerate_envelope()\nverify_envelope()\nverify_signature_bytes()\nload_public_key_from_der_b64()\nload_private_key_from_pem()\nenvelope_payload_bytes()"
+            file "**certificates.py**\nEnvelope\njson_to_bytes()\ngenerate_envelope()\nverify_envelope()\nverify_signature_bytes()\nsign_bytes()\nload_public_key_from_der_b64()\nload_private_key_from_pem()\nenvelope_payload_bytes()\nverify_envelope_and_get_payload_bytes()"
         }
     }
 
     rectangle "Shared Protocol Models" as proto #E0E0E0 {
         rectangle "application/shared" {
-            file "**payment_channel_payloads.py**\nOpenChannelRequestPayload\nOpenChannelResponsePayload\nCloseChannelRequestPayload\nOffChainTxPayload"
+            file "**payment_channel_payloads.py**\nOpenChannelRequestPayload\nCloseChannelRequestPayload\nOffChainTxPayload"
         }
     }
     

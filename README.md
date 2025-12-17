@@ -160,7 +160,7 @@ A deliberately broken (non-atomic) implementation (`vulnerable_repository.py`) i
 
 ```bash
 # Run vulnerable tests to see the race condition in action
-poetry run pytest tests/integration/test_vulnerable_*.py -v --race-iterations=500
+poetry run pytest tests/integration/test_vulnerable_*.py -v --race-iterations=500 -s
 ```
 
 # TODO

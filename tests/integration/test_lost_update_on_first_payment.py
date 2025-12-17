@@ -19,9 +19,6 @@ from nanomoni.application.vendor.use_cases.payment import PaymentService
 from nanomoni.crypto.certificates import generate_envelope
 from nanomoni.domain.vendor.entities import PaymentChannel
 from nanomoni.infrastructure.storage import RedisKeyValueStore
-from nanomoni.infrastructure.vendor.off_chain_tx_repository_impl import (
-    OffChainTxRepositoryImpl,
-)
 from nanomoni.infrastructure.vendor.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
 )
@@ -64,12 +61,10 @@ async def test_lost_update_on_first_payment_statistical(
     )
 
     # Setup repositories
-    off_chain_tx_repo = OffChainTxRepositoryImpl(redis_store)
     payment_channel_repo = PaymentChannelRepositoryImpl(redis_store)
 
     # Create PaymentService
     payment_service = PaymentService(
-        off_chain_tx_repository=off_chain_tx_repo,
         payment_channel_repository=payment_channel_repo,
         issuer_base_url="http://mock-issuer",  # Not used since we pre-create channels
         vendor_public_key_der_b64=vendor_public_key_der_b64,
@@ -124,7 +119,7 @@ async def test_lost_update_on_first_payment_statistical(
             )
 
             # Seed the repository with the channel ONLY (no initial transaction)
-            await payment_channel_repo.create(payment_channel)
+            await payment_channel_repo.save_channel(payment_channel)
             channels_by_id[computed_id] = payment_channel
 
             # Create two payment envelopes - both trying to be the FIRST payment
@@ -171,7 +166,8 @@ async def test_lost_update_on_first_payment_statistical(
             result_a, result_b = results
 
             # Check final state
-            final_tx = await off_chain_tx_repo.get_latest_by_computed_id(computed_id)
+            final_channel = await payment_channel_repo.get_by_computed_id(computed_id)
+            final_tx = final_channel.latest_tx if final_channel else None
             final_owed = final_tx.owed_amount if final_tx else None
 
             # Analyze results

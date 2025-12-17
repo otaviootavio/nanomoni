@@ -169,6 +169,9 @@ class PaymentChannel(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 
+    # Vendor context: latest transaction state part of the aggregate
+    latest_tx: Optional[OffChainTx] = None
+
     @field_serializer("id")
     def serialize_id(self, value: UUID) -> str:
         return str(value)
@@ -180,3 +183,7 @@ class PaymentChannel(BaseModel):
     @field_serializer("closed_at")
     def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
         return value.isoformat() if value else None
+
+    @property
+    def current_balance(self) -> int:
+        return self.latest_tx.owed_amount if self.latest_tx else 0

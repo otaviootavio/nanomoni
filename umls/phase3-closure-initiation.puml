@@ -10,11 +10,8 @@ database "Vendor DB\n(Redis)" as VendorDB
 Client -> Vendor: Request Channel Closure\nCloseChannelRequest
 activate Vendor
 
-Vendor -> VendorDB: Get PaymentChannel
-VendorDB --> Vendor: PaymentChannel
-
-Vendor -> VendorDB: Get latest OffChainTx
-VendorDB --> Vendor: OffChainTx
+Vendor -> VendorDB: Get Channel Aggregate
+VendorDB --> Vendor: PaymentChannel + latest_tx
 
 Vendor -> Vendor: Validate channel & payments
 

@@ -5,20 +5,48 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .entities import PaymentChannel
+from .entities import PaymentChannel, OffChainTx
 
 
 class PaymentChannelRepository(ABC):
     """Abstract repository interface for PaymentChannel entities."""
 
     @abstractmethod
-    async def create(self, payment_channel: PaymentChannel) -> PaymentChannel:
-        """Create a new payment_channel."""
+    async def save_channel(self, payment_channel: PaymentChannel) -> PaymentChannel:
+        """Cache a new payment_channel (from issuer)."""
         pass
 
     @abstractmethod
     async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
-        """Get payment_channel by computed_id."""
+        """Get the full channel aggregate (metadata + latest tx)."""
+        pass
+
+    @abstractmethod
+    async def save_payment(
+        self, channel: PaymentChannel, new_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Atomically update the channel's latest transaction.
+
+        Returns:
+          (1, tx) -> stored (success)
+          (0, tx) -> rejected (returns current tx)
+          (2, None) -> payment channel missing
+        """
+        pass
+
+    @abstractmethod
+    async def save_channel_and_initial_payment(
+        self, channel: PaymentChannel, initial_tx: OffChainTx
+    ) -> tuple[int, Optional[OffChainTx]]:
+        """
+        Atomically save channel metadata AND the first transaction.
+        Used for the first payment flow.
+
+        Returns:
+          (1, tx) -> stored (success)
+          (0, tx) -> rejected (race condition: channel/tx already exists)
+        """
         pass
 
     @abstractmethod

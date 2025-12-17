@@ -7,15 +7,11 @@ from fastapi import Depends
 from ...application.vendor.use_cases.payment import PaymentService
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
-from ...domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ...domain.vendor.task_repository import TaskRepository
 from ...domain.vendor.user_repository import UserRepository
 from ...infrastructure.database import DatabaseClient, get_database_client
 from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
-from ...infrastructure.vendor.off_chain_tx_repository_impl import (
-    OffChainTxRepositoryImpl,
-)
 from ...infrastructure.vendor.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
 )
@@ -52,13 +48,6 @@ def get_task_repository(
     return TaskRepositoryImpl(store)
 
 
-def get_off_chain_tx_repository(
-    store: KeyValueStore = Depends(get_key_value_store),
-) -> OffChainTxRepository:
-    """Get off-chain transaction repository."""
-    return OffChainTxRepositoryImpl(store)
-
-
 def get_payment_channel_repository(
     store: KeyValueStore = Depends(get_key_value_store),
 ) -> PaymentChannelRepository:
@@ -82,9 +71,6 @@ def get_task_service(
 
 
 def get_payment_service(
-    off_chain_tx_repository: OffChainTxRepository = Depends(
-        get_off_chain_tx_repository
-    ),
     payment_channel_repository: PaymentChannelRepository = Depends(
         get_payment_channel_repository
     ),
@@ -92,7 +78,6 @@ def get_payment_service(
 ) -> PaymentService:
     """Get payment service."""
     return PaymentService(
-        off_chain_tx_repository=off_chain_tx_repository,
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,

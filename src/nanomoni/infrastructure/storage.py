@@ -16,6 +16,11 @@ class KeyValueStore(ABC):
         pass
 
     @abstractmethod
+    async def mget(self, keys: List[str]) -> List[Optional[str]]:
+        """Get multiple keys in a single operation."""
+        pass
+
+    @abstractmethod
     async def set(self, key: str, value: str) -> None:
         pass
 
@@ -50,6 +55,11 @@ class RedisKeyValueStore(KeyValueStore):
     async def get(self, key: str) -> Optional[str]:
         async with self._db_client.get_connection() as conn:
             return await conn.get(key)
+
+    async def mget(self, keys: List[str]) -> List[Optional[str]]:
+        """Get multiple keys in a single operation."""
+        async with self._db_client.get_connection() as conn:
+            return await conn.mget(keys)
 
     async def set(self, key: str, value: str) -> None:
         async with self._db_client.get_connection() as conn:

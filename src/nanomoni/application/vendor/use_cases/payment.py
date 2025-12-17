@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 import httpx
 from pydantic import ValidationError
@@ -24,7 +24,6 @@ from ....crypto.certificates import (
     DERB64,
 )
 from ....domain.vendor.entities import OffChainTx, PaymentChannel
-from ....domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import (
@@ -39,14 +38,12 @@ class PaymentService:
 
     def __init__(
         self,
-        off_chain_tx_repository: OffChainTxRepository,
         payment_channel_repository: PaymentChannelRepository,
         issuer_base_url: str,
         vendor_public_key_der_b64: str,
         *,
         vendor_private_key_pem: Optional[str] = None,
     ):
-        self.off_chain_tx_repository = off_chain_tx_repository
         self.payment_channel_repository = payment_channel_repository
         self.issuer_base_url = issuer_base_url
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
@@ -103,24 +100,19 @@ class PaymentService:
         if payload.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
             raise ValueError("Payment not addressed to this vendor")
 
-        # 2) Get the latest transaction for this payment channel to check for double spending
-        latest_tx = await self.off_chain_tx_repository.get_latest_by_computed_id(
+        # 2) Get full channel aggregate (lazy load)
+        payment_channel = await self.payment_channel_repository.get_by_computed_id(
             payload.computed_id
         )
-        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
 
-        # 2.1) If this is the first payment for this channel, verify it exists on issuer
-        payment_channel: Optional[PaymentChannel] = None
-        is_first_payment = latest_tx is None
-        if is_first_payment:
-            payment_channel = await self._verify_payment_channel(payload.computed_id)
-        else:
-            payment_channel = await self.payment_channel_repository.get_by_computed_id(
-                payload.computed_id
-            )
-
+        # 2.1) If missing, verify with issuer and cache locally (First Payment flow)
+        is_first_payment = False
         if not payment_channel:
-            raise ValueError("Payment channel could not be found or verified.")
+            payment_channel = await self._verify_payment_channel(payload.computed_id)
+            is_first_payment = True
+
+        latest_tx = payment_channel.latest_tx
+        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
 
         # 2.2) Ensure the channel remains bound to this vendor
         if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
@@ -158,15 +150,7 @@ class PaymentService:
                 f"Owed amount {payload.owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
-        # 6.1) Cache the verified channel locally only after a fully validated first payment
-        if is_first_payment:
-            try:
-                await self.payment_channel_repository.create(payment_channel)
-            except ValueError:
-                # Channel already exists (race condition with concurrent requests); ignore
-                pass
-
-        # 7) Create and store the off-chain transaction atomically
+        # 7) Create the off-chain transaction object
         off_chain_tx = OffChainTx(
             computed_id=payload.computed_id,
             client_public_key_der_b64=payment_channel.client_public_key_der_b64,
@@ -176,29 +160,73 @@ class PaymentService:
             client_signature_b64=dto.envelope.signature_b64,
         )
 
-        # Atomic save with business rule enforcement
-        status, stored_tx = await self.off_chain_tx_repository.save_if_valid(
-            off_chain_tx
-        )
+        status: int = 0
+        stored_tx: Optional[OffChainTx] = None
 
-        if status == 2:
-            # Channel missing locally - verify with issuer and create cache, then retry
-            payment_channel = await self._verify_payment_channel(payload.computed_id)
-            try:
-                await self.payment_channel_repository.create(payment_channel)
-            except ValueError:
-                # Channel was created by another concurrent request; ignore
-                pass
-            # Retry the atomic save
-            status, stored_tx = await self.off_chain_tx_repository.save_if_valid(
-                off_chain_tx
+        if is_first_payment:
+            # Atomic save of channel metadata + first transaction
+            (
+                status,
+                stored_tx,
+            ) = await self.payment_channel_repository.save_channel_and_initial_payment(
+                payment_channel, off_chain_tx
             )
+            if status == 0:
+                # Race condition: Channel was created by another concurrent request.
+                # Fallback to standard save_payment flow.
+                is_first_payment = False
+                # Refresh aggregate to get the tx that beat us
+                payment_channel = (
+                    await self.payment_channel_repository.get_by_computed_id(
+                        payload.computed_id
+                    )
+                )
+                if not payment_channel:
+                    # Should not happen if save_channel_and_initial_payment failed due to existence
+                    raise RuntimeError(
+                        "Race condition handling failed: channel missing after collision"
+                    )
+
+        if not is_first_payment:
+            # Standard flow: update existing channel
+            status, stored_tx = await self.payment_channel_repository.save_payment(
+                payment_channel, off_chain_tx
+            )
+
+            if status == 2:
+                # Channel missing locally (edge case: evicted? or race on delete?)
+                # Verify with issuer and create cache, then retry
+                payment_channel = await self._verify_payment_channel(
+                    payload.computed_id
+                )
+                # Try atomic init again (since it's missing now)
+                (
+                    status,
+                    stored_tx,
+                ) = await self.payment_channel_repository.save_channel_and_initial_payment(
+                    payment_channel, off_chain_tx
+                )
+                # If that fails again, it's a very tight loop of creation/deletion, or just simple race.
+                # We can retry save_payment one last time if init failed.
+                if status == 0:
+                    payment_channel = (
+                        await self.payment_channel_repository.get_by_computed_id(
+                            payload.computed_id
+                        )
+                    )
+                    if payment_channel:
+                        (
+                            status,
+                            stored_tx,
+                        ) = await self.payment_channel_repository.save_payment(
+                            payment_channel, off_chain_tx
+                        )
 
         if status == 1:
             # Success: transaction was stored
             if stored_tx is None:
                 raise RuntimeError(
-                    "Unexpected: save_if_valid returned success but no transaction"
+                    "Unexpected: save_payment returned success but no transaction"
                 )
             return OffChainTxResponseDTO(**stored_tx.model_dump())
         elif status == 0:
@@ -210,29 +238,20 @@ class PaymentService:
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
-    async def get_payments_by_channel(
-        self, computed_id: str
-    ) -> List[OffChainTxResponseDTO]:
-        """Get all payments for a payment channel."""
-        txs = await self.off_chain_tx_repository.get_by_computed_id(computed_id)
-        return [OffChainTxResponseDTO(**tx.model_dump()) for tx in txs]
-
     async def close_channel(self, dto: CloseChannelDTO) -> None:
         """Close a payment channel by sending the latest off-chain tx to issuer and marking local channel closed."""
 
-        # 1) Load channel and ensure it exists locally
+        # 1) Fetch channel aggregate (includes latest tx)
         channel = await self.payment_channel_repository.get_by_computed_id(
             dto.computed_id
         )
+
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
             return None
 
-        # 2) Get latest off-chain tx
-        latest_tx = await self.off_chain_tx_repository.get_latest_by_computed_id(
-            dto.computed_id
-        )
+        latest_tx = channel.latest_tx
         if not latest_tx:
             raise ValueError("No off-chain payments received for this channel")
 

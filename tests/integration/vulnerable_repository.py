@@ -1,4 +1,4 @@
-"""Deliberately vulnerable OffChainTx repository implementation for testing.
+"""Deliberately vulnerable PaymentChannel repository implementation for testing.
 
 DO NOT USE IN PRODUCTION. This exists only to prove the race condition
 is real and that our atomic implementation fixes it.
@@ -6,14 +6,16 @@ is real and that our atomic implementation fixes it.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 from nanomoni.domain.vendor.entities import OffChainTx, PaymentChannel
-from nanomoni.domain.vendor.off_chain_tx_repository import OffChainTxRepository
 from nanomoni.infrastructure.storage import KeyValueStore
+from nanomoni.infrastructure.vendor.payment_channel_repository_impl import (
+    PaymentChannelRepositoryImpl,
+)
 
 
-class VulnerableOffChainTxRepositoryImpl(OffChainTxRepository):
+class VulnerablePaymentChannelRepositoryImpl(PaymentChannelRepositoryImpl):
     """
     DELIBERATELY VULNERABLE implementation that demonstrates the lost update bug.
 
@@ -25,43 +27,10 @@ class VulnerableOffChainTxRepositoryImpl(OffChainTxRepository):
     """
 
     def __init__(self, store: KeyValueStore):
-        self.store = store
+        super().__init__(store)
 
-    async def create(self, off_chain_tx: OffChainTx) -> OffChainTx:
-        latest_key = f"vulnerable:off_chain_tx:latest:{off_chain_tx.computed_id}"
-        payload_json = off_chain_tx.model_dump_json()
-        await self.store.set(latest_key, payload_json)
-        return off_chain_tx
-
-    async def get_by_computed_id(self, computed_id: str) -> List[OffChainTx]:
-        latest = await self.get_latest_by_computed_id(computed_id)
-        return [latest] if latest else []
-
-    async def get_latest_by_computed_id(self, computed_id: str) -> Optional[OffChainTx]:
-        latest_key = f"vulnerable:off_chain_tx:latest:{computed_id}"
-        data = await self.store.get(latest_key)
-        if not data:
-            return None
-        return OffChainTx.model_validate_json(data)
-
-    async def overwrite_latest(
-        self, computed_id: str, new_off_chain_tx: OffChainTx
-    ) -> OffChainTx:
-        latest_key = f"vulnerable:off_chain_tx:latest:{computed_id}"
-        payload_json = new_off_chain_tx.model_dump_json()
-        await self.store.set(latest_key, payload_json)
-        return new_off_chain_tx
-
-    async def delete_by_computed_id(self, computed_id: str) -> bool:
-        latest_key = f"vulnerable:off_chain_tx:latest:{computed_id}"
-        existing_raw = await self.store.get(latest_key)
-        if not existing_raw:
-            return False
-        await self.store.delete(latest_key)
-        return True
-
-    async def save_if_valid(
-        self, off_chain_tx: OffChainTx
+    async def save_payment(
+        self, channel: PaymentChannel, new_tx: OffChainTx
     ) -> tuple[int, Optional[OffChainTx]]:
         """
         VULNERABLE: Non-atomic read-check-write implementation.
@@ -75,8 +44,8 @@ class VulnerableOffChainTxRepositoryImpl(OffChainTxRepository):
         causing a lost update where a higher payment is overwritten
         by a lower one.
         """
-        latest_key = f"vulnerable:off_chain_tx:latest:{off_chain_tx.computed_id}"
-        channel_key = f"payment_channel:{off_chain_tx.computed_id}"
+        latest_key = f"off_chain_tx:latest:{new_tx.computed_id}"
+        channel_key = f"payment_channel:{new_tx.computed_id}"
 
         # Step 1: READ channel (check exists)
         channel_raw = await self.store.get(channel_key)
@@ -86,7 +55,7 @@ class VulnerableOffChainTxRepositoryImpl(OffChainTxRepository):
         channel = PaymentChannel.model_validate_json(channel_raw)
 
         # Check capacity
-        if off_chain_tx.owed_amount > channel.amount:
+        if new_tx.owed_amount > channel.amount:
             current_raw = await self.store.get(latest_key)
             current = (
                 OffChainTx.model_validate_json(current_raw) if current_raw else None
@@ -100,17 +69,17 @@ class VulnerableOffChainTxRepositoryImpl(OffChainTxRepository):
         if not current_raw:
             # First payment - just store it
             # ⚠️ Another "first payment" could have been stored between READ and WRITE
-            await self.store.set(latest_key, off_chain_tx.model_dump_json())
-            return 1, off_chain_tx
+            await self.store.set(latest_key, new_tx.model_dump_json())
+            return 1, new_tx
 
         current = OffChainTx.model_validate_json(current_raw)
 
         # Step 3: CHECK in Python (not atomic with read or write)
-        if off_chain_tx.owed_amount > current.owed_amount:
+        if new_tx.owed_amount > current.owed_amount:
             # ⚠️ RACE WINDOW: Another request could have updated between CHECK and WRITE
             # Step 4: WRITE (not atomic with check)
-            await self.store.set(latest_key, off_chain_tx.model_dump_json())
+            await self.store.set(latest_key, new_tx.model_dump_json())
             # ⚠️ RACE WINDOW ENDS HERE ⚠️
-            return 1, off_chain_tx
+            return 1, new_tx
         else:
             return 0, current

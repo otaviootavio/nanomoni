@@ -18,11 +18,8 @@ from nanomoni.application.vendor.use_cases.payment import PaymentService
 from nanomoni.crypto.certificates import generate_envelope
 from nanomoni.domain.vendor.entities import OffChainTx, PaymentChannel
 from nanomoni.infrastructure.storage import RedisKeyValueStore
-from nanomoni.infrastructure.vendor.payment_channel_repository_impl import (
-    PaymentChannelRepositoryImpl,
-)
 
-from .vulnerable_repository import VulnerableOffChainTxRepositoryImpl
+from .vulnerable_repository import VulnerablePaymentChannelRepositoryImpl
 
 
 @pytest.mark.asyncio
@@ -48,12 +45,10 @@ async def test_vulnerable_subsequent_payment_has_lost_updates(
     iterations = request.config.getoption("--race-iterations", default=500)
 
     # Setup with VULNERABLE repository
-    vulnerable_repo = VulnerableOffChainTxRepositoryImpl(redis_store)
-    payment_channel_repo = PaymentChannelRepositoryImpl(redis_store)
+    vulnerable_repo = VulnerablePaymentChannelRepositoryImpl(redis_store)
 
     payment_service = PaymentService(
-        off_chain_tx_repository=vulnerable_repo,
-        payment_channel_repository=payment_channel_repo,
+        payment_channel_repository=vulnerable_repo,
         issuer_base_url="http://mock-issuer",
         vendor_public_key_der_b64=vendor_public_key_der_b64,
     )
@@ -83,7 +78,7 @@ async def test_vulnerable_subsequent_payment_has_lost_updates(
             balance=0,
             is_closed=False,
         )
-        await payment_channel_repo.create(payment_channel)
+        await vulnerable_repo.save_channel(payment_channel)
 
         # Seed initial transaction (owed_amount=10)
         initial_tx = OffChainTx(
@@ -94,7 +89,7 @@ async def test_vulnerable_subsequent_payment_has_lost_updates(
             payload_b64="initial_payload",
             client_signature_b64="initial_signature",
         )
-        await vulnerable_repo.create(initial_tx)
+        await vulnerable_repo.save_payment(payment_channel, initial_tx)
 
         # Create competing payments
         payload_a = OffChainTxPayload(
@@ -125,7 +120,8 @@ async def test_vulnerable_subsequent_payment_has_lost_updates(
         result_a, result_b = results
 
         # Check final state
-        final_tx = await vulnerable_repo.get_latest_by_computed_id(computed_id)
+        final_channel = await vulnerable_repo.get_by_computed_id(computed_id)
+        final_tx = final_channel.latest_tx if final_channel else None
         final_owed = final_tx.owed_amount if final_tx else None
 
         a_succeeded = not isinstance(result_a, Exception)
