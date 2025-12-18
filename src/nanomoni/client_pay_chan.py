@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 
 from cryptography.hazmat.primitives import serialization
@@ -29,7 +30,7 @@ from nanomoni.crypto.certificates import (
 )
 from nanomoni.envs.client_env import get_settings
 from nanomoni.infrastructure.issuer.issuer_client import IssuerClient
-from nanomoni.infrastructure.vendor.vendor_client import VendorClient
+from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 
 def register_into_issuer_using_private_key(
@@ -148,8 +149,8 @@ def vendor_validate_client_off_tx(
     return envelope
 
 
-def send_payment_to_vendor(
-    vendor_client: VendorClient,
+async def send_payment_to_vendor(
+    vendor_client: VendorClientAsync,
     computed_id: str,
     client_off_tx_envelope: Envelope,
 ) -> OffChainTxResponseDTO:
@@ -158,7 +159,7 @@ def send_payment_to_vendor(
     Returns the vendor's response with the processed transaction details.
     """
     request_dto = ReceivePaymentDTO(envelope=client_off_tx_envelope)
-    response_dto = vendor_client.send_off_chain_payment(computed_id, request_dto)
+    response_dto = await vendor_client.send_off_chain_payment(computed_id, request_dto)
 
     # Parse and log payment details (latest state for this channel)
     computed_id = response_dto.computed_id
@@ -173,14 +174,16 @@ def send_payment_to_vendor(
     return response_dto
 
 
-def request_vendor_close_channel(vendor_client: VendorClient, computed_id: str) -> None:
+async def request_vendor_close_channel(
+    vendor_client: VendorClientAsync, computed_id: str
+) -> None:
     """Ask the vendor to close the payment channel for the given computed_id."""
     dto = CloseChannelDTO(computed_id=computed_id)
-    vendor_client.request_close_channel(dto)
+    await vendor_client.request_close_channel(dto)
     print(f"Requested vendor to close channel {computed_id}")
 
 
-def main() -> None:
+async def main() -> None:
     settings = get_settings()
     issuer_base_url = settings.issuer_base_url
     vendor_base_url = settings.vendor_base_url
@@ -192,10 +195,10 @@ def main() -> None:
 
     register_into_issuer_using_private_key(issuer_base_url, client_private_key_pem)
 
-    # Use a single VendorClient session to reuse TCP/SSL connections
-    with VendorClient(vendor_base_url) as vendor_client:
+    # Use a single VendorClientAsync session to reuse TCP/SSL connections
+    async with VendorClientAsync(vendor_base_url) as vendor_client:
         # Get vendor public key
-        vendor_pk_dto = vendor_client.get_vendor_public_key()
+        vendor_pk_dto = await vendor_client.get_vendor_public_key()
         vendor_public_key_der_b64 = vendor_pk_dto.public_key_der_b64
 
         # TODO
@@ -209,25 +212,41 @@ def main() -> None:
         )
 
         # Loop to send 100,000 off-chain payments to the vendor API
-        for i in range(1, 50000):
-            client_off_tx = client_create_off_tx_to_vendor(
-                computed_id,
-                client_private_key,
-                i,  # Cumulative owed_amount
-                client_public_key_der_b64,
-                vendor_public_key_der_b64,
-            )
+        # We use a semaphore to limit the number of concurrent requests to avoid
+        # overwhelming the client or server with too many open connections.
+        concurrency_limit = 1
+        sem = asyncio.Semaphore(concurrency_limit)
 
-            # Send payment to vendor API
-            send_payment_to_vendor(
-                vendor_client,
-                computed_id,
-                client_off_tx,
-            )
+        async def send_payment_task(amount: int) -> None:
+            async with sem:
+                # Note: This CPU-bound operation blocks the event loop, so tx creation
+                # happens sequentially, but network requests will overlap.
+                client_off_tx = client_create_off_tx_to_vendor(
+                    computed_id,
+                    client_private_key,
+                    amount,  # Cumulative owed_amount
+                    client_public_key_der_b64,
+                    vendor_public_key_der_b64,
+                )
+
+                try:
+                    # Send payment to vendor API
+                    await send_payment_to_vendor(
+                        vendor_client,
+                        computed_id,
+                        client_off_tx,
+                    )
+                except Exception as e:
+                    # In a highly concurrent environment with out-of-order delivery,
+                    # some payments might fail if the server enforces strict ordering.
+                    print(f"Payment {amount} failed or was rejected: {e}")
+
+        tasks = [send_payment_task(i) for i in range(1, 10000)]
+        await asyncio.gather(*tasks)
 
         # After sending all micropayments, request the vendor to close the channel
-        request_vendor_close_channel(vendor_client, computed_id)
+        await request_vendor_close_channel(vendor_client, computed_id)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

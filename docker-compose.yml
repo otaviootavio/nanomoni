@@ -35,6 +35,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6379:6379
+    volumes:
+      - redis_vendor_data:/data
     networks:
       - app-network
 
@@ -43,6 +45,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6380:6379
+    volumes:
+      - redis_issuer_data:/data
     networks:
       - app-network
 
@@ -51,6 +55,8 @@ services:
     command: ["server", "--http-address=:4040"]
     ports:
       - 4040:4040
+    volumes:
+      - pyroscope_data:/var/lib/pyroscope
     networks:
       - app-network
 
@@ -60,6 +66,8 @@ services:
       - 3000:3000
     depends_on:
       - pyroscope
+    volumes:
+      - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -102,6 +110,7 @@ services:
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -109,4 +118,10 @@ services:
 
 networks:
   app-network:
-      
+
+volumes:
+  redis_vendor_data:
+  redis_issuer_data:
+  pyroscope_data:
+  grafana_data:
+  prometheus_data:

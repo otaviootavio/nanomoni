@@ -6,7 +6,7 @@ import time
 
 from cryptography.exceptions import InvalidSignature
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Histogram, Gauge
 
 from ....application.vendor.dtos import (
     CloseChannelDTO,
@@ -18,17 +18,29 @@ from ..dependencies import get_payment_service
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
-
 payment_requests_total = Counter(
     "payment_requests_total",
     "Total payment requests processed",
     ["status"],
 )
 
-payment_request_duration_seconds = Histogram(
-    "payment_request_duration_seconds",
-    "Wall time to process a payment request",
+PAYMENT_DURATION_BUCKETS = (
+    [float(x) for x in range(1, 21)]  # 1..20ms (1ms resolution)
+    + [25.0, 30.0, 40.0, 50.0]
+    + [float("inf")]
+)
+
+payment_request_duration_milliseconds = Histogram(
+    "payment_request_duration_milliseconds",
+    "Wall time to process a payment request (ms)",
     ["status"],
+    buckets=PAYMENT_DURATION_BUCKETS,
+)
+
+payment_requests_inprogress = Gauge(
+    "payment_requests_inprogress",
+    "Number of payment requests currently being processed",
+    multiprocess_mode="livesum",
 )
 
 
@@ -44,33 +56,44 @@ async def receive_payment(
 ) -> OffChainTxResponseDTO:
     """Receive and validate an off-chain payment from a client."""
     start_time = time.perf_counter()
+    # Track in-progress requests
+    payment_requests_inprogress.inc()
     try:
         result = await payment_service.receive_payment(payment_data)
         payment_requests_total.labels(status="success").inc()
-        elapsed = time.perf_counter() - start_time
-        payment_request_duration_seconds.labels(status="success").observe(elapsed)
+        elapsed = (time.perf_counter() - start_time) * 1000
+        payment_request_duration_milliseconds.labels(status="success").observe(elapsed)
         return result
     except InvalidSignature:
         payment_requests_total.labels(status="client_error").inc()
-        elapsed = time.perf_counter() - start_time
-        payment_request_duration_seconds.labels(status="client_error").observe(elapsed)
+        elapsed = (time.perf_counter() - start_time) * 1000
+        payment_request_duration_milliseconds.labels(status="client_error").observe(
+            elapsed
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid signature on payment envelope",
         )
     except ValueError as e:
         payment_requests_total.labels(status="client_error").inc()
-        elapsed = time.perf_counter() - start_time
-        payment_request_duration_seconds.labels(status="client_error").observe(elapsed)
+        elapsed = (time.perf_counter() - start_time) * 1000
+        payment_request_duration_milliseconds.labels(status="client_error").observe(
+            elapsed
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         payment_requests_total.labels(status="server_error").inc()
-        elapsed = time.perf_counter() - start_time
-        payment_request_duration_seconds.labels(status="server_error").observe(elapsed)
+        elapsed = (time.perf_counter() - start_time) * 1000
+        payment_request_duration_milliseconds.labels(status="server_error").observe(
+            elapsed
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process payment: {str(e)}",
         )
+    finally:
+        # Ensure the in-progress gauge is decremented regardless of outcome
+        payment_requests_inprogress.dec()
 
 
 @router.post(
