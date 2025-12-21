@@ -5,6 +5,12 @@ We are not using `.env` files but rather `env.sh` files that export the variable
 
 They are defined in `/envs/**`. We also provide an example that contains dummy text. To quickstart the project, copy and paste the content into `./envs/env.sh`.
 
+### Running with Docker
+
+```
+docker compose up alloy pyroscope redis-vendor cadvisor grafana prometheus redis-issuer 
+```
+
 ### Running with Python for development
 
 Use Poetry for managing packages and pyenv for managing Python versions.
