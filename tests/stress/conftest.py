@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for E2E tests using docker compose."""
+"""Shared fixtures for stress tests."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ import httpx
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
+
+from tests.e2e.helpers.issuer_client import IssuerTestClient
+from tests.e2e.helpers.vendor_client import VendorTestClient
 
 
 def run_compose_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -47,23 +50,27 @@ def docker_compose_stack() -> Generator[None, None, None]:
     """
     Session-scoped fixture that manages the docker compose stack lifecycle.
 
-    - Runs `docker compose down -v` to clean up any existing stack
+    - Stops and removes only the test services if they're already running
     - Starts required services: issuer, vendor, redis-issuer, redis-vendor
     - Polls health endpoints until services are ready
-    - Tears down with `docker compose down -v` after all tests complete
+    - Tears down only the test services after all tests complete
     """
     project_root = Path(__file__).parent.parent.parent
 
-    # Clean up any existing stack
-    print("\n[E2E] Cleaning up existing docker compose stack...")
-    run_compose_command(["down", "-v"], cwd=project_root)
+    # Services that this test manages
+    test_services = ["issuer", "vendor", "redis-issuer", "redis-vendor"]
+
+    # Clean up any existing test services (stop and remove containers)
+    print("\n[Stress] Cleaning up existing test services...")
+    # Stop the specific services we manage
+    run_compose_command(["stop"] + test_services, cwd=project_root)
+    # Remove containers for those services
+    run_compose_command(["rm", "-f"] + test_services, cwd=project_root)
 
     # Start required services
-    print(
-        "[E2E] Starting docker compose services (issuer, vendor, redis-issuer, redis-vendor)..."
-    )
+    print(f"[Stress] Starting docker compose services ({', '.join(test_services)})...")
     result = run_compose_command(
-        ["up", "-d", "issuer", "vendor", "redis-issuer", "redis-vendor"],
+        ["up", "-d"] + test_services,
         cwd=project_root,
     )
 
@@ -75,34 +82,50 @@ def docker_compose_stack() -> Generator[None, None, None]:
         )
 
     # Wait for services to become healthy
-    print("[E2E] Waiting for services to become healthy...")
+    print("[Stress] Waiting for services to become healthy...")
     try:
         wait_for_service("http://localhost:8001/health", timeout=60.0)  # Issuer
-        print("[E2E] Issuer is healthy")
+        print("[Stress] Issuer is healthy")
 
         wait_for_service("http://localhost:8000/health", timeout=60.0)  # Vendor
-        print("[E2E] Vendor is healthy")
+        print("[Stress] Vendor is healthy")
 
-        print("[E2E] All services are ready")
+        print("[Stress] All services are ready")
     except TimeoutError:
         # Try to get logs for debugging
-        print("\n[E2E] Service health check failed. Container logs:")
-        run_compose_command(["logs", "--tail=50"], cwd=project_root)
+        print("\n[Stress] Service health check failed. Container logs:")
+        run_compose_command(["logs", "--tail=50"] + test_services, cwd=project_root)
         raise
 
     yield
 
-    # Teardown: stop and remove containers, networks, and volumes
-    print("\n[E2E] Tearing down docker compose stack...")
-    run_compose_command(["down", "-v"], cwd=project_root)
-    print("[E2E] Teardown complete")
+    # Teardown: stop and remove only the test services (not all services)
+    print("\n[Stress] Tearing down test services...")
+    run_compose_command(["stop"] + test_services, cwd=project_root)
+    run_compose_command(["rm", "-f"] + test_services, cwd=project_root)
+    print("[Stress] Teardown complete")
+
+
+@pytest.fixture
+def issuer_client() -> IssuerTestClient:
+    """Provide an IssuerTestClient instance for stress tests."""
+    return IssuerTestClient()
+
+
+@pytest.fixture
+def vendor_client() -> VendorTestClient:
+    """Provide a VendorTestClient instance for stress tests."""
+    return VendorTestClient()
 
 
 @pytest_asyncio.fixture(autouse=True, scope="function")
-async def cleanup_redis_between_tests(
-    docker_compose_stack: None,  # Ensure stack is running
+async def cleanup_redis(
+    docker_compose_stack: None,  # Ensure stack is running - override base conftest
 ) -> AsyncGenerator[None, None]:
     """
+    Override base conftest's cleanup_redis to use docker compose instead.
+
+    This ensures docker_compose_stack runs first, making Redis available.
     Automatically flush Redis databases between each test for isolation.
 
     This fixture runs before and after each test to ensure:

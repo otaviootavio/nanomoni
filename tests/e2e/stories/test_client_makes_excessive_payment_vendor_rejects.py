@@ -44,4 +44,3 @@ async def test_client_makes_excessive_payment_vendor_rejects(
     response = await vendor_client.receive_payment_raw(computed_id, excessive_payment)
     assert response.status_code == 400, "Should reject payment exceeding channel amount"
     assert "exceed" in response.text.lower() or "amount" in response.text.lower()
-

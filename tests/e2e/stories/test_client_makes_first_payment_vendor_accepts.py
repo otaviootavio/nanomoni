@@ -48,4 +48,3 @@ async def test_client_makes_first_payment_vendor_accepts(
     assert payment_response.computed_id == computed_id
     assert payment_response.client_public_key_der_b64 == client.public_key_der_b64
     assert payment_response.vendor_public_key_der_b64 == vendor_public_key_der_b64
-

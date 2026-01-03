@@ -7,7 +7,7 @@ They are defined in `/envs/**`. We also provide an example that contains dummy t
 
 ### Running with Docker
 
-```
+```sh
 docker compose up alloy pyroscope redis-vendor cadvisor grafana prometheus redis-issuer 
 ```
 

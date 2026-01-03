@@ -64,4 +64,3 @@ async def test_multiple_clients_register_issuer_accepts_all(
     # Accounts are independent (balances may be same initial value, but separate)
     assert response1.client_public_key_der_b64 == client1.public_key_der_b64
     assert response2.client_public_key_der_b64 == client2.public_key_der_b64
-

@@ -85,4 +85,3 @@ async def test_vendor_tries_to_close_already_closed_channel_vendor_handles_grace
     # Then: Second closure should be handled gracefully (idempotent or rejected)
     # The implementation returns None if already closed, which is acceptable
     await vendor_client.request_channel_closure(computed_id)  # Should not raise
-

@@ -78,4 +78,3 @@ async def test_client_queries_channel_state_issuer_returns(
     assert channel_state.is_closed is False
     assert channel_state.client_public_key_der_b64 == client.public_key_der_b64
     assert channel_state.vendor_public_key_der_b64 == vendor_public_key_der_b64
-

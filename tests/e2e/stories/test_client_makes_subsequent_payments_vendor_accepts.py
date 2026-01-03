@@ -99,4 +99,3 @@ async def test_client_makes_sequence_of_payments_vendor_accepts_all(
     # Note: Balance on issuer reflects final payment after closure
     # During active payments, balance tracks on vendor side
     assert channel_state.is_closed is False  # Still open
-

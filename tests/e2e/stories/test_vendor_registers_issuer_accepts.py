@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from tests.e2e.helpers.client_actor import ClientActor
 from tests.e2e.helpers.issuer_client import IssuerTestClient
 from tests.e2e.helpers.vendor_client import VendorTestClient
 
@@ -39,4 +38,3 @@ async def test_vendor_registers_issuer_accepts(
     assert second_response.balance == response.balance, (
         "Re-registration should not change balance"
     )
-

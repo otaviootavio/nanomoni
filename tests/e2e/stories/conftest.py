@@ -18,4 +18,3 @@ def issuer_client() -> IssuerTestClient:
 def vendor_client() -> VendorTestClient:
     """Provide a VendorTestClient instance for story tests."""
     return VendorTestClient()
-

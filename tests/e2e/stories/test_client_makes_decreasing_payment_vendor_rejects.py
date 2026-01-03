@@ -48,4 +48,3 @@ async def test_client_makes_decreasing_payment_vendor_rejects(
     response = await vendor_client.receive_payment_raw(computed_id, decreasing_payment)
     assert response.status_code == 400, "Should reject decreasing payment"
     assert "increasing" in response.text.lower() or "greater" in response.text.lower()
-

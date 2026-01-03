@@ -42,6 +42,7 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 markers = [
     "e2e: marks tests as end-to-end (requires docker compose)",
+    "stress: marks tests as stress tests (requires docker compose)",
 ]
 asyncio_mode = "auto"
 

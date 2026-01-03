@@ -132,4 +132,3 @@ async def test_client_registers_and_opens_channel_issuer_accepts(
     # Verify channel state via issuer query
     channel_state = await issuer_client.get_channel(channel_response.computed_id)
     assert channel_state.is_closed is False
-
