@@ -1,9 +1,18 @@
 #!/bin/bash
-. ./envs/env.client.sh
+set -euo pipefail
 
-# Run 8 instances of the client in parallel
-for i in $(seq 1 16); do
-  poetry run python -m src.nanomoni.client_pay_chan &
-done
+required_env() {
+  local name="$1"
+  if [ -z "${!name:-}" ]; then
+    echo "Missing required environment variable: ${name}" >&2
+    exit 2
+  fi
+}
 
-wait
+required_env "VENDOR_BASE_URL"
+required_env "ISSUER_BASE_URL"
+required_env "CLIENT_PRIVATE_KEY_PEM"
+required_env "CLIENT_PAYMENT_COUNT"
+required_env "CLIENT_CHANNEL_AMOUNT"
+
+poetry run python -m src.nanomoni.client_pay_chan

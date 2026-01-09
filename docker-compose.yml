@@ -3,8 +3,13 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.client
-    expose:
-      - "8002"
+    environment:
+      VENDOR_BASE_URL: ${VENDOR_BASE_URL}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL}
+      CLIENT_PRIVATE_KEY_PEM: ${CLIENT_PRIVATE_KEY_PEM}
+      CLIENT_PAYMENT_COUNT: ${CLIENT_PAYMENT_COUNT}
+      CLIENT_CHANNEL_AMOUNT: ${CLIENT_CHANNEL_AMOUNT}
+      CLIENT_RAMP_DELAY_SEC: ${CLIENT_RAMP_DELAY_SEC}
     networks:
       - app-network
 
@@ -12,6 +17,17 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.issuer
+    environment:
+      ISSUER_DATABASE_URL: ${ISSUER_DATABASE_URL}
+      ISSUER_DATABASE_ECHO: ${ISSUER_DATABASE_ECHO}
+      ISSUER_API_HOST: ${ISSUER_API_HOST}
+      ISSUER_API_PORT: ${ISSUER_API_PORT}
+      ISSUER_API_DEBUG: ${ISSUER_API_DEBUG}
+      ISSUER_API_CORS_ORIGINS: ${ISSUER_API_CORS_ORIGINS}
+      PROMETHEUS_MULTIPROC_DIR: ${PROMETHEUS_MULTIPROC_DIR}
+      ISSUER_APP_NAME: ${ISSUER_APP_NAME}
+      ISSUER_APP_VERSION: ${ISSUER_APP_VERSION}
+      ISSUER_PRIVATE_KEY_PEM: ${ISSUER_PRIVATE_KEY_PEM}
     ports:
       - 8001:8001
     depends_on:
@@ -23,6 +39,19 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.vendor
+    environment:
+      VENDOR_DATABASE_URL: ${VENDOR_DATABASE_URL}
+      VENDOR_DATABASE_ECHO: ${VENDOR_DATABASE_ECHO}
+      VENDOR_API_HOST: ${VENDOR_API_HOST}
+      VENDOR_API_PORT: ${VENDOR_API_PORT}
+      VENDOR_API_DEBUG: ${VENDOR_API_DEBUG}
+      VENDOR_API_CORS_ORIGINS: ${VENDOR_API_CORS_ORIGINS}
+      VENDOR_API_WORKERS: ${VENDOR_API_WORKERS}
+      VENDOR_APP_NAME: ${VENDOR_APP_NAME}
+      VENDOR_APP_VERSION: ${VENDOR_APP_VERSION}
+      VENDOR_PRIVATE_KEY_PEM: ${VENDOR_PRIVATE_KEY_PEM}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL}
+      PROMETHEUS_MULTIPROC_DIR: ${PROMETHEUS_MULTIPROC_DIR}
     ports:
       - 8000:8000
     depends_on:
