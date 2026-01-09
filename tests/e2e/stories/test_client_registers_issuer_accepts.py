@@ -11,7 +11,7 @@ from tests.e2e.helpers.issuer_client import IssuerTestClient
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_client_registers_issuer_accepts(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
 ) -> None:
     """
@@ -41,7 +41,7 @@ async def test_client_registers_issuer_accepts(
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_multiple_clients_register_issuer_accepts_all(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
 ) -> None:
     """

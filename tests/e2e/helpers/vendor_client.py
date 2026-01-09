@@ -16,9 +16,7 @@ from nanomoni.crypto.certificates import Envelope
 class VendorTestClient:
     """HTTP client for interacting with the Vendor API in E2E tests."""
 
-    def __init__(
-        self, base_url: str = "http://localhost:8000/api/v1", timeout: float = 30.0
-    ) -> None:
+    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         """
         Initialize the vendor test client.
 
@@ -26,6 +24,8 @@ class VendorTestClient:
             base_url: Base URL of the vendor API
             timeout: Request timeout in seconds
         """
+        if not base_url:
+            raise ValueError("VendorTestClient requires a non-empty base_url.")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 

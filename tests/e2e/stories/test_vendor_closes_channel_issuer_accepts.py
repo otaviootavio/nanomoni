@@ -12,7 +12,7 @@ from tests.e2e.helpers.vendor_client import VendorTestClient
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_vendor_closes_channel_issuer_accepts(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
 ) -> None:
@@ -53,7 +53,7 @@ async def test_vendor_closes_channel_issuer_accepts(
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_vendor_tries_to_close_already_closed_channel_vendor_handles_gracefully(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     vendor_client: VendorTestClient,
     issuer_client: IssuerTestClient,
 ) -> None:

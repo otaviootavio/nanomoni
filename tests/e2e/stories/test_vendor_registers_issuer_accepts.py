@@ -11,7 +11,7 @@ from tests.e2e.helpers.vendor_client import VendorTestClient
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_vendor_registers_issuer_accepts(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
 ) -> None:

@@ -140,13 +140,25 @@ async def redis_store(redis_db_client: DatabaseClient) -> RedisKeyValueStore:
     return RedisKeyValueStore(redis_db_client)
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def cleanup_redis(redis_db_client: DatabaseClient) -> AsyncGenerator[None, None]:
-    """Automatically clean up Redis after each test."""
-    yield
-    # Cleanup happens after test
-    try:
-        async with redis_db_client.get_connection() as conn:
-            await conn.flushdb()
-    except Exception:
-        pass  # Ignore cleanup errors if Redis not available
+@pytest.fixture(scope="session")
+def issuer_base_url() -> str:
+    """
+    Base URL for the Issuer API used by E2E/stress tests.
+
+    Centralized here so helper clients don't reach into environment variables directly.
+    The base URL should include /api/v1 prefix.
+    """
+    base_url = os.getenv("ISSUER_BASE_URL", "http://localhost:8001/api/v1")
+    return base_url.rstrip("/")
+
+
+@pytest.fixture(scope="session")
+def vendor_base_url() -> str:
+    """
+    Base URL for the Vendor API used by E2E/stress tests.
+
+    Centralized here so helper clients don't reach into environment variables directly.
+    The base URL should include /api/v1 prefix.
+    """
+    base_url = os.getenv("VENDOR_BASE_URL", "http://localhost:8000/api/v1")
+    return base_url.rstrip("/")

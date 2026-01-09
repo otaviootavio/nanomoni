@@ -1,170 +1,136 @@
-"""Shared fixtures for stress tests."""
+"""Shared fixtures for stress tests requiring external services."""
 
 from __future__ import annotations
 
-import subprocess
-import time
-from collections.abc import Generator
-from pathlib import Path
-from typing import AsyncGenerator
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import pytest
-import pytest_asyncio
-import redis.asyncio as redis
 
 from tests.e2e.helpers.issuer_client import IssuerTestClient
 from tests.e2e.helpers.vendor_client import VendorTestClient
 
 
-def run_compose_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    """Run a docker compose command and return the result."""
-    cmd = ["docker", "compose"] + args
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result
+def check_service_health(url: str, timeout: float = 5.0) -> None:
+    """
+    Check if a service health endpoint is available and returns 200.
+
+    Raises RuntimeError if the service is not available.
+    """
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.get(url)
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Service at {url} returned status {response.status_code}, expected 200"
+                )
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Failed to connect to service at {url}: {e}") from e
 
 
-def wait_for_service(url: str, timeout: float = 60.0, interval: float = 1.0) -> None:
-    """Wait for a service to become healthy by polling a health endpoint."""
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            with httpx.Client(timeout=5.0) as client:
-                response = client.get(url)
-                if response.status_code == 200:
-                    return
-        except (httpx.RequestError, httpx.TimeoutException):
-            pass
-        time.sleep(interval)
-    raise TimeoutError(f"Service at {url} did not become healthy within {timeout}s")
+def check_redis_connection(url: str, timeout: float = 5.0) -> None:
+    """
+    Check if a Redis instance is reachable by pinging it.
+
+    Raises RuntimeError if Redis is not available.
+    """
+    import redis as redis_sync
+
+    try:
+        # Use synchronous Redis client for health check in synchronous fixture
+        redis_client = redis_sync.from_url(
+            url, decode_responses=False, socket_connect_timeout=timeout
+        )
+        redis_client.ping()
+        redis_client.close()
+    except Exception as e:
+        raise RuntimeError(f"Failed to connect to Redis at {url}: {e}") from e
+
+
+def health_url(base_url: str) -> str:
+    """
+    Build a root health endpoint URL from a base URL.
+
+    Stress/E2E tests often use base URLs like http://localhost:8001/api/v1, while the
+    services expose health at /health (root). This helper makes health checks robust.
+    """
+    parts = urlsplit(base_url)
+    return urlunsplit((parts.scheme, parts.netloc, "/health", "", ""))
 
 
 @pytest.fixture(scope="session")
-def docker_compose_stack() -> Generator[None, None, None]:
+def require_services(
+    issuer_base_url: str,
+    vendor_base_url: str,
+) -> None:
     """
-    Session-scoped fixture that manages the docker compose stack lifecycle.
+    Session-scoped fixture that validates required external services are available.
 
-    - Stops and removes only the test services if they're already running
-    - Starts required services: issuer, vendor, redis-issuer, redis-vendor
-    - Polls health endpoints until services are ready
-    - Tears down only the test services after all tests complete
+    This fixture checks:
+    - Issuer API health endpoint (GET /health)
+    - Vendor API health endpoint (GET /health)
+    - Redis vendor at localhost:6379
+    - Redis issuer at localhost:6380
+
+    Raises RuntimeError with clear instructions if any service is not available.
+    Tests will not proceed unless all services are running.
     """
-    project_root = Path(__file__).parent.parent.parent
+    errors = []
 
-    # Services that this test manages
-    test_services = ["issuer", "vendor", "redis-issuer", "redis-vendor"]
-
-    # Clean up any existing test services (stop and remove containers)
-    print("\n[Stress] Cleaning up existing test services...")
-    # Stop the specific services we manage
-    run_compose_command(["stop"] + test_services, cwd=project_root)
-    # Remove containers for those services
-    run_compose_command(["rm", "-f"] + test_services, cwd=project_root)
-
-    # Start required services
-    print(f"[Stress] Starting docker compose services ({', '.join(test_services)})...")
-    result = run_compose_command(
-        ["up", "-d"] + test_services,
-        cwd=project_root,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Failed to start docker compose services:\n"
-            f"stdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
-        )
-
-    # Wait for services to become healthy
-    print("[Stress] Waiting for services to become healthy...")
+    # Check Issuer health
+    issuer_health_url = health_url(issuer_base_url)
     try:
-        wait_for_service("http://localhost:8001/health", timeout=60.0)  # Issuer
-        print("[Stress] Issuer is healthy")
+        check_service_health(issuer_health_url)
+        print("[Stress] Issuer health check passed")
+    except RuntimeError as e:
+        errors.append(f"Issuer health check failed: {e}")
 
-        wait_for_service("http://localhost:8000/health", timeout=60.0)  # Vendor
-        print("[Stress] Vendor is healthy")
+    # Check Vendor health
+    vendor_health_url = health_url(vendor_base_url)
+    try:
+        check_service_health(vendor_health_url)
+        print("[Stress] Vendor health check passed")
+    except RuntimeError as e:
+        errors.append(f"Vendor health check failed: {e}")
 
-        print("[Stress] All services are ready")
-    except TimeoutError:
-        # Try to get logs for debugging
-        print("\n[Stress] Service health check failed. Container logs:")
-        run_compose_command(["logs", "--tail=50"] + test_services, cwd=project_root)
-        raise
-
-    yield
-
-    # Teardown: stop and remove only the test services (not all services)
-    print("\n[Stress] Tearing down test services...")
-    run_compose_command(["stop"] + test_services, cwd=project_root)
-    run_compose_command(["rm", "-f"] + test_services, cwd=project_root)
-    print("[Stress] Teardown complete")
-
-
-@pytest.fixture
-def issuer_client() -> IssuerTestClient:
-    """Provide an IssuerTestClient instance for stress tests."""
-    return IssuerTestClient()
-
-
-@pytest.fixture
-def vendor_client() -> VendorTestClient:
-    """Provide a VendorTestClient instance for stress tests."""
-    return VendorTestClient()
-
-
-@pytest_asyncio.fixture(autouse=True, scope="function")
-async def cleanup_redis(
-    docker_compose_stack: None,  # Ensure stack is running - override base conftest
-) -> AsyncGenerator[None, None]:
-    """
-    Override base conftest's cleanup_redis to use docker compose instead.
-
-    This ensures docker_compose_stack runs first, making Redis available.
-    Automatically flush Redis databases between each test for isolation.
-
-    This fixture runs before and after each test to ensure:
-    - Each test starts with a clean Redis state
-    - Test data doesn't leak between tests
-    - Tests are independent and can run in any order
-
-    Flushes both:
-    - redis-vendor (localhost:6379, database 0)
-    - redis-issuer (localhost:6380, database 0)
-    """
-    # Pre-test: Ensure clean state (flush before test runs)
-    await _flush_redis_instances()
-
-    yield
-
-    # Post-test: Clean up after test completes
-    await _flush_redis_instances()
-
-
-async def _flush_redis_instances() -> None:
-    """Flush both Redis instances (vendor and issuer) to ensure test isolation."""
+    # Check Redis vendor
     redis_vendor_url = "redis://localhost:6379/0"
+    try:
+        check_redis_connection(redis_vendor_url)
+        print("[Stress] Redis vendor connection check passed")
+    except RuntimeError as e:
+        errors.append(f"Redis vendor (localhost:6379) check failed: {e}")
+
+    # Check Redis issuer
     redis_issuer_url = "redis://localhost:6380/0"
-
-    # Flush vendor Redis
     try:
-        vendor_client = redis.from_url(redis_vendor_url, decode_responses=False)
-        await vendor_client.flushdb()
-        await vendor_client.aclose()
-    except Exception:
-        # Silently ignore if Redis is not available (e.g., during setup/teardown)
-        pass
+        check_redis_connection(redis_issuer_url)
+        print("[Stress] Redis issuer connection check passed")
+    except RuntimeError as e:
+        errors.append(f"Redis issuer (localhost:6380) check failed: {e}")
 
-    # Flush issuer Redis
-    try:
-        issuer_client = redis.from_url(redis_issuer_url, decode_responses=False)
-        await issuer_client.flushdb()
-        await issuer_client.aclose()
-    except Exception:
-        # Silently ignore if Redis is not available (e.g., during setup/teardown)
-        pass
+    # If any checks failed, raise with clear error message
+    if errors:
+        error_msg = (
+            "\n[Stress] Required services are not available:\n"
+            + "\n".join(f"  - {err}" for err in errors)
+            + "\n\n"
+            + "Please start the required services with:\n"
+            + "  docker compose up -d issuer vendor redis-issuer redis-vendor\n\n"
+            + "Then wait for services to be ready and run the tests again."
+        )
+        raise RuntimeError(error_msg)
+
+    print("[Stress] All required services are available")
+
+
+@pytest.fixture
+def issuer_client(issuer_base_url: str, require_services: None) -> IssuerTestClient:
+    """Provide an IssuerTestClient instance for stress tests."""
+    return IssuerTestClient(base_url=issuer_base_url)
+
+
+@pytest.fixture
+def vendor_client(vendor_base_url: str, require_services: None) -> VendorTestClient:
+    """Provide a VendorTestClient instance for stress tests."""
+    return VendorTestClient(base_url=vendor_base_url)

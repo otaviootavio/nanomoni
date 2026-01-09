@@ -16,7 +16,6 @@ class VendorClient:
     """Synchronous client for talking to the Vendor HTTP API."""
 
     def __init__(self, base_url: str, timeout: float = 10.0) -> None:
-        # vendor_base_url is expected to already contain any API prefix (e.g. /api/v1)
         self._http = HttpClient(base_url, timeout=timeout)
 
     def get_vendor_public_key(self) -> VendorPublicKeyDTO:

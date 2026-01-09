@@ -18,9 +18,7 @@ from nanomoni.application.issuer.dtos import (
 class IssuerTestClient:
     """HTTP client for interacting with the Issuer API in E2E tests."""
 
-    def __init__(
-        self, base_url: str = "http://localhost:8001/api/v1", timeout: float = 30.0
-    ) -> None:
+    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         """
         Initialize the issuer test client.
 
@@ -28,6 +26,8 @@ class IssuerTestClient:
             base_url: Base URL of the issuer API
             timeout: Request timeout in seconds
         """
+        if not base_url:
+            raise ValueError("IssuerTestClient requires a non-empty base_url.")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 

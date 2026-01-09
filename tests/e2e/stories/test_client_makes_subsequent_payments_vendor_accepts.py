@@ -12,7 +12,7 @@ from tests.e2e.helpers.vendor_client import VendorTestClient
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_client_makes_subsequent_payments_vendor_accepts(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
 ) -> None:
@@ -61,7 +61,7 @@ async def test_client_makes_subsequent_payments_vendor_accepts(
 @pytest.mark.asyncio
 @pytest.mark.e2e
 async def test_client_makes_sequence_of_payments_vendor_accepts_all(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
 ) -> None:

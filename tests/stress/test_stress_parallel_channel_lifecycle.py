@@ -85,7 +85,7 @@ async def _client_channel_lifecycle(
 @pytest.mark.stress
 @pytest.mark.parametrize("num_clients", [2, 4, 8, 16, 32])
 async def test_stress_parallel_channel_lifecycle_multiple_clients(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
     num_clients: int,

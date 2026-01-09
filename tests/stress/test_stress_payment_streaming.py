@@ -12,7 +12,7 @@ from tests.e2e.helpers.vendor_client import VendorTestClient
 @pytest.mark.asyncio
 @pytest.mark.stress
 async def test_stress_payment_streaming_5000_payments(
-    docker_compose_stack: None,  # pytest fixture
+    require_services: None,  # pytest fixture - ensures services are available
     issuer_client: IssuerTestClient,
     vendor_client: VendorTestClient,
 ) -> None:
