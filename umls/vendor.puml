@@ -37,13 +37,13 @@ rectangle "Vendor Context" #E6FFE6 {
     rectangle "Domain Layer" as domain #FFFACD {
         rectangle "domain/vendor" {
             file "**entities.py**\nUser \nTask\nOffChainTx\nPaymentChannel" #FFFFE0
-            file "user_repository.py\ntask_repository.py\noff_chain_tx_repository.py\npayment_channel_repository.py"
+            file "user_repository.py\ntask_repository.py\npayment_channel_repository.py"
         }
     }
     
     rectangle "Infrastructure Layer" as infra #E8F4F8 {
         rectangle "infrastructure/vendor" {
-            file "user_repository_impl.py\ntask_repository_impl.py\noff_chain_tx_repository_impl.py\npayment_channel_repository_impl.py\nvendor_client.py"
+            file "user_repository_impl.py\ntask_repository_impl.py\npayment_channel_repository_impl.py\nvendor_client.py"
         }
     }
     

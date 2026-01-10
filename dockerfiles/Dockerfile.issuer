@@ -14,17 +14,6 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_CACHE_DIR='/var/cache/pypoetry' \
     POETRY_HOME='/usr/local'
 
-# Application environment variables
-ENV ISSUER_DATABASE_URL=${ISSUER_DATABASE_URL} \
-    ISSUER_DATABASE_ECHO=${ISSUER_DATABASE_ECHO} \
-    ISSUER_API_HOST=${ISSUER_API_HOST} \
-    ISSUER_API_PORT=${ISSUER_API_PORT} \
-    ISSUER_API_DEBUG=${ISSUER_API_DEBUG} \
-    ISSUER_API_CORS_ORIGINS=${ISSUER_API_CORS_ORIGINS} \
-    ISSUER_APP_NAME=${ISSUER_APP_NAME} \
-    ISSUER_APP_VERSION=${ISSUER_APP_VERSION} \
-    ISSUER_PRIVATE_KEY_PEM=${ISSUER_PRIVATE_KEY_PEM}
-
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN pip install pipx
 RUN pipx install poetry==2.1.3

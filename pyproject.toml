@@ -21,7 +21,8 @@ dependencies = [
     "redis (>=5.0.0,<6.0.0)",
     "pandas (>=2.3.2,<3.0.0)",
     "mypy (>=1.18.2,<2.0.0)",
-    "prometheus-client (>=0.23.1,<0.24.0)"
+    "prometheus-client (>=0.23.1,<0.24.0)",
+    "pytest-asyncio (<1.0.0)"
 ]
 
 [tool.poetry]
@@ -37,6 +38,13 @@ disallow_untyped_defs = true
 warn_unused_ignores = true
 no_implicit_optional = true
 plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: marks tests as end-to-end (requires docker compose)",
+    "stress: marks tests as stress tests (requires docker compose)",
+]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

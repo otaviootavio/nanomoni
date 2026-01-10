@@ -1,6 +1,7 @@
+```sh
 mkdir -p png
 docker run --rm -v $(pwd):/data plantuml/plantuml -tpng -o png *.puml
-
+```
 
 ## System Overview
 
@@ -140,9 +141,8 @@ end note
 note over Vendor
   **Verification details (subsequent payments):**
   1. Decode envelope → get computed_id and keys
-  2. Fetch latest OffChainTx by computed_id
-  3. Fetch cached PaymentChannel by computed_id
-  4. Check:
+  2. Fetch Channel Aggregate (channel + latest tx) by computed_id
+  3. Check:
      • owed_amount > previous.owed_amount
      • owed_amount ≤ channel.amount
   5. Validate keys:

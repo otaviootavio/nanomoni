@@ -3,8 +3,13 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.client
-    expose:
-      - "8002"
+    environment:
+      VENDOR_BASE_URL: ${VENDOR_BASE_URL}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL}
+      CLIENT_PRIVATE_KEY_PEM: ${CLIENT_PRIVATE_KEY_PEM}
+      CLIENT_PAYMENT_COUNT: ${CLIENT_PAYMENT_COUNT}
+      CLIENT_CHANNEL_AMOUNT: ${CLIENT_CHANNEL_AMOUNT}
+      CLIENT_RAMP_DELAY_SEC: ${CLIENT_RAMP_DELAY_SEC}
     networks:
       - app-network
 
@@ -12,6 +17,17 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.issuer
+    environment:
+      ISSUER_DATABASE_URL: ${ISSUER_DATABASE_URL}
+      ISSUER_DATABASE_ECHO: ${ISSUER_DATABASE_ECHO}
+      ISSUER_API_HOST: ${ISSUER_API_HOST}
+      ISSUER_API_PORT: ${ISSUER_API_PORT}
+      ISSUER_API_DEBUG: ${ISSUER_API_DEBUG}
+      ISSUER_API_CORS_ORIGINS: ${ISSUER_API_CORS_ORIGINS}
+      PROMETHEUS_MULTIPROC_DIR: ${PROMETHEUS_MULTIPROC_DIR}
+      ISSUER_APP_NAME: ${ISSUER_APP_NAME}
+      ISSUER_APP_VERSION: ${ISSUER_APP_VERSION}
+      ISSUER_PRIVATE_KEY_PEM: ${ISSUER_PRIVATE_KEY_PEM}
     ports:
       - 8001:8001
     depends_on:
@@ -23,6 +39,19 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.vendor
+    environment:
+      VENDOR_DATABASE_URL: ${VENDOR_DATABASE_URL}
+      VENDOR_DATABASE_ECHO: ${VENDOR_DATABASE_ECHO}
+      VENDOR_API_HOST: ${VENDOR_API_HOST}
+      VENDOR_API_PORT: ${VENDOR_API_PORT}
+      VENDOR_API_DEBUG: ${VENDOR_API_DEBUG}
+      VENDOR_API_CORS_ORIGINS: ${VENDOR_API_CORS_ORIGINS}
+      VENDOR_API_WORKERS: ${VENDOR_API_WORKERS}
+      VENDOR_APP_NAME: ${VENDOR_APP_NAME}
+      VENDOR_APP_VERSION: ${VENDOR_APP_VERSION}
+      VENDOR_PRIVATE_KEY_PEM: ${VENDOR_PRIVATE_KEY_PEM}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL}
+      PROMETHEUS_MULTIPROC_DIR: ${PROMETHEUS_MULTIPROC_DIR}
     ports:
       - 8000:8000
     depends_on:
@@ -35,6 +64,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6379:6379
+    volumes:
+      - redis_vendor_data:/data
     networks:
       - app-network
 
@@ -43,6 +74,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6380:6379
+    volumes:
+      - redis_issuer_data:/data
     networks:
       - app-network
 
@@ -51,6 +84,8 @@ services:
     command: ["server", "--http-address=:4040"]
     ports:
       - 4040:4040
+    volumes:
+      - pyroscope_data:/var/lib/pyroscope
     networks:
       - app-network
 
@@ -59,7 +94,12 @@ services:
     ports:
       - 3000:3000
     depends_on:
+      - prometheus
       - pyroscope
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -102,6 +142,7 @@ services:
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -109,4 +150,10 @@ services:
 
 networks:
   app-network:
-      
+
+volumes:
+  redis_vendor_data:
+  redis_issuer_data:
+  pyroscope_data:
+  grafana_data:
+  prometheus_data:

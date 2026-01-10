@@ -52,6 +52,7 @@ def load_public_key_from_der_b64(der_b64: DERB64) -> ec.EllipticCurvePublicKey:
     return key
 
 
+@lru_cache(maxsize=128)
 def load_private_key_from_pem(pem_str: str) -> ec.EllipticCurvePrivateKey:
     """Load a cryptography private key object from a PEM-formatted string."""
     key = serialization.load_pem_private_key(pem_str.encode(), password=None)

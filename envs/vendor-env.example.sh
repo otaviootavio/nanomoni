@@ -14,17 +14,18 @@ export VENDOR_API_HOST="0.0.0.0"
 export VENDOR_API_PORT="8000"
 export VENDOR_API_DEBUG="false"
 export VENDOR_API_CORS_ORIGINS="*"
-export VENDOR_API_WORKERS="2"
+export VENDOR_API_WORKERS="16"
+
+# Prometheus multiprocess metrics directory (must be writable by the app)
+export PROMETHEUS_MULTIPROC_DIR="/tmp/prometheus_vendor"
 
 # Application settings
 export VENDOR_APP_NAME="Vendor NanoMoni"
 export VENDOR_APP_VERSION="1.0.0" 
 
-# Issuer base URL (used by middleware to fetch issuer public key)
-# Running locally on localhost   
-export ISSUER_BASE_URL="http://127.0.0.1:8001/api/v1" 
-# Running on docker compose (default)
-# export ISSUER_BASE_URL="http://issuer:8001/api/v1" 
+# Issuer base URL
+# export ISSUER_BASE_URL="http://127.0.0.1:8001/api/v1" 
+export ISSUER_BASE_URL="http://issuer:8001/api/v1" 
 
 # Vendor private key (PEM format) dinamically generated
 export VENDOR_PRIVATE_KEY_PEM="$(openssl ecparam -genkey -name secp256k1 | openssl pkcs8 -topk8 -nocrypt)" 

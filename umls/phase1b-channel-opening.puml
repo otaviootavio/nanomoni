@@ -29,8 +29,8 @@ Issuer -> IssuerDB: Deduct amount from client Account
 Issuer -> Issuer: Generate random salt\nCompute channel ID
 Issuer -> IssuerDB: CREATE PaymentChannel
 
-Issuer -> Issuer: Build OpenChannelResponsePayload
-Issuer --> Client: 201 Created\nOpenChannelResponsePayload
+Issuer -> Issuer: Build OpenChannelResponseDTO
+Issuer --> Client: 201 Created\nOpenChannelResponseDTO
 deactivate Issuer
 
 @enduml

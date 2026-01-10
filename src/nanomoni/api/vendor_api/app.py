@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -15,6 +16,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     generate_latest,
     multiprocess,
+    REGISTRY,
 )
 
 from ...application.vendor.dtos import VendorPublicKeyDTO
@@ -94,9 +96,12 @@ def create_app() -> FastAPI:
     @app.get("/metrics")
     async def metrics() -> Response:
         """Expose Prometheus metrics (aggregated across all workers if multiprocess is enabled)."""
-        registry = CollectorRegistry()
-        multiprocess.MultiProcessCollector(registry)
-        data = generate_latest(registry)
+        if os.getenv("PROMETHEUS_MULTIPROC_DIR"):
+            registry = CollectorRegistry()
+            multiprocess.MultiProcessCollector(registry)
+            data = generate_latest(registry)
+        else:
+            data = generate_latest(REGISTRY)
         return Response(data, media_type=CONTENT_TYPE_LATEST)
 
     return app

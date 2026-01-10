@@ -1,113 +1,107 @@
+### NanoMoni (docker compose)
 
+Prereqs:
+- Docker + Docker Compose v2 (`docker compose`)
 
-### Managing secrets
-We are not using `.env` files but rather `env.sh` files that export the variables as environment variables.
+### 1) Start observability (optional)
 
-They are defined in `/envs/**`. We also provide an example that contains dummy text. To quickstart the project, copy and paste the content into `./envs/env.sh`.
-
-### Running with Python for development
-
-Use Poetry for managing packages and pyenv for managing Python versions.
-
-- Reference for pyenv: https://github.com/pyenv/pyenv
-- Reference for Poetry: https://python-poetry.org/docs/managing-environments/
-
-We are using Python 3.9, so run:
-
-```bash
-pyenv install 3.9
+```sh
+docker compose up -d alloy pyroscope cadvisor grafana prometheus
 ```
 
-```bash
-pyenv local 3.9
+### 2) Export runtime environment variables
+
+This repo uses `envs/env.*.sh` scripts (they `export ...`) so you can load all required variables into your shell:
+
+```sh
+source ./envs/env.issuer.sh
+source ./envs/env.vendor.sh
+source ./envs/env.client.sh
 ```
 
-```bash
-poetry env use python3.9
+### 3) Build + run the services
+
+Issuer and vendor will start their Redis dependencies via `depends_on`.
+
+```sh
+docker compose up -d issuer vendor --build
+docker compose up client
 ```
 
-To add the interpreter to VS Code:
-```bash
-poetry env info --path
+### 4) Stop everything
+
+```sh
+docker compose down
 ```
 
-Then add the path to `Python: Select Interpreter` visible in the command palette (Ctrl+Shift+P or Cmd+Shift+P on macOS).
+## Running Tests
 
+### Prerequisites
 
-### Generate the envs
-Then, create the envs
-```bash
-envs/issuer-env.example.sh
+- Poetry installed (for dependency management)
+- Docker + Docker Compose v2 (for E2E and stress tests)
+
+### Installation
+
+```sh
+poetry install
 ```
 
-```bash
-envs/vendor-env.example.sh
+### Running Tests
+
+#### Integration Tests
+
+Integration tests require Redis to be running. They will automatically skip if Redis is not available.
+
+```sh
+# Start Redis (if not already running)
+docker run --rm -p 6379:6379 redis:7
+
+# Run integration tests
+poetry run pytest tests/integration
+
+# With custom Redis URL
+TEST_REDIS_URL=redis://localhost:6379/15 poetry run pytest tests/integration
+
+# With race condition test options
+poetry run pytest tests/integration/test_lost_update.py --race-iterations=1000
 ```
 
-```bash
-envs/client-env.example.sh
+#### E2E Tests
+
+E2E tests require all services to be running. **Tests no longer manage Docker Compose lifecycle** - you must start services manually before running tests.
+
+```sh
+# 1. Start required services
+source ./envs/env.issuer.sh
+source ./envs/env.vendor.sh
+docker compose up -d issuer redis-issuer
+docker compose up -d vendor  redis-vendor
+
+# 2. Wait for services to be ready, then run tests
+poetry run pytest -m e2e tests/e2e
 ```
 
-### Start the DBs
-```bash
-docker compose up redis-vendor redis-issuer -d
+If services are not available, tests will fail with clear error messages indicating which services are missing.
+
+#### Stress Tests
+
+Stress tests also require all services to be running.
+
+```sh
+# 1. Start required services (same as E2E)
+source ./envs/env.issuer.sh
+source ./envs/env.vendor.sh
+docker compose up -d issuer redis-issuer
+docker compose up -d vendor  redis-vendor
+# 2. Run stress tests
+poetry run pytest -m stress tests/stress
 ```
 
-### Run the scripts
-For each step below, run in a new terminal.
+#### All Tests
 
-First, run the issuer
-```bash
-./scripts/issuer-entrypoint.sh
+```sh
+poetry run pytest
 ```
 
-Then, run the vendor
-```bash
-./scripts/vendor-entrypoint.sh
-```
-
-Finally, run the client.
-```bash
-./scripts/client-entrypoint.sh
-```
-
-### Running with Docker 
-
-```bash
-docker build . -t  nanomoni
-```
-
-```bash
-# 1. Source the environment variables
-. ./envs/env.sh 
-
-# 2. Verify the variable is set (this is correct)
-echo ${SECRET} 
-
-# 3. Run Docker with the environment variable
-docker run -e SECRET=$SECRET nanomoni
-```
-
-### Linter
-```bash
-ruff format src/
-```
-
-```bash
-ruff check src/
-```
-
-### Static checker
-```bash
-mypy src/
-```
-
-# TODO
-- [x] Add cAdvisor + Prometheus + Graphana
-- [x] Create Kerner component UML
-- [x] Create Issuer component UML
-- [x] Create Client component UML
-- [x] Create System data flow overview UML
-- [x] Create Phase 1 / setup UML
-- [x] Create Phase 2 / payments UML
-- [x] Create Phase 3 / close sequence diagram UML
+Note: E2E and stress tests will fail if services are not already running. Integration tests will skip if Redis is unavailable.

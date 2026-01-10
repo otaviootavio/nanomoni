@@ -17,8 +17,8 @@ activate Vendor
 
 Vendor -> Vendor: Verify envelope &\ndeserialize payload
 
-Vendor -> VendorDB: Get latest OffChainTx
-VendorDB --> Vendor: none (first payment)
+Vendor -> VendorDB: Get Channel Aggregate (metadata + latest_tx)
+VendorDB --> Vendor: none (not in cache)
 
 Vendor -> Issuer: Verify Channel State
 activate Issuer
@@ -29,11 +29,9 @@ deactivate Issuer
 
 Vendor -> Vendor: Validate channel & payment
 
-Vendor -> VendorDB: Cache PaymentChannel locally
+Vendor -> VendorDB: Save Channel & OffChainTx
 
-Vendor -> VendorDB: CREATE OffChainTx
-
-Vendor --> Client: 201 Created\nOffChainTxResponseDTO
+Vendor --> Client: 201 Created
 deactivate Vendor
 
 @enduml
