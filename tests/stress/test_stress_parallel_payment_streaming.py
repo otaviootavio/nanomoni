@@ -62,9 +62,12 @@ async def _client_payment_stream(
 
         last_owed_amount = owed_amount
 
-    # Verify final state
+    # Close the channel to settle payments
+    await vendor_client.request_channel_closure(computed_id)
+
+    # Verify final state after closure
     channel_state = await issuer_client.get_channel(computed_id)
-    assert channel_state.is_closed is False
+    assert channel_state.is_closed is True
     assert channel_state.computed_id == computed_id
     assert channel_state.balance == last_owed_amount
     assert channel_state.amount == channel_amount
