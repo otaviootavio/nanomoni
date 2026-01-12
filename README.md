@@ -9,7 +9,17 @@ Prereqs:
 docker compose up -d alloy pyroscope cadvisor grafana prometheus
 ```
 
-### 2) Export runtime environment variables
+### 2) Copy environment variable examples
+
+Copy the example environment files to create the actual environment files:
+
+```sh
+cp envs/client-env.example.sh envs/env.client.sh
+cp envs/issuer-env.example.sh envs/env.issuer.sh
+cp envs/vendor-env.example.sh envs/env.vendor.sh
+```
+
+### 3) Export runtime environment variables
 
 This repo uses `envs/env.*.sh` scripts (they `export ...`) so you can load all required variables into your shell:
 
@@ -19,16 +29,17 @@ source ./envs/env.vendor.sh
 source ./envs/env.client.sh
 ```
 
-### 3) Build + run the services
+### 4) Build + run the services
 
 Issuer and vendor will start their Redis dependencies via `depends_on`.
 
 ```sh
-docker compose up -d issuer vendor --build
-docker compose up client
+docker compose up -d issuer --build
+docker compose up -d vendor --build
+docker compose up client --build
 ```
 
-### 4) Stop everything
+### 5) Stop everything
 
 ```sh
 docker compose down
