@@ -214,26 +214,58 @@ class PaymentChannelService:
             )
             await self.account_repo.upsert(vendor_acc)
 
-            # Pay vendor owed_amount
-        vendor_acc = await self.account_repo.update_balance(
-            close_payload.vendor_public_key_der_b64, close_payload.owed_amount
-        )
         # Return the remainder to client
         remainder = channel.amount - close_payload.owed_amount
 
-        client_acc = await self.account_repo.update_balance(
-            close_payload.client_public_key_der_b64, remainder
+        # The following three operations must behave transactionally:
+        # 1) credit vendor, 2) refund client remainder, 3) mark channel closed.
+        # If any step fails, roll back prior balance changes before propagating
+        # the error to avoid leaving inconsistent balances.
+        vendor_acc = await self.account_repo.update_balance(
+            close_payload.vendor_public_key_der_b64, close_payload.owed_amount
         )
+        try:
+            client_acc = await self.account_repo.update_balance(
+                close_payload.client_public_key_der_b64, remainder
+            )
+        except Exception:
+            # Roll back vendor credit if client refund fails.
+            await self.account_repo.update_balance(
+                close_payload.vendor_public_key_der_b64, -close_payload.owed_amount
+            )
+            raise
 
-        # Mark channel closed and persist the closing signature, updating channel amounts
-        await self.channel_repo.mark_closed(
-            close_payload.computed_id,
-            dto.close_payload_b64,
-            dto.client_close_signature_b64,
-            amount=channel.amount,
-            balance=close_payload.owed_amount,
-            vendor_close_signature_b64=dto.vendor_close_signature_b64,
-        )
+        try:
+            # Mark channel closed and persist the closing signature, updating channel amounts
+            await self.channel_repo.mark_closed(
+                close_payload.computed_id,
+                dto.close_payload_b64,
+                dto.client_close_signature_b64,
+                amount=channel.amount,
+                balance=close_payload.owed_amount,
+                vendor_close_signature_b64=dto.vendor_close_signature_b64,
+            )
+        except Exception as close_err:
+            # Roll back both balance updates if closing persistence fails.
+            rollback_errors: list[Exception] = []
+            try:
+                await self.account_repo.update_balance(
+                    close_payload.vendor_public_key_der_b64, -close_payload.owed_amount
+                )
+            except Exception as e:
+                rollback_errors.append(e)
+            try:
+                await self.account_repo.update_balance(
+                    close_payload.client_public_key_der_b64, -remainder
+                )
+            except Exception as e:
+                rollback_errors.append(e)
+
+            if rollback_errors:
+                raise RuntimeError(
+                    "Failed to mark channel closed and failed to roll back balances"
+                ) from close_err
+            raise
 
         return CloseChannelResponseDTO(
             computed_id=close_payload.computed_id,
