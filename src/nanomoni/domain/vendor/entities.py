@@ -8,11 +8,16 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer, EmailStr
 
+from ...application.shared.serializers import (
+    CommonSerializersMixin,
+    DatetimeSerializerMixin,
+)
+
 
 _sentinel = object()
 
 
-class User(BaseModel):
+class User(CommonSerializersMixin, BaseModel):
     """User entity representing a system user."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -21,14 +26,6 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = None
     is_active: bool = True
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
     @field_serializer("updated_at")
     def serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
@@ -61,7 +58,7 @@ class User(BaseModel):
         self.updated_at = datetime.now(timezone.utc)
 
 
-class Task(BaseModel):
+class Task(CommonSerializersMixin, BaseModel):
     """Task entity representing a monitoring task."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -73,17 +70,9 @@ class Task(BaseModel):
     updated_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
     @field_serializer("user_id")
     def serialize_user_id(self, value: UUID) -> str:
         return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
     @field_serializer("updated_at")
     def serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
@@ -130,7 +119,7 @@ class Task(BaseModel):
         self.updated_at = datetime.now(timezone.utc)
 
 
-class OffChainTx(BaseModel):
+class OffChainTx(DatetimeSerializerMixin, BaseModel):
     """Off-chain transaction entity representing the latest payment channel state."""
 
     computed_id: str = Field(..., description="Payment channel computed ID")
@@ -147,12 +136,8 @@ class OffChainTx(BaseModel):
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
-
-class PaywordState(BaseModel):
+class PaywordState(DatetimeSerializerMixin, BaseModel):
     """Latest PayWord payment state (monotonic counter + token)."""
 
     computed_id: str = Field(..., description="Payment channel computed ID")
@@ -160,12 +145,8 @@ class PaywordState(BaseModel):
     token_b64: str = Field(..., description="Base64 token for this k (preimage)")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
-
-class PaymentChannel(BaseModel):
+class PaymentChannel(CommonSerializersMixin, BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -191,18 +172,6 @@ class PaymentChannel(BaseModel):
 
     # Vendor context: latest transaction state part of the aggregate
     latest_tx: Optional[OffChainTx] = None
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
-
-    @field_serializer("closed_at")
-    def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
-        return value.isoformat() if value else None
 
     @property
     def current_balance(self) -> int:

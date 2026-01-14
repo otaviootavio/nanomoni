@@ -89,15 +89,46 @@ def get_settings() -> Settings:
         )
     if client_payment_count_str is None or client_channel_amount_str is None:
         raise ValueError("CLIENT_PAYMENT_COUNT and CLIENT_CHANNEL_AMOUNT are required")
+
+    try:
+        client_payment_count = int(client_payment_count_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid integer for CLIENT_PAYMENT_COUNT: {client_payment_count_str!r}"
+        ) from e
+
+    try:
+        client_channel_amount = int(client_channel_amount_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid integer for CLIENT_CHANNEL_AMOUNT: {client_channel_amount_str!r}"
+        ) from e
+
+    client_payword_unit_value_value = client_payword_unit_value_str or "1"
+    try:
+        client_payword_unit_value = int(client_payword_unit_value_value)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid integer for CLIENT_PAYWORD_UNIT_VALUE: {client_payword_unit_value_value!r}"
+        ) from e
+
+    if client_payword_max_k_str:
+        try:
+            client_payword_max_k = int(client_payword_max_k_str)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid integer for CLIENT_PAYWORD_MAX_K: {client_payword_max_k_str!r}"
+            ) from e
+    else:
+        client_payword_max_k = None
+
     return Settings(
         client_private_key_pem=client_private_key_pem,
         vendor_base_url=vendor_base_url,
         issuer_base_url=issuer_base_url,
-        client_payment_count=int(client_payment_count_str),
-        client_channel_amount=int(client_channel_amount_str),
+        client_payment_count=client_payment_count,
+        client_channel_amount=client_channel_amount,
         client_payment_mode=client_payment_mode,
-        client_payword_unit_value=int(client_payword_unit_value_str or "1"),
-        client_payword_max_k=int(client_payword_max_k_str)
-        if client_payword_max_k_str
-        else None,
+        client_payword_unit_value=client_payword_unit_value,
+        client_payword_max_k=client_payword_max_k,
     )

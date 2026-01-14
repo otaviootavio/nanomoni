@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel
+
+from ..shared.serializers import CommonSerializersMixin
 
 
 class RegistrationRequestDTO(BaseModel):
@@ -72,7 +74,7 @@ class GetPaymentChannelRequestDTO(BaseModel):
     computed_id: str
 
 
-class PaymentChannelResponseDTO(BaseModel):
+class PaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     """Response with payment channel details."""
 
     id: UUID
@@ -89,14 +91,4 @@ class PaymentChannelResponseDTO(BaseModel):
     created_at: datetime
     closed_at: Optional[datetime] = None
 
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
-
-    @field_serializer("closed_at")
-    def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
-        return value.isoformat() if value else None
+    # `id`, `created_at`, `closed_at` serializers provided by CommonSerializersMixin.

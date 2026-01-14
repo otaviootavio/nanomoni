@@ -103,7 +103,7 @@ async def run_client_flow() -> None:
                     "CLIENT_PAYWORD_MAX_K must be >= CLIENT_PAYMENT_COUNT"
                 )
             # Always use pebbling optimization in clients (trade memory for hashing).
-            PAYWORD_PEBBLE_COUNT = 2**32
+            PAYWORD_PEBBLE_COUNT = payword_max_k
             payword = Payword.create(
                 max_k=payword_max_k, pebble_count=PAYWORD_PEBBLE_COUNT
             )

@@ -57,4 +57,10 @@ async def get_payword_channel(
     service: PaywordChannelService = Depends(get_payword_channel_service),
 ) -> PaywordPaymentChannelResponseDTO:
     payload = GetPaymentChannelRequestDTO(computed_id=channel_id)
-    return await service.get_channel(payload)
+    try:
+        return await service.get_channel(payload)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err),
+        )

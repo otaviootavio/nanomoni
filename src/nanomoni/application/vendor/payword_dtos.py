@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field
+
+from ..shared.serializers import CommonSerializersMixin
 
 
 class ReceivePaywordPaymentDTO(BaseModel):
@@ -14,14 +16,10 @@ class ReceivePaywordPaymentDTO(BaseModel):
     token_b64: str = Field(..., description="Base64 token (preimage) for this k")
 
 
-class PaywordPaymentResponseDTO(BaseModel):
+class PaywordPaymentResponseDTO(CommonSerializersMixin, BaseModel):
     """DTO for returning PayWord payment acceptance data."""
 
     computed_id: str
     k: int
     owed_amount: int
     created_at: datetime
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()

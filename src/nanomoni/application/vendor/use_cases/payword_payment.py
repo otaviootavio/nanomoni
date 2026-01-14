@@ -75,6 +75,73 @@ class PaywordPaymentService:
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
+    async def _save_payword_payment_with_retry(
+        self,
+        *,
+        computed_id: str,
+        payment_channel: PaymentChannel,
+        new_state: PaywordState,
+        is_first_payment: bool,
+    ) -> tuple[int, Optional[PaywordState], PaymentChannel]:
+        """
+        Save a PayWord payment state, reconciling vendor cache races.
+
+        Repository status codes:
+          - 1: stored successfully (returns stored_state)
+          - 0: rejected (race / not increasing; returns current state or None)
+          - 2: channel missing in vendor cache (needs issuer verification)
+
+        This helper centralizes the "first payment vs subsequent payment" flow
+        and the status==2 reconciliation logic so callers don't need deeply
+        nested conditionals.
+        """
+
+        # We may need up to two passes:
+        # - First attempt using current local knowledge.
+        # - If status==2, fetch from issuer, then retry initial-cache + save.
+        for attempt in range(2):
+            if is_first_payment:
+                (
+                    status,
+                    stored_state,
+                ) = await self.payment_channel_repository.save_channel_and_initial_payword_state(
+                    payment_channel, new_state
+                )
+                if status == 1:
+                    return status, stored_state, payment_channel
+
+                # status == 0: cache collision; switch to subsequent-save flow
+                is_first_payment = False
+                cached = await self.payment_channel_repository.get_by_computed_id(
+                    computed_id
+                )
+                if not cached:
+                    raise RuntimeError(
+                        "Race condition handling failed: channel missing after collision"
+                    )
+                payment_channel = cached
+
+            (
+                status,
+                stored_state,
+            ) = await self.payment_channel_repository.save_payword_payment(
+                payment_channel, new_state
+            )
+
+            if status != 2:
+                return status, stored_state, payment_channel
+
+            # status == 2: vendor cache is missing the channel; fetch from issuer,
+            # then cache it and retry the save flow once.
+            if attempt == 0:
+                payment_channel = await self._verify_payword_channel(computed_id)
+                is_first_payment = True
+                continue
+
+        # If we get here, something is inconsistent (e.g., channel was verified
+        # but still appears missing in storage).
+        return status, stored_state, payment_channel
+
     async def receive_payword_payment(
         self, computed_id: str, dto: ReceivePaywordPaymentDTO
     ) -> PaywordPaymentResponseDTO:
@@ -156,57 +223,16 @@ class PaywordPaymentService:
             created_at=datetime.now(timezone.utc),
         )
 
-        status: int = 0
-        stored_state: Optional[PaywordState] = None
-
-        if is_first_payment:
-            (
-                status,
-                stored_state,
-            ) = await self.payment_channel_repository.save_channel_and_initial_payword_state(
-                payment_channel, new_state
-            )
-            if status == 0:
-                is_first_payment = False
-                payment_channel = (
-                    await self.payment_channel_repository.get_by_computed_id(
-                        computed_id
-                    )
-                )
-                if not payment_channel:
-                    raise RuntimeError(
-                        "Race condition handling failed: channel missing after collision"
-                    )
-
-        if not is_first_payment:
-            (
-                status,
-                stored_state,
-            ) = await self.payment_channel_repository.save_payword_payment(
-                payment_channel, new_state
-            )
-
-            if status == 2:
-                payment_channel = await self._verify_payword_channel(computed_id)
-                (
-                    status,
-                    stored_state,
-                ) = await self.payment_channel_repository.save_channel_and_initial_payword_state(
-                    payment_channel, new_state
-                )
-                if status == 0:
-                    payment_channel = (
-                        await self.payment_channel_repository.get_by_computed_id(
-                            computed_id
-                        )
-                    )
-                    if payment_channel:
-                        (
-                            status,
-                            stored_state,
-                        ) = await self.payment_channel_repository.save_payword_payment(
-                            payment_channel, new_state
-                        )
+        (
+            status,
+            stored_state,
+            payment_channel,
+        ) = await self._save_payword_payment_with_retry(
+            computed_id=computed_id,
+            payment_channel=payment_channel,
+            new_state=new_state,
+            is_first_payment=is_first_payment,
+        )
 
         if status == 1:
             if stored_state is None:

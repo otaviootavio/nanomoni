@@ -91,6 +91,67 @@ class PaymentService:
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
+    async def _save_payment_with_retry(
+        self,
+        *,
+        computed_id: str,
+        payment_channel: PaymentChannel,
+        new_tx: OffChainTx,
+        is_first_payment: bool,
+    ) -> tuple[int, Optional[OffChainTx], PaymentChannel]:
+        """
+        Save an off-chain payment, reconciling vendor cache races.
+
+        Repository status codes:
+          - 1: stored successfully (returns stored_tx)
+          - 0: rejected (race / not increasing; returns current tx or None)
+          - 2: channel missing in vendor cache (needs issuer verification)
+
+        """
+
+        # We may need up to two passes:
+        # - First attempt using current local knowledge.
+        # - If status==2, fetch from issuer, then retry initial-cache + save.
+        for attempt in range(2):
+            if is_first_payment:
+                (
+                    status,
+                    stored_tx,
+                ) = await self.payment_channel_repository.save_channel_and_initial_payment(
+                    payment_channel, new_tx
+                )
+                if status == 1:
+                    return status, stored_tx, payment_channel
+
+                # status == 0: cache collision; switch to subsequent-save flow
+                is_first_payment = False
+                cached = await self.payment_channel_repository.get_by_computed_id(
+                    computed_id
+                )
+                if not cached:
+                    raise RuntimeError(
+                        "Race condition handling failed: channel missing after collision"
+                    )
+                payment_channel = cached
+
+            status, stored_tx = await self.payment_channel_repository.save_payment(
+                payment_channel, new_tx
+            )
+
+            if status != 2:
+                return status, stored_tx, payment_channel
+
+            # status == 2: vendor cache is missing the channel; fetch from issuer,
+            # then cache it and retry the save flow once.
+            if attempt == 0:
+                payment_channel = await self._verify_payment_channel(computed_id)
+                is_first_payment = True
+                continue
+
+        # If we get here, something is inconsistent (e.g., channel was verified
+        # but still appears missing in storage).
+        return status, stored_tx, payment_channel
+
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
         # 1) Decode and validate payload (extract computed_id and key fields)
@@ -160,67 +221,16 @@ class PaymentService:
             client_signature_b64=dto.envelope.signature_b64,
         )
 
-        status: int = 0
-        stored_tx: Optional[OffChainTx] = None
-
-        if is_first_payment:
-            # Atomic save of channel metadata + first transaction
-            (
-                status,
-                stored_tx,
-            ) = await self.payment_channel_repository.save_channel_and_initial_payment(
-                payment_channel, off_chain_tx
-            )
-            if status == 0:
-                # Race condition: Channel was created by another concurrent request.
-                # Fallback to standard save_payment flow.
-                is_first_payment = False
-                # Refresh aggregate to get the tx that beat us
-                payment_channel = (
-                    await self.payment_channel_repository.get_by_computed_id(
-                        payload.computed_id
-                    )
-                )
-                if not payment_channel:
-                    # Should not happen if save_channel_and_initial_payment failed due to existence
-                    raise RuntimeError(
-                        "Race condition handling failed: channel missing after collision"
-                    )
-
-        if not is_first_payment:
-            # Standard flow: update existing channel
-            status, stored_tx = await self.payment_channel_repository.save_payment(
-                payment_channel, off_chain_tx
-            )
-
-            if status == 2:
-                # Channel missing locally (edge case: evicted? or race on delete?)
-                # Verify with issuer and create cache, then retry
-                payment_channel = await self._verify_payment_channel(
-                    payload.computed_id
-                )
-                # Try atomic init again (since it's missing now)
-                (
-                    status,
-                    stored_tx,
-                ) = await self.payment_channel_repository.save_channel_and_initial_payment(
-                    payment_channel, off_chain_tx
-                )
-                # If that fails again, it's a very tight loop of creation/deletion, or just simple race.
-                # We can retry save_payment one last time if init failed.
-                if status == 0:
-                    payment_channel = (
-                        await self.payment_channel_repository.get_by_computed_id(
-                            payload.computed_id
-                        )
-                    )
-                    if payment_channel:
-                        (
-                            status,
-                            stored_tx,
-                        ) = await self.payment_channel_repository.save_payment(
-                            payment_channel, off_chain_tx
-                        )
+        (
+            status,
+            stored_tx,
+            _payment_channel,
+        ) = await self._save_payment_with_retry(
+            computed_id=payload.computed_id,
+            payment_channel=payment_channel,
+            new_tx=off_chain_tx,
+            is_first_payment=is_first_payment,
+        )
 
         if status == 1:
             # Success: transaction was stored

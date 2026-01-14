@@ -22,10 +22,21 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         return f"payment_channel:{computed_id}"
 
     async def create(self, channel: PaymentChannel) -> PaymentChannel:
-        # Store channel JSON keyed directly by computed_id
-        await self.store.set(
-            self._computed_id_key(channel.computed_id), channel.model_dump_json()
+        # Store channel JSON keyed directly by computed_id.
+        # Use a Lua script to ensure we don't overwrite an existing channel.
+        key = self._computed_id_key(channel.computed_id)
+        script = (
+            "if redis.call('EXISTS', KEYS[1]) == 1 then "
+            "  return 0 "
+            "end "
+            "redis.call('SET', KEYS[1], ARGV[1]) "
+            "return 1"
         )
+        created = await self.store.eval(
+            script, keys=[key], args=[channel.model_dump_json()]
+        )
+        if int(created) != 1:
+            raise ValueError("Payment channel already exists")
         return channel
 
     async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
@@ -33,6 +44,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if not data:
             return None
         return PaymentChannel.model_validate_json(data)
+
+    async def delete_by_computed_id(self, computed_id: str) -> int:
+        return await self.store.delete(self._computed_id_key(computed_id))
 
     async def mark_closed(
         self,

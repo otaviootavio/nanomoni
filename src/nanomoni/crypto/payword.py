@@ -23,7 +23,7 @@ def bytes_to_b64(data: bytes) -> str:
 
 def hash_bytes(data: bytes) -> bytes:
     """Hash bytes (fixed algorithm: SHA-256)."""
-    return hashlib.sha256(data).digest()
+    return hashlib.new(SHA256, data).digest()
 
 
 def hash_n(data: bytes, n: int) -> bytes:
@@ -56,13 +56,21 @@ def build_hash_chain(seed: bytes, n: int) -> list[bytes]:
 
 def _collect_midpoint_pebbles(*, n: int, pebble_count: int) -> list[int]:
     """
-    Return pebble indices using recursive midpoint splitting (BFS-ish order).
+    Return up to `pebble_count` pebble indices using recursive midpoint splitting.
+
+    Traversal is **depth-first / preorder**: append `mid = (lo + hi) // 2`, then recurse
+    left (`rec(lo, mid)`) and then right (`rec(mid, hi)`). Because we stop once we have
+    enough pebbles, the returned order reflects that DFS traversal, not a breadth-first
+    (level-order) walk of the implicit midpoint tree.
+
+    Note: callers that want monotonically increasing indices can sort the result (see
+    `PaywordPebbleCache.build`).
 
     Examples (n=100):
       pebble_count=0 -> []
       pebble_count=1 -> [50]
-      pebble_count=3 -> [50, 25, 75]
-      pebble_count=7 -> [50, 25, 75, 12, 37, 62, 87]
+      pebble_count=3 -> [50, 25, 12]
+      pebble_count=7 -> [50, 25, 12, 6, 3, 1, 2]
     """
     if pebble_count < 0:
         raise ValueError("pebble_count must be >= 0")

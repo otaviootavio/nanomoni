@@ -102,10 +102,13 @@ class ClientActor:
         Create an open channel request with an embedded PayWord commitment.
 
         Returns:
-            (OpenChannelRequestDTO, PaywordChain) so tests can generate tokens in O(1).
+            (OpenChannelRequestDTO, Payword) so tests can generate tokens efficiently.
+
+            Note: token generation is **not** O(1) in general. Proof generation hashes
+            forward from the nearest cached pebble checkpoint to the requested index.
+            Worst-case hashing work is proportional to the largest gap between pebbles
+            (roughly O(max_k / pebble_count); O(max_k) when pebble_count=0).
         """
-        if max_k <= 0:
-            raise ValueError("max_k must be > 0")
         if unit_value <= 0:
             raise ValueError("unit_value must be > 0")
 

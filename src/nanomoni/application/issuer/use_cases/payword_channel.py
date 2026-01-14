@@ -134,10 +134,6 @@ class PaywordChannelService:
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
-        await self.account_repo.update_balance(
-            open_req_payload.client_public_key_der_b64, -open_req_payload.amount
-        )
-
         channel = PaymentChannel(
             computed_id=computed_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
@@ -151,6 +147,16 @@ class PaywordChannelService:
             payword_hash_alg=payword_hash_alg,
         )
         created = await self.channel_repo.create(channel)
+
+        # Deduct funds only after the channel is persisted. If the balance update
+        # fails for any reason, attempt to roll back by deleting the channel.
+        try:
+            await self.account_repo.update_balance(
+                open_req_payload.client_public_key_der_b64, -open_req_payload.amount
+            )
+        except Exception:
+            await self.channel_repo.delete_by_computed_id(computed_id)
+            raise
 
         if (
             created.payword_root_b64 is None

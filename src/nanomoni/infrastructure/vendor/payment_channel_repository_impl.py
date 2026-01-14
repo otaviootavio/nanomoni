@@ -170,9 +170,21 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         local new_val = ARGV[1]
         local new_k = tonumber(ARGV[2])
 
-        local channel_exists = redis.call('EXISTS', channel_key)
-        if channel_exists == 0 then
+        -- Load and decode the stored channel to read max_k (atomic validation)
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
             return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_k = tonumber(channel.payword_max_k or channel.max_k)
+        if not max_k then
+            -- Channel exists but is missing PayWord configuration
+            return {2, ''}
+        end
+        if new_k > max_k then
+            -- k exceeds PayWord commitment window
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
         end
 
         local current_raw = redis.call('GET', latest_key)
@@ -190,6 +202,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return {0, current_raw}
         end
         """
+
+        if channel.computed_id != new_state.computed_id:
+            raise ValueError("Channel computed_id mismatch for PayWord payment")
 
         latest_key = f"payword_state:latest:{new_state.computed_id}"
         channel_key = f"payment_channel:{new_state.computed_id}"
@@ -218,6 +233,8 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return 1, PaywordState.model_validate_json(payload)
         elif code == 0:
             return 0, PaywordState.model_validate_json(payload) if payload else None
+        elif code == 3:
+            return 3, PaywordState.model_validate_json(payload) if payload else None
         else:
             return 2, None
 

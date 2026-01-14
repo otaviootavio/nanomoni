@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
 from ...crypto.certificates import Envelope
+from ..shared.serializers import CommonSerializersMixin, DatetimeSerializerMixin
 
 
 class CreateUserDTO(BaseModel):
@@ -31,7 +32,7 @@ class UpdateUserDTO(BaseModel):
     email: Optional[EmailStr] = Field(None, max_length=100)
 
 
-class UserResponseDTO(BaseModel):
+class UserResponseDTO(CommonSerializersMixin, BaseModel):
     """DTO for returning user data."""
 
     id: UUID
@@ -40,14 +41,6 @@ class UserResponseDTO(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     is_active: bool
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
     @field_serializer("updated_at")
     def serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
@@ -70,7 +63,7 @@ class UpdateTaskDTO(BaseModel):
     status: Optional[Literal["pending", "running", "completed", "failed"]] = Field(None)
 
 
-class TaskResponseDTO(BaseModel):
+class TaskResponseDTO(CommonSerializersMixin, BaseModel):
     """DTO for returning task data."""
 
     id: UUID
@@ -82,17 +75,9 @@ class TaskResponseDTO(BaseModel):
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
 
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
     @field_serializer("user_id")
     def serialize_user_id(self, value: UUID) -> str:
         return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
     @field_serializer("updated_at")
     def serialize_updated_at(self, value: Optional[datetime]) -> Optional[str]:
@@ -109,7 +94,7 @@ class ReceivePaymentDTO(BaseModel):
     envelope: Envelope = Field(..., description="Signed payment envelope from client")
 
 
-class OffChainTxResponseDTO(BaseModel):
+class OffChainTxResponseDTO(DatetimeSerializerMixin, BaseModel):
     """DTO for returning off-chain transaction data."""
 
     computed_id: str
@@ -117,10 +102,6 @@ class OffChainTxResponseDTO(BaseModel):
     vendor_public_key_der_b64: str
     owed_amount: int
     created_at: datetime
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
 
 
 class PaginatedResponse(BaseModel):
