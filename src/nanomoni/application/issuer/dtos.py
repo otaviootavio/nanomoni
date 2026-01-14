@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from ..shared.serializers import CommonSerializersMixin
+from nanomoni.domain.shared.serializers import CommonSerializersMixin
 
 
 class RegistrationRequestDTO(BaseModel):

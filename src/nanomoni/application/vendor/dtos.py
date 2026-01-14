@@ -9,7 +9,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
 from ...crypto.certificates import Envelope
-from ..shared.serializers import CommonSerializersMixin, DatetimeSerializerMixin
+from nanomoni.domain.shared.serializers import (
+    CommonSerializersMixin,
+    DatetimeSerializerMixin,
+)
 
 
 class CreateUserDTO(BaseModel):

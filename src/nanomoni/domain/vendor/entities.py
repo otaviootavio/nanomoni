@@ -8,10 +8,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer, EmailStr
 
-from ...application.shared.serializers import (
-    CommonSerializersMixin,
-    DatetimeSerializerMixin,
-)
+from ..shared.serializers import CommonSerializersMixin, DatetimeSerializerMixin
 
 
 _sentinel = object()

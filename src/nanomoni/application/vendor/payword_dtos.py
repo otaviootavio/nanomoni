@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from ..shared.serializers import CommonSerializersMixin
+from nanomoni.domain.shared.serializers import CommonSerializersMixin
 
 
 class ReceivePaywordPaymentDTO(BaseModel):

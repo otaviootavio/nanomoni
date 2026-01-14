@@ -1,4 +1,8 @@
-"""Shared Pydantic serializers used across DTOs/entities."""
+"""Shared Pydantic serializers usable by domain and application layers.
+
+This module intentionally lives in the domain so domain entities can use it
+without depending on the application layer.
+"""
 
 from __future__ import annotations
 

@@ -8,7 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from ...application.shared.serializers import CommonSerializersMixin
+from ..shared.serializers import CommonSerializersMixin
 
 
 class Account(CommonSerializersMixin, BaseModel):
