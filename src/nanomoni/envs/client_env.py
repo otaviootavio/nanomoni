@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from typing import Optional
 
 from pydantic import BaseModel, computed_field, field_validator
 from cryptography.hazmat.primitives import serialization
@@ -12,6 +13,11 @@ class Settings(BaseModel):
     client_private_key_pem: str
     vendor_base_url: str
     issuer_base_url: str
+    client_payment_count: int = 1
+    client_channel_amount: int = 1
+    client_payment_mode: str = "signature"
+    client_payword_unit_value: int = 1
+    client_payword_max_k: Optional[int] = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -72,12 +78,26 @@ def get_settings() -> Settings:
     client_private_key_pem = os.environ.get("CLIENT_PRIVATE_KEY_PEM")
     vendor_base_url = os.environ.get("VENDOR_BASE_URL")
     issuer_base_url = os.environ.get("ISSUER_BASE_URL")
+    client_payment_count_str = os.environ.get("CLIENT_PAYMENT_COUNT")
+    client_channel_amount_str = os.environ.get("CLIENT_CHANNEL_AMOUNT")
+    client_payment_mode = (os.environ.get("CLIENT_PAYMENT_MODE") or "signature").lower()
+    client_payword_unit_value_str = os.environ.get("CLIENT_PAYWORD_UNIT_VALUE")
+    client_payword_max_k_str = os.environ.get("CLIENT_PAYWORD_MAX_K")
     if not (client_private_key_pem and vendor_base_url and issuer_base_url):
         raise ValueError(
             "CLIENT_PRIVATE_KEY_PEM, VENDOR_BASE_URL, and ISSUER_BASE_URL are required"
         )
+    if client_payment_count_str is None or client_channel_amount_str is None:
+        raise ValueError("CLIENT_PAYMENT_COUNT and CLIENT_CHANNEL_AMOUNT are required")
     return Settings(
         client_private_key_pem=client_private_key_pem,
         vendor_base_url=vendor_base_url,
         issuer_base_url=issuer_base_url,
+        client_payment_count=int(client_payment_count_str),
+        client_channel_amount=int(client_channel_amount_str),
+        client_payment_mode=client_payment_mode,
+        client_payword_unit_value=int(client_payword_unit_value_str or "1"),
+        client_payword_max_k=int(client_payword_max_k_str)
+        if client_payword_max_k_str
+        else None,
     )

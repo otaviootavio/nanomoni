@@ -40,6 +40,13 @@ class PaymentChannel(BaseModel):
     close_payload_b64: Optional[str] = None
     client_close_signature_b64: Optional[str] = None
     vendor_close_signature_b64: Optional[str] = None
+
+    # Optional PayWord (hash-chain) commitment for PayWord-enabled channels.
+    payword_root_b64: Optional[str] = None
+    payword_unit_value: Optional[int] = None
+    payword_max_k: Optional[int] = None
+    payword_hash_alg: Optional[str] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 

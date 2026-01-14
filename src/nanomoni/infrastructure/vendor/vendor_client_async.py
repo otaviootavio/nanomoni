@@ -9,6 +9,10 @@ from ...application.vendor.dtos import (
     ReceivePaymentDTO,
     VendorPublicKeyDTO,
 )
+from ...application.vendor.payword_dtos import (
+    PaywordPaymentResponseDTO,
+    ReceivePaywordPaymentDTO,
+)
 from ..http.http_client import AsyncHttpClient
 
 
@@ -38,13 +42,28 @@ class VendorClientAsync:
         as ``OffChainTxResponseDTO`` to keep this client aligned with the
         vendor API contract.
         """
-        path = f"/vendor/channels/{computed_id}/payments"
+        path = f"/vendor/channels/signature/{computed_id}/payments"
         resp = await self._http.post(path, json=dto.model_dump())
         return OffChainTxResponseDTO.model_validate(resp.json())
 
+    async def send_payword_payment(
+        self,
+        computed_id: str,
+        dto: ReceivePaywordPaymentDTO,
+    ) -> PaywordPaymentResponseDTO:
+        """Send a PayWord payment to the vendor API."""
+        path = f"/vendor/channels/payword/{computed_id}/payments"
+        resp = await self._http.post(path, json=dto.model_dump())
+        return PaywordPaymentResponseDTO.model_validate(resp.json())
+
     async def request_close_channel(self, dto: CloseChannelDTO) -> None:
         """Ask the vendor to close a payment channel."""
-        path = f"/vendor/channels/{dto.computed_id}/closure-requests"
+        path = f"/vendor/channels/signature/{dto.computed_id}/closure-requests"
+        await self._http.post(path, json=dto.model_dump())
+
+    async def request_close_channel_payword(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to close a PayWord payment channel."""
+        path = f"/vendor/channels/payword/{dto.computed_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def aclose(self) -> None:

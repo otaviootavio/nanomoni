@@ -13,6 +13,7 @@ from ...infrastructure.issuer.payment_channel_repository_impl import (
 )
 from ...application.issuer.use_cases.registration import RegistrationService
 from ...application.issuer.use_cases.payment_channel import PaymentChannelService
+from ...application.issuer.use_cases.payword_channel import PaywordChannelService
 
 
 @lru_cache()
@@ -56,5 +57,14 @@ def get_payment_channel_service() -> PaymentChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaymentChannelService(
+        account_repo, channel_repo, settings.issuer_private_key
+    )
+
+
+def get_payword_channel_service() -> PaywordChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    settings = get_settings_dependency()
+    return PaywordChannelService(
         account_repo, channel_repo, settings.issuer_private_key
     )

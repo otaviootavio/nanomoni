@@ -14,6 +14,11 @@ from ...application.issuer.dtos import (
     GetPaymentChannelRequestDTO,
     PaymentChannelResponseDTO,
 )
+from ...application.issuer.payword_dtos import (
+    PaywordOpenChannelResponseDTO,
+    PaywordPaymentChannelResponseDTO,
+    PaywordSettlementRequestDTO,
+)
 from ..http.http_client import HttpClient, AsyncHttpClient
 
 
@@ -37,7 +42,7 @@ class IssuerClient:
     def open_payment_channel(
         self, dto: OpenChannelRequestDTO
     ) -> OpenChannelResponseDTO:
-        resp = self._http.post("/issuer/channels", json=dto.model_dump())
+        resp = self._http.post("/issuer/channels/signature", json=dto.model_dump())
         return OpenChannelResponseDTO.model_validate(resp.json())
 
     def close_payment_channel(
@@ -45,16 +50,38 @@ class IssuerClient:
         computed_id: str,
         dto: CloseChannelRequestDTO,
     ) -> CloseChannelResponseDTO:
-        path = f"/issuer/channels/{computed_id}/settlements"
+        path = f"/issuer/channels/signature/{computed_id}/settlements"
+        resp = self._http.post(path, json=dto.model_dump())
+        return CloseChannelResponseDTO.model_validate(resp.json())
+
+    def settle_payword_payment_channel(
+        self,
+        computed_id: str,
+        dto: PaywordSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        path = f"/issuer/channels/payword/{computed_id}/settlements"
         resp = self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 
     def get_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaymentChannelResponseDTO:
-        path = f"/issuer/channels/{dto.computed_id}"
+        path = f"/issuer/channels/signature/{dto.computed_id}"
         resp = self._http.get(path)
         return PaymentChannelResponseDTO.model_validate(resp.json())
+
+    def open_payword_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaywordOpenChannelResponseDTO:
+        resp = self._http.post("/issuer/channels/payword", json=dto.model_dump())
+        return PaywordOpenChannelResponseDTO.model_validate(resp.json())
+
+    def get_payword_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaywordPaymentChannelResponseDTO:
+        path = f"/issuer/channels/payword/{dto.computed_id}"
+        resp = self._http.get(path)
+        return PaywordPaymentChannelResponseDTO.model_validate(resp.json())
 
     def close(self) -> None:
         self._http.close()
@@ -91,7 +118,9 @@ class AsyncIssuerClient:
     async def open_payment_channel(
         self, dto: OpenChannelRequestDTO
     ) -> OpenChannelResponseDTO:
-        resp = await self._http.post("/issuer/channels", json=dto.model_dump())
+        resp = await self._http.post(
+            "/issuer/channels/signature", json=dto.model_dump()
+        )
         return OpenChannelResponseDTO.model_validate(resp.json())
 
     async def close_payment_channel(
@@ -99,16 +128,38 @@ class AsyncIssuerClient:
         computed_id: str,
         dto: CloseChannelRequestDTO,
     ) -> CloseChannelResponseDTO:
-        path = f"/issuer/channels/{computed_id}/settlements"
+        path = f"/issuer/channels/signature/{computed_id}/settlements"
+        resp = await self._http.post(path, json=dto.model_dump())
+        return CloseChannelResponseDTO.model_validate(resp.json())
+
+    async def settle_payword_payment_channel(
+        self,
+        computed_id: str,
+        dto: PaywordSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        path = f"/issuer/channels/payword/{computed_id}/settlements"
         resp = await self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 
     async def get_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaymentChannelResponseDTO:
-        path = f"/issuer/channels/{dto.computed_id}"
+        path = f"/issuer/channels/signature/{dto.computed_id}"
         resp = await self._http.get(path)
         return PaymentChannelResponseDTO.model_validate(resp.json())
+
+    async def open_payword_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaywordOpenChannelResponseDTO:
+        resp = await self._http.post("/issuer/channels/payword", json=dto.model_dump())
+        return PaywordOpenChannelResponseDTO.model_validate(resp.json())
+
+    async def get_payword_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaywordPaymentChannelResponseDTO:
+        path = f"/issuer/channels/payword/{dto.computed_id}"
+        resp = await self._http.get(path)
+        return PaywordPaymentChannelResponseDTO.model_validate(resp.json())
 
     async def aclose(self) -> None:
         await self._http.aclose()

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-
 from cryptography.hazmat.primitives.asymmetric import ec
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ...crypto.certificates import (
     Envelope,
@@ -13,6 +12,8 @@ from ...crypto.certificates import (
 
 class OpenChannelRequestPayload(BaseModel):
     """Payload carried by the client-signed open-channel request envelope."""
+
+    model_config = ConfigDict(extra="forbid")
 
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str

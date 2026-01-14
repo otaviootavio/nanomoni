@@ -40,8 +40,8 @@ class PaymentChannelRepository(ABC):
     async def mark_closed(
         self,
         computed_id: str,
-        close_payload_b64: str,
-        client_close_signature_b64: str,
+        close_payload_b64: Optional[str],
+        client_close_signature_b64: Optional[str],
         *,
         amount: int,
         balance: int,

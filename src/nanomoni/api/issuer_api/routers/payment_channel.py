@@ -17,7 +17,7 @@ router = APIRouter(tags=["channels"])
 
 
 @router.post(
-    "/channels",
+    "/channels/signature",
     response_model=OpenChannelResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
@@ -32,7 +32,7 @@ async def open_payment_channel(
 
 
 @router.post(
-    "/channels/{channel_id}/settlements",
+    "/channels/signature/{channel_id}/settlements",
     response_model=CloseChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
@@ -48,7 +48,7 @@ async def close_payment_channel(
 
 
 @router.get(
-    "/channels/{channel_id}",
+    "/channels/signature/{channel_id}",
     response_model=PaymentChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )

@@ -131,6 +131,10 @@ class PaymentChannelService:
             salt_b64=salt_b64,
             amount=open_req_payload.amount,
             balance=0,
+            payword_root_b64=None,
+            payword_unit_value=None,
+            payword_max_k=None,
+            payword_hash_alg=None,
         )
         created = await self.channel_repo.create(channel)
 
@@ -243,4 +247,13 @@ class PaymentChannelService:
         channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
         if not channel:
             raise ValueError("Payment channel not found")
-        return PaymentChannelResponseDTO(**channel.model_dump())
+        # Signature flow response should not expose PayWord fields.
+        data = channel.model_dump(
+            exclude={
+                "payword_root_b64",
+                "payword_unit_value",
+                "payword_max_k",
+                "payword_hash_alg",
+            }
+        )
+        return PaymentChannelResponseDTO(**data)

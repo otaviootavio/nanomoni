@@ -38,13 +38,13 @@ class VendorClient:
         as ``OffChainTxResponseDTO`` to keep this client aligned with the
         vendor API contract.
         """
-        path = f"/vendor/channels/{computed_id}/payments"
+        path = f"/vendor/channels/signature/{computed_id}/payments"
         resp = self._http.post(path, json=dto.model_dump())
         return OffChainTxResponseDTO.model_validate(resp.json())
 
     def request_close_channel(self, dto: CloseChannelDTO) -> None:
         """Ask the vendor to close a payment channel."""
-        path = f"/vendor/channels/{dto.computed_id}/closure-requests"
+        path = f"/vendor/channels/signature/{dto.computed_id}/closure-requests"
         self._http.post(path, json=dto.model_dump())
 
     def close(self) -> None:

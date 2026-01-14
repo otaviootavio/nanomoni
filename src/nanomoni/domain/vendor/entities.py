@@ -152,6 +152,19 @@ class OffChainTx(BaseModel):
         return value.isoformat()
 
 
+class PaywordState(BaseModel):
+    """Latest PayWord payment state (monotonic counter + token)."""
+
+    computed_id: str = Field(..., description="Payment channel computed ID")
+    k: int = Field(..., ge=0, description="Monotonic PayWord counter")
+    token_b64: str = Field(..., description="Base64 token for this k (preimage)")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return value.isoformat()
+
+
 class PaymentChannel(BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
@@ -166,6 +179,13 @@ class PaymentChannel(BaseModel):
     close_payload_b64: Optional[str] = None
     client_close_signature_b64: Optional[str] = None
     vendor_close_signature_b64: Optional[str] = None
+
+    # Optional PayWord (hash-chain) commitment for PayWord-enabled channels.
+    payword_root_b64: Optional[str] = None
+    payword_unit_value: Optional[int] = None
+    payword_max_k: Optional[int] = None
+    payword_hash_alg: Optional[str] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 
