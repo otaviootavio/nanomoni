@@ -128,16 +128,8 @@ async def run_client_flow() -> None:
             #   payment_count = how many payments this run; max_i = channel capacity in steps.
             # - The channel amount must cover the maximum possible owed amount:
             #   (max_i * unit_value) <= channel_amount  (issuer validates this at open).
-            paytree_unit_value = (
-                settings.client_paytree_unit_value
-                if hasattr(settings, "client_paytree_unit_value")
-                else settings.client_payword_unit_value
-            )
-            paytree_max_i = (
-                settings.client_paytree_max_i
-                if hasattr(settings, "client_paytree_max_i")
-                else payment_count
-            )
+            paytree_unit_value = settings.client_paytree_unit_value
+            paytree_max_i = settings.client_paytree_max_i or payment_count
             if paytree_max_i < payment_count:
                 raise RuntimeError(
                     "CLIENT_PAYTREE_MAX_I must be >= CLIENT_PAYMENT_COUNT"
@@ -235,15 +227,27 @@ async def run_client_flow() -> None:
         elif client_mode == "payword":
             if payword is None:
                 raise RuntimeError("PayWord not initialized")
+            # Precompute payment proofs before sending requests, so the runtime path
+            # measures mostly network + server-side verification.
+            payword_payments: list[ReceivePaywordPaymentDTO] = []
             for k in payments:
-                token_b64 = payword.payment_proof_b64(k=k)
-                await vendor.send_payword_payment(
-                    computed_id,
-                    ReceivePaywordPaymentDTO(k=k, token_b64=token_b64),
+                payword_payments.append(
+                    ReceivePaywordPaymentDTO(
+                        k=k, token_b64=payword.payment_proof_b64(k=k)
+                    )
                 )
+
+            for payword_dto in payword_payments:
+                await vendor.send_payword_payment(computed_id, payword_dto)
         else:  # paytree
             if paytree is None:
                 raise RuntimeError("PayTree not initialized")
+            # Note: We generate proofs on-demand in the loop rather than precomputing them.
+            # In our experiments, precomputing all PayTree proofs (i, leaf_b64, siblings_b64[])
+            # did not improve TPS but caused significant memory growth, especially for large
+            # payment counts. The siblings_b64 arrays can be large (O(log n) per proof).
+            # Although the tree leaves are still loaded in memory (as part of the Paytree
+            # object), generating proofs on-demand reduces peak memory usage.
             for i in payments:
                 i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
                 await vendor.send_paytree_payment(

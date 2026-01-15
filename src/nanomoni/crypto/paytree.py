@@ -179,7 +179,6 @@ class Paytree:
         # Generate random secrets for each leaf
         if seed is not None:
             # For deterministic testing: derive secrets from seed
-            import hashlib
 
             leaf_secrets: list[bytes] = []
             for i in range(max_i + 1):

@@ -18,6 +18,7 @@ export CLIENT_CHANNEL_AMOUNT=10000000
 # Client payment mode:
 # - "signature": send signed owed_amount updates (existing behavior)
 # - "payword": send PayWord hash-chain tokens (k, token_b64)
+# - "paytree": send PayTree Merkle proof payments (i, leaf_b64, siblings_b64[])
 export CLIENT_PAYMENT_MODE="payword"
 
 # PayWord mode mental model:
@@ -41,5 +42,27 @@ export CLIENT_PAYWORD_UNIT_VALUE=1
 # - if unset, the client runner defaults it to CLIENT_PAYMENT_COUNT for this run
 # - set explicitly if you want a channel with capacity beyond this run
 export CLIENT_PAYWORD_MAX_K="$CLIENT_PAYMENT_COUNT"
+
+# PayTree mode mental model:
+# - You lock funds in the channel with CLIENT_CHANNEL_AMOUNT (money cap).
+# - You send a monotonic index i; owed_amount = i * CLIENT_PAYTREE_UNIT_VALUE (step value).
+# - Constraints enforced by vendor/issuer:
+#   1) i must be increasing
+#   2) i <= CLIENT_PAYTREE_MAX_I (index cap committed when opening the channel)
+#   3) i * unit_value <= CLIENT_CHANNEL_AMOUNT (money cap)
+#
+# Good default if you're just running once:
+# - set CLIENT_PAYTREE_MAX_I = CLIENT_PAYMENT_COUNT
+# - pick CLIENT_PAYTREE_UNIT_VALUE as "price per step"
+# - keep CLIENT_CHANNEL_AMOUNT > (CLIENT_PAYMENT_COUNT * CLIENT_PAYTREE_UNIT_VALUE) if you want remainder refunded
+#
+# Note: CLIENT_PAYTREE_UNIT_VALUE = CLIENT_CHANNEL_AMOUNT / CLIENT_PAYMENT_COUNT is only true if you WANT
+# the last payment to exactly reach the channel cap (and it divides evenly). It is not required.
+export CLIENT_PAYTREE_UNIT_VALUE=1
+
+# PayTree index cap (channel commitment). Optional convenience:
+# - if unset, the client runner defaults it to CLIENT_PAYMENT_COUNT for this run
+# - set explicitly if you want a channel with capacity beyond this run
+export CLIENT_PAYTREE_MAX_I="$CLIENT_PAYMENT_COUNT"
 
 export CLIENT_RAMP_DELAY_SEC=5
