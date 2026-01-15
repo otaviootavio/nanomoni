@@ -99,6 +99,27 @@ class IssuerTestClient:
         response.raise_for_status()
         return OpenChannelResponseDTO.model_validate(response.json())
 
+    async def open_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> httpx.Response:
+        """
+        Open a payment channel without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        if self._http_client is not None:
+            return await self._http_client.post(
+                f"{self.base_url}/issuer/channels/signature",
+                json=open_channel_request.model_dump(),
+            )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await client.post(
+                f"{self.base_url}/issuer/channels/signature",
+                json=open_channel_request.model_dump(),
+            )
+
     async def get_channel(self, computed_id: str) -> PaymentChannelResponseDTO:
         """
         Get payment channel state by computed ID.
@@ -171,6 +192,27 @@ class IssuerTestClient:
 
         response.raise_for_status()
         return PaywordOpenChannelResponseDTO.model_validate(response.json())
+
+    async def open_payword_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> httpx.Response:
+        """
+        Open a PayWord-enabled payment channel without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        if self._http_client is not None:
+            return await self._http_client.post(
+                f"{self.base_url}/issuer/channels/payword",
+                json=open_channel_request.model_dump(),
+            )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await client.post(
+                f"{self.base_url}/issuer/channels/payword",
+                json=open_channel_request.model_dump(),
+            )
 
     async def get_payword_channel(
         self, computed_id: str
