@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field
+
+from ..shared.serializers import CommonSerializersMixin
 
 
-class Account(BaseModel):
+class Account(CommonSerializersMixin, BaseModel):
     """Generic account identified by a public key with a spendable balance."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -17,16 +19,8 @@ class Account(BaseModel):
     balance: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
 
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
-
-
-class PaymentChannel(BaseModel):
+class PaymentChannel(CommonSerializersMixin, BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -40,17 +34,12 @@ class PaymentChannel(BaseModel):
     close_payload_b64: Optional[str] = None
     client_close_signature_b64: Optional[str] = None
     vendor_close_signature_b64: Optional[str] = None
+
+    # Optional PayWord (hash-chain) commitment for PayWord-enabled channels.
+    payword_root_b64: Optional[str] = None
+    payword_unit_value: Optional[int] = None
+    payword_max_k: Optional[int] = None
+    payword_hash_alg: Optional[str] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
-
-    @field_serializer("id")
-    def serialize_id(self, value: UUID) -> str:
-        return str(value)
-
-    @field_serializer("created_at")
-    def serialize_created_at(self, value: datetime) -> str:
-        return value.isoformat()
-
-    @field_serializer("closed_at")
-    def serialize_closed_at(self, value: Optional[datetime]) -> Optional[str]:
-        return value.isoformat() if value else None

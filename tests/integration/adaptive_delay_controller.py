@@ -7,6 +7,8 @@ race conditions during testing.
 
 from __future__ import annotations
 
+from typing import List, Optional
+
 
 class AdaptiveDelayController:
     """PI Controller with dynamic gain scheduling for targeting 50% race rate."""
@@ -25,9 +27,9 @@ class AdaptiveDelayController:
         self.gain_reduction_factor: float = gain_reduction_factor
         self.min_kp: float = min_kp
         self._prev_delay_sign: int = 0
-        self.delay_history: list[float] = []
+        self.delay_history: List[float] = []
 
-    def update(self, step_outcome: float, iteration: int | None = None) -> float:
+    def update(self, step_outcome: float, iteration: Optional[int] = None) -> float:
         """
         Update delay based on outcome.
 

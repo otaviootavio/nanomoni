@@ -6,7 +6,7 @@ import time
 
 from cryptography.exceptions import InvalidSignature
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 from ....application.vendor.dtos import (
     CloseChannelDTO,
@@ -16,7 +16,7 @@ from ....application.vendor.dtos import (
 from ....application.vendor.use_cases.payment import PaymentService
 from ..dependencies import get_payment_service
 
-router = APIRouter(prefix="/channels", tags=["channels"])
+router = APIRouter(prefix="/channels/signature", tags=["channels", "signature"])
 
 payment_requests_total = Counter(
     "payment_requests_total",
@@ -25,8 +25,8 @@ payment_requests_total = Counter(
 )
 
 PAYMENT_DURATION_BUCKETS = (
-    [float(x) for x in range(1, 21)]  # 1..20ms (1ms resolution)
-    + [25.0, 30.0, 40.0, 50.0]
+    [round(0.5 * i, 1) for i in range(1, 21)]  # 0.5ms..10ms (0.5ms resolution)
+    + [float(x) for x in range(15, 55, 5)]  # 15, 20, 25, ..., 50ms (5ms resolution)
     + [float("inf")]
 )
 

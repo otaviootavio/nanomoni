@@ -1,5 +1,6 @@
 services:
   client:
+    cpuset: "2-5"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.client
@@ -9,11 +10,15 @@ services:
       CLIENT_PRIVATE_KEY_PEM: ${CLIENT_PRIVATE_KEY_PEM}
       CLIENT_PAYMENT_COUNT: ${CLIENT_PAYMENT_COUNT}
       CLIENT_CHANNEL_AMOUNT: ${CLIENT_CHANNEL_AMOUNT}
+      CLIENT_PAYMENT_MODE: ${CLIENT_PAYMENT_MODE}
+      CLIENT_PAYWORD_UNIT_VALUE: ${CLIENT_PAYWORD_UNIT_VALUE}
+      CLIENT_PAYWORD_MAX_K: ${CLIENT_PAYWORD_MAX_K}
       CLIENT_RAMP_DELAY_SEC: ${CLIENT_RAMP_DELAY_SEC}
     networks:
       - app-network
 
   issuer:
+    cpuset: "2-5"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.issuer
@@ -36,6 +41,7 @@ services:
       - app-network
 
   vendor:
+    cpuset: "2-5"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.vendor
@@ -60,6 +66,7 @@ services:
       - app-network
 
   redis-vendor:
+    cpuset: "2-5"
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
@@ -70,6 +77,7 @@ services:
       - app-network
 
   redis-issuer:
+    cpuset: "2-5"
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:

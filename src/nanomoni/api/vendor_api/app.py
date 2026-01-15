@@ -21,7 +21,7 @@ from prometheus_client import (
 
 from ...application.vendor.dtos import VendorPublicKeyDTO
 from ...envs.vendor_env import get_settings, register_vendor_with_issuer
-from .routers import payments, tasks, users
+from .routers import payments, payword_payments, tasks, users
 
 settings = get_settings()
 
@@ -56,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix="/api/v1/vendor")
     app.include_router(tasks.router, prefix="/api/v1/vendor")
     app.include_router(payments.router, prefix="/api/v1/vendor")
+    app.include_router(payword_payments.router, prefix="/api/v1/vendor")
 
     @app.get("/")
     async def root() -> dict[str, str]:

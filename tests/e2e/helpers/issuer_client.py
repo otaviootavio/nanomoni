@@ -13,23 +13,35 @@ from nanomoni.application.issuer.dtos import (
     CloseChannelRequestDTO,
     CloseChannelResponseDTO,
 )
+from nanomoni.application.issuer.payword_dtos import (
+    PaywordOpenChannelResponseDTO,
+    PaywordPaymentChannelResponseDTO,
+)
 
 
 class IssuerTestClient:
     """HTTP client for interacting with the Issuer API in E2E tests."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
         """
         Initialize the issuer test client.
 
         Args:
             base_url: Base URL of the issuer API
             timeout: Request timeout in seconds
+            http_client: Optional shared AsyncClient (reuses connections / keep-alive)
         """
         if not base_url:
             raise ValueError("IssuerTestClient requires a non-empty base_url.")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._http_client = http_client
 
     async def register_account(
         self, public_key_der_b64: str
@@ -44,13 +56,20 @@ class IssuerTestClient:
             RegistrationResponseDTO with account balance
         """
         dto = RegistrationRequestDTO(client_public_key_der_b64=public_key_der_b64)
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
+        if self._http_client is not None:
+            response = await self._http_client.post(
                 f"{self.base_url}/issuer/accounts",
                 json=dto.model_dump(),
             )
-            response.raise_for_status()
-            return RegistrationResponseDTO.model_validate(response.json())
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/issuer/accounts",
+                    json=dto.model_dump(),
+                )
+
+        response.raise_for_status()
+        return RegistrationResponseDTO.model_validate(response.json())
 
     async def open_channel(
         self,
@@ -65,13 +84,20 @@ class IssuerTestClient:
         Returns:
             OpenChannelResponseDTO with channel details including computed_id
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/issuer/channels",
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/issuer/channels/signature",
                 json=open_channel_request.model_dump(),
             )
-            response.raise_for_status()
-            return OpenChannelResponseDTO.model_validate(response.json())
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/issuer/channels/signature",
+                    json=open_channel_request.model_dump(),
+                )
+
+        response.raise_for_status()
+        return OpenChannelResponseDTO.model_validate(response.json())
 
     async def get_channel(self, computed_id: str) -> PaymentChannelResponseDTO:
         """
@@ -83,12 +109,18 @@ class IssuerTestClient:
         Returns:
             PaymentChannelResponseDTO with channel state
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(
-                f"{self.base_url}/issuer/channels/{computed_id}"
+        if self._http_client is not None:
+            response = await self._http_client.get(
+                f"{self.base_url}/issuer/channels/signature/{computed_id}"
             )
-            response.raise_for_status()
-            return PaymentChannelResponseDTO.model_validate(response.json())
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/issuer/channels/signature/{computed_id}"
+                )
+
+        response.raise_for_status()
+        return PaymentChannelResponseDTO.model_validate(response.json())
 
     async def close_channel(
         self,
@@ -105,10 +137,54 @@ class IssuerTestClient:
         Returns:
             CloseChannelResponseDTO with final balances
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/issuer/channels/{computed_id}/settlements",
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/issuer/channels/signature/{computed_id}/settlements",
                 json=close_request.model_dump(),
             )
-            response.raise_for_status()
-            return CloseChannelResponseDTO.model_validate(response.json())
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/issuer/channels/signature/{computed_id}/settlements",
+                    json=close_request.model_dump(),
+                )
+
+        response.raise_for_status()
+        return CloseChannelResponseDTO.model_validate(response.json())
+
+    async def open_payword_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaywordOpenChannelResponseDTO:
+        """Open a PayWord-enabled payment channel."""
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/issuer/channels/payword",
+                json=open_channel_request.model_dump(),
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/issuer/channels/payword",
+                    json=open_channel_request.model_dump(),
+                )
+
+        response.raise_for_status()
+        return PaywordOpenChannelResponseDTO.model_validate(response.json())
+
+    async def get_payword_channel(
+        self, computed_id: str
+    ) -> PaywordPaymentChannelResponseDTO:
+        """Get PayWord payment channel state by computed ID."""
+        if self._http_client is not None:
+            response = await self._http_client.get(
+                f"{self.base_url}/issuer/channels/payword/{computed_id}"
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/issuer/channels/payword/{computed_id}"
+                )
+
+        response.raise_for_status()
+        return PaywordPaymentChannelResponseDTO.model_validate(response.json())
