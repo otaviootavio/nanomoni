@@ -14,6 +14,10 @@ from nanomoni.application.vendor.payword_dtos import (
     ReceivePaywordPaymentDTO,
     PaywordPaymentResponseDTO,
 )
+from nanomoni.application.vendor.paytree_dtos import (
+    ReceivePaytreePaymentDTO,
+    PaytreePaymentResponseDTO,
+)
 from nanomoni.crypto.certificates import Envelope
 
 
@@ -164,6 +168,46 @@ class VendorTestClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/vendor/channels/payword/{channel_id}/closure-requests",
+                    json=dto.model_dump(),
+                )
+
+        response.raise_for_status()
+        assert response.status_code == 204
+
+    async def receive_paytree_payment(
+        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+    ) -> PaytreePaymentResponseDTO:
+        """Submit a PayTree payment to the vendor."""
+        dto = ReceivePaytreePaymentDTO(
+            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+        )
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+                json=dto.model_dump(),
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+                    json=dto.model_dump(),
+                )
+
+        response.raise_for_status()
+        return PaytreePaymentResponseDTO.model_validate(response.json())
+
+    async def request_channel_closure_paytree(self, channel_id: str) -> None:
+        """Request closure of a PayTree channel."""
+        dto = CloseChannelDTO(computed_id=channel_id)
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
+                json=dto.model_dump(),
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
                     json=dto.model_dump(),
                 )
 

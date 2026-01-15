@@ -17,6 +17,10 @@ from nanomoni.application.issuer.payword_dtos import (
     PaywordOpenChannelResponseDTO,
     PaywordPaymentChannelResponseDTO,
 )
+from nanomoni.application.issuer.paytree_dtos import (
+    PaytreeOpenChannelResponseDTO,
+    PaytreePaymentChannelResponseDTO,
+)
 
 
 class IssuerTestClient:
@@ -230,3 +234,40 @@ class IssuerTestClient:
 
         response.raise_for_status()
         return PaywordPaymentChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaytreeOpenChannelResponseDTO:
+        """Open a PayTree-enabled payment channel."""
+        if self._http_client is not None:
+            response = await self._http_client.post(
+                f"{self.base_url}/issuer/channels/paytree",
+                json=open_channel_request.model_dump(),
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/issuer/channels/paytree",
+                    json=open_channel_request.model_dump(),
+                )
+
+        response.raise_for_status()
+        return PaytreeOpenChannelResponseDTO.model_validate(response.json())
+
+    async def get_paytree_channel(
+        self, computed_id: str
+    ) -> PaytreePaymentChannelResponseDTO:
+        """Get PayTree payment channel state by computed ID."""
+        if self._http_client is not None:
+            response = await self._http_client.get(
+                f"{self.base_url}/issuer/channels/paytree/{computed_id}"
+            )
+        else:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/issuer/channels/paytree/{computed_id}"
+                )
+
+        response.raise_for_status()
+        return PaytreePaymentChannelResponseDTO.model_validate(response.json())

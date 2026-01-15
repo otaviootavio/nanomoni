@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .entities import PaymentChannel, OffChainTx, PaywordState
+from .entities import PaymentChannel, OffChainTx, PaywordState, PaytreeState
 
 
 class PaymentChannelRepository(ABC):
@@ -74,6 +74,38 @@ class PaymentChannelRepository(ABC):
     ) -> tuple[int, Optional[PaywordState]]:
         """
         Atomically save channel metadata AND the first PayWord state.
+
+        Returns:
+          (1, state) -> stored (success)
+          (0, None) -> rejected (race condition)
+        """
+        pass
+
+    @abstractmethod
+    async def get_paytree_state(self, computed_id: str) -> Optional[PaytreeState]:
+        """Get the latest PayTree state for this channel."""
+        pass
+
+    @abstractmethod
+    async def save_paytree_payment(
+        self, channel: PaymentChannel, new_state: PaytreeState
+    ) -> tuple[int, Optional[PaytreeState]]:
+        """
+        Atomically update the channel's latest PayTree state.
+
+        Returns:
+          (1, state) -> stored (success)
+          (0, state) -> rejected (returns current state)
+          (2, None) -> payment channel missing
+        """
+        pass
+
+    @abstractmethod
+    async def save_channel_and_initial_paytree_state(
+        self, channel: PaymentChannel, initial_state: PaytreeState
+    ) -> tuple[int, Optional[PaytreeState]]:
+        """
+        Atomically save channel metadata AND the first PayTree state.
 
         Returns:
           (1, state) -> stored (success)

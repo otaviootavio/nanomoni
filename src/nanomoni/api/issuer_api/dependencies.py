@@ -14,6 +14,7 @@ from ...infrastructure.issuer.payment_channel_repository_impl import (
 from ...application.issuer.use_cases.registration import RegistrationService
 from ...application.issuer.use_cases.payment_channel import PaymentChannelService
 from ...application.issuer.use_cases.payword_channel import PaywordChannelService
+from ...application.issuer.use_cases.paytree_channel import PaytreeChannelService
 
 
 @lru_cache()
@@ -66,5 +67,14 @@ def get_payword_channel_service() -> PaywordChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaywordChannelService(
+        account_repo, channel_repo, settings.issuer_private_key
+    )
+
+
+def get_paytree_channel_service() -> PaytreeChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    settings = get_settings_dependency()
+    return PaytreeChannelService(
         account_repo, channel_repo, settings.issuer_private_key
     )
