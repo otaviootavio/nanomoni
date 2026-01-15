@@ -21,7 +21,7 @@ cp envs/example.vendor.sh envs/vendor.env.sh
 
 ### 3) Export runtime environment variables
 
-This repo uses `envs/env.*.sh` scripts (they `export ...`) so you can load all required variables into your shell:
+This repo uses `envs/*.env.sh` scripts (they `export ...`, e.g. `issuer.env.sh`) so you can load all required variables into your shell:
 
 ```sh
 source ./envs/issuer.env.sh
