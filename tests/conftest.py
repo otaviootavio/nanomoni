@@ -101,12 +101,11 @@ class TestDatabaseSettings:
 async def redis_db_client() -> AsyncGenerator[DatabaseClient, None]:
     """Create a Redis database client for testing.
 
-    Uses database 15 by default, or TEST_REDIS_URL if set.
-    Falls back to localhost:6379/15 if not specified.
+    Uses database 15 on localhost:6379.
     """
     import warnings
 
-    test_redis_url = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
+    test_redis_url = "redis://localhost:6379/15"
     settings = TestDatabaseSettings(database_url=test_redis_url)
     client = DatabaseClient(settings)
     client.initialize_database()
@@ -146,10 +145,9 @@ def issuer_base_url() -> str:
     Base URL for the Issuer API used by E2E/stress tests.
 
     Centralized here so helper clients don't reach into environment variables directly.
-    The base URL should include /api/v1 prefix.
+    The base URL includes /api/v1 prefix.
     """
-    base_url = os.getenv("ISSUER_BASE_URL", "http://localhost:8001/api/v1")
-    return base_url.rstrip("/")
+    return "http://localhost:8001/api/v1"
 
 
 @pytest.fixture(scope="session")
@@ -158,7 +156,6 @@ def vendor_base_url() -> str:
     Base URL for the Vendor API used by E2E/stress tests.
 
     Centralized here so helper clients don't reach into environment variables directly.
-    The base URL should include /api/v1 prefix.
+    The base URL includes /api/v1 prefix.
     """
-    base_url = os.getenv("VENDOR_BASE_URL", "http://localhost:8000/api/v1")
-    return base_url.rstrip("/")
+    return "http://localhost:8000/api/v1"

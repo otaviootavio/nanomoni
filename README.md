@@ -60,27 +60,15 @@ poetry install
 
 ### Running Tests
 
-#### Integration Tests
-
-Integration tests require Redis to be running. They will automatically skip if Redis is not available.
-
-```sh
-# Start Redis (if not already running)
-docker run --rm -p 6379:6379 redis:7
-
-# Run integration tests
-poetry run pytest tests/integration
-
-# With custom Redis URL
-TEST_REDIS_URL=redis://localhost:6379/15 poetry run pytest tests/integration
-
-# With race condition test options
-poetry run pytest tests/integration/test_lost_update.py --race-iterations=1000
-```
-
 #### E2E Tests
 
-E2E tests require all services to be running. **Tests no longer manage Docker Compose lifecycle** - you must start services manually before running tests.
+E2E tests are true end-to-end tests that exercise the full system via HTTP. They require all services (Issuer, Vendor, and their Redis instances) to be running. **You must start services manually before running tests** - tests do not manage Docker Compose lifecycle.
+
+**Prerequisites:**
+- Issuer API running on port 8001
+- Vendor API running on port 8000
+- Redis for issuer on port 6380
+- Redis for vendor on port 6379
 
 ```sh
 # 1. Start required services
@@ -95,24 +83,14 @@ poetry run pytest -m e2e tests/e2e
 
 If services are not available, tests will fail with clear error messages indicating which services are missing.
 
-#### Stress Tests
+**E2E Test Categories:**
 
-Stress tests also require all services to be running.
+- **Happy Path Tests**: Complete payment flows, channel lifecycle, PayWord flows
+- **Business Logic Tests**: Excessive payments, decreasing payments, empty channel closure
+- **Security/Tamper Tests**: Invalid signatures, tampered payloads, mismatched public keys, invalid PayWord tokens
 
-```sh
-# 1. Start required services (same as E2E)
-source ./envs/env.issuer.sh
-source ./envs/env.vendor.sh
-docker compose up -d issuer redis-issuer
-docker compose up -d vendor  redis-vendor
-# 2. Run stress tests
-poetry run pytest -m stress tests/stress
-```
-
-#### All Tests
-
-```sh
-poetry run pytest
-```
-
-Note: E2E and stress tests will fail if services are not already running. Integration tests will skip if Redis is unavailable.
+The security tests verify that the system correctly rejects:
+- Tampered open-channel signatures (signature and PayWord flows)
+- Tampered payment signatures
+- Mismatched public key claims (issuer and vendor)
+- Invalid PayWord tokens (tampered, non-monotonic k, wrong root)
