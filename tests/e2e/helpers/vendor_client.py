@@ -131,6 +131,27 @@ class VendorTestClient:
         response.raise_for_status()
         return PaywordPaymentResponseDTO.model_validate(response.json())
 
+    async def receive_payword_payment_raw(
+        self, channel_id: str, *, k: int, token_b64: str
+    ) -> httpx.Response:
+        """
+        Submit a PayWord payment to the vendor without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        dto = ReceivePaywordPaymentDTO(k=k, token_b64=token_b64)
+        if self._http_client is not None:
+            return await self._http_client.post(
+                f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
+                json=dto.model_dump(),
+            )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            return await client.post(
+                f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
+                json=dto.model_dump(),
+            )
+
     async def request_channel_closure_payword(self, channel_id: str) -> None:
         """Request closure of a PayWord channel."""
         dto = CloseChannelDTO(computed_id=channel_id)
