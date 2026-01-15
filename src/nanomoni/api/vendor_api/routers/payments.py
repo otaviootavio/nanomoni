@@ -24,10 +24,14 @@ payment_requests_total = Counter(
     ["status"],
 )
 
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]  # 0.5ms..10ms (0.5ms resolution)
-    + [float(x) for x in range(15, 55, 5)]  # 15, 20, 25, ..., 50ms (5ms resolution)
-    + [float("inf")]
+PAYMENT_DURATION_BUCKETS = sorted(
+    set(
+        [round(0.25 * i, 2) for i in range(1, 21)]  # 0.25ms..5ms (0.25ms resolution)
+        + [
+            float(x) for x in range(5, 25, 5)
+        ]  # 5, 10, 15, 20ms (5ms resolution from 5ms..20ms)
+        + [float("inf")]
+    )
 )
 
 payment_request_duration_milliseconds = Histogram(

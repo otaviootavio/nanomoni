@@ -14,19 +14,19 @@ docker compose up -d alloy pyroscope cadvisor grafana prometheus
 Copy the example environment files to create the actual environment files:
 
 ```sh
-cp envs/client-env.example.sh envs/env.client.sh
-cp envs/issuer-env.example.sh envs/env.issuer.sh
-cp envs/vendor-env.example.sh envs/env.vendor.sh
+cp envs/example.client.sh envs/client.env.sh
+cp envs/example.issuer.sh envs/issuer.env.sh
+cp envs/example.vendor.sh envs/vendor.env.sh
 ```
 
 ### 3) Export runtime environment variables
 
-This repo uses `envs/env.*.sh` scripts (they `export ...`) so you can load all required variables into your shell:
+This repo uses `envs/*.env.sh` scripts (they `export ...`, e.g. `issuer.env.sh`) so you can load all required variables into your shell:
 
 ```sh
-source ./envs/env.issuer.sh
-source ./envs/env.vendor.sh
-source ./envs/env.client.sh
+source ./envs/issuer.env.sh
+source ./envs/vendor.env.sh
+source ./envs/client.env.sh
 ```
 
 ### 4) Build + run the services
@@ -72,8 +72,8 @@ E2E tests are true end-to-end tests that exercise the full system via HTTP. They
 
 ```sh
 # 1. Start required services
-source ./envs/env.issuer.sh
-source ./envs/env.vendor.sh
+source ./envs/issuer.env.sh
+source ./envs/vendor.env.sh
 docker compose up -d issuer redis-issuer
 docker compose up -d vendor  redis-vendor
 
