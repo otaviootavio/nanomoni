@@ -139,6 +139,42 @@ class ClientActor:
             payword,
         )
 
+    def create_open_channel_request_payword_with_root(
+        self,
+        vendor_public_key_der_b64: str,
+        *,
+        amount: int,
+        unit_value: int,
+        max_k: int,
+        payword_root_b64: str,
+    ) -> OpenChannelRequestDTO:
+        """
+        Create an open channel request embedding an existing PayWord commitment root.
+
+        This is useful for stress tests where generating a fresh PayWord chain per client
+        (O(max_k) hashing) would dominate runtime. The issuer/vendor still verify tokens
+        with O(k) hashing during payment/settlement.
+        """
+        if unit_value <= 0:
+            raise ValueError("unit_value must be > 0")
+
+        payload = PaywordOpenChannelRequestPayload(
+            client_public_key_der_b64=self.public_key_der_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            payword_root_b64=payword_root_b64,
+            payword_unit_value=unit_value,
+            payword_max_k=max_k,
+            payword_hash_alg="sha256",
+        )
+        envelope = generate_envelope(self.private_key, payload.model_dump())
+
+        return OpenChannelRequestDTO(
+            client_public_key_der_b64=self.public_key_der_b64,
+            open_payload_b64=envelope.payload_b64,
+            open_signature_b64=envelope.signature_b64,
+        )
+
     def create_open_channel_request_paytree(
         self,
         vendor_public_key_der_b64: str,
