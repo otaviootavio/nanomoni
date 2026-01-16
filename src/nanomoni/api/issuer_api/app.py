@@ -11,7 +11,7 @@ from prometheus_client import (
 )
 
 from ...envs.issuer_env import get_settings
-from .routers import registration, payment_channel, payword_channels
+from .routers import registration, payment_channel, payword_channels, paytree_channels
 
 
 settings = get_settings()
@@ -38,6 +38,7 @@ def create_issuer_app() -> FastAPI:
     app.include_router(registration.router, prefix="/api/v1/issuer")
     app.include_router(payment_channel.router, prefix="/api/v1/issuer")
     app.include_router(payword_channels.router, prefix="/api/v1/issuer")
+    app.include_router(paytree_channels.router, prefix="/api/v1/issuer")
 
     @app.get("/")
     async def root() -> dict[str, str]:

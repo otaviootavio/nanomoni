@@ -6,6 +6,7 @@ from fastapi import Depends
 
 from ...application.vendor.use_cases.payment import PaymentService
 from ...application.vendor.use_cases.payword_payment import PaywordPaymentService
+from ...application.vendor.use_cases.paytree_payment import PaytreePaymentService
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
@@ -94,6 +95,21 @@ def get_payword_payment_service(
 ) -> PaywordPaymentService:
     """Get PayWord payment service."""
     return PaywordPaymentService(
+        payment_channel_repository=payment_channel_repository,
+        issuer_base_url=settings.issuer_base_url,
+        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
+        vendor_private_key_pem=settings.vendor_private_key_pem,
+    )
+
+
+def get_paytree_payment_service(
+    payment_channel_repository: PaymentChannelRepository = Depends(
+        get_payment_channel_repository
+    ),
+    settings: Settings = Depends(get_settings),
+) -> PaytreePaymentService:
+    """Get PayTree payment service."""
+    return PaytreePaymentService(
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ...domain.vendor.entities import PaymentChannel, OffChainTx, PaywordState
+from ...domain.vendor.entities import (
+    PaymentChannel,
+    OffChainTx,
+    PaywordState,
+    PaytreeState,
+)
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ..storage import KeyValueStore
 
@@ -419,3 +424,141 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         channel.closed_at = datetime.now(timezone.utc)
 
         return await self.update(channel)
+
+    async def get_paytree_state(self, computed_id: str) -> Optional[PaytreeState]:
+        key = f"paytree_state:latest:{computed_id}"
+        raw = await self.store.get(key)
+        if not raw:
+            return None
+        return PaytreeState.model_validate_json(raw)
+
+    async def save_paytree_payment(
+        self, channel: PaymentChannel, new_state: PaytreeState
+    ) -> tuple[int, Optional[PaytreeState]]:
+        """
+        Atomically update the channel's latest PayTree state using Lua script.
+        """
+        script = """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local new_val = ARGV[1]
+        local new_i = tonumber(ARGV[2])
+
+        -- Load and decode the stored channel to read max_i (atomic validation)
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_i = tonumber(channel.paytree_max_i)
+        if not max_i then
+            -- Channel exists but is missing PayTree configuration
+            return {2, ''}
+        end
+        if new_i > max_i then
+            -- i exceeds PayTree commitment window
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
+        end
+
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        end
+
+        local current = cjson.decode(current_raw)
+        local current_i = tonumber(current.i)
+        if new_i > current_i then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+        """
+
+        if channel.computed_id != new_state.computed_id:
+            raise ValueError("Channel computed_id mismatch for PayTree payment")
+
+        latest_key = f"paytree_state:latest:{new_state.computed_id}"
+        channel_key = f"payment_channel:{new_state.computed_id}"
+        payload_json = new_state.model_dump_json()
+
+        result = await self.store.eval(
+            script,
+            keys=[latest_key, channel_key],
+            args=[payload_json, str(new_state.i)],
+        )
+
+        code = (
+            int(result[0])
+            if result and result[0] is not None and result[0] != ""
+            else 0
+        )
+        payload = (
+            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        )
+
+        if code == 1:
+            if payload is None:
+                raise RuntimeError(
+                    "Unexpected: save_paytree_payment returned success but no payload"
+                )
+            return 1, PaytreeState.model_validate_json(payload)
+        elif code == 0:
+            return 0, PaytreeState.model_validate_json(payload) if payload else None
+        elif code == 3:
+            return 3, PaytreeState.model_validate_json(payload) if payload else None
+        else:
+            return 2, None
+
+    async def save_channel_and_initial_paytree_state(
+        self, channel: PaymentChannel, initial_state: PaytreeState
+    ) -> tuple[int, Optional[PaytreeState]]:
+        """
+        Atomically save channel metadata AND the first PayTree state.
+        """
+        script = """
+        local channel_key = KEYS[1]
+        local latest_key = KEYS[2]
+        local channel_json = ARGV[1]
+        local state_json = ARGV[2]
+        local created_ts = tonumber(ARGV[3])
+        local computed_id = ARGV[4]
+
+        if redis.call('EXISTS', channel_key) == 1 then
+            return {0, ''}
+        end
+
+        if redis.call('EXISTS', latest_key) == 1 then
+            return {0, ''}
+        end
+
+        redis.call('SET', channel_key, channel_json)
+        redis.call('SET', latest_key, state_json)
+
+        redis.call('ZADD', 'payment_channels:all', created_ts, computed_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, computed_id)
+
+        return {1, state_json}
+        """
+
+        channel_key = f"payment_channel:{channel.computed_id}"
+        latest_key = f"paytree_state:latest:{channel.computed_id}"
+
+        channel.latest_tx = None
+        channel_json = channel.model_dump_json(exclude={"latest_tx"})
+        state_json = initial_state.model_dump_json()
+        created_ts = channel.created_at.timestamp()
+
+        result = await self.store.eval(
+            script,
+            keys=[channel_key, latest_key],
+            args=[channel_json, state_json, str(created_ts), channel.computed_id],
+        )
+
+        code = int(result[0])
+        if code == 1:
+            return 1, initial_state
+        else:
+            return 0, None

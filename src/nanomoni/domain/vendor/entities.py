@@ -143,6 +143,18 @@ class PaywordState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class PaytreeState(DatetimeSerializerMixin, BaseModel):
+    """Latest PayTree payment state (monotonic index + Merkle proof)."""
+
+    computed_id: str = Field(..., description="Payment channel computed ID")
+    i: int = Field(..., ge=0, description="Monotonic PayTree index")
+    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
+    siblings_b64: list[str] = Field(
+        ..., description="List of base64-encoded sibling hashes"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class PaymentChannel(CommonSerializersMixin, BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
@@ -163,6 +175,12 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
     payword_unit_value: Optional[int] = None
     payword_max_k: Optional[int] = None
     payword_hash_alg: Optional[str] = None
+
+    # Optional PayTree (Merkle tree) commitment for PayTree-enabled channels.
+    paytree_root_b64: Optional[str] = None
+    paytree_unit_value: Optional[int] = None
+    paytree_max_i: Optional[int] = None
+    paytree_hash_alg: Optional[str] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None

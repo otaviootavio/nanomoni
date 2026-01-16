@@ -18,6 +18,8 @@ class Settings(BaseModel):
     client_payment_mode: str = "signature"
     client_payword_unit_value: int = 1
     client_payword_max_k: Optional[int] = None
+    client_paytree_unit_value: int = 1
+    client_paytree_max_i: Optional[int] = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -83,6 +85,8 @@ def get_settings() -> Settings:
     client_payment_mode = (os.environ.get("CLIENT_PAYMENT_MODE") or "signature").lower()
     client_payword_unit_value_str = os.environ.get("CLIENT_PAYWORD_UNIT_VALUE")
     client_payword_max_k_str = os.environ.get("CLIENT_PAYWORD_MAX_K")
+    client_paytree_unit_value_str = os.environ.get("CLIENT_PAYTREE_UNIT_VALUE")
+    client_paytree_max_i_str = os.environ.get("CLIENT_PAYTREE_MAX_I")
     if not (client_private_key_pem and vendor_base_url and issuer_base_url):
         raise ValueError(
             "CLIENT_PRIVATE_KEY_PEM, VENDOR_BASE_URL, and ISSUER_BASE_URL are required"
@@ -122,6 +126,24 @@ def get_settings() -> Settings:
     else:
         client_payword_max_k = None
 
+    client_paytree_unit_value_value = client_paytree_unit_value_str or "1"
+    try:
+        client_paytree_unit_value = int(client_paytree_unit_value_value)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid integer for CLIENT_PAYTREE_UNIT_VALUE: {client_paytree_unit_value_value!r}"
+        ) from e
+
+    if client_paytree_max_i_str:
+        try:
+            client_paytree_max_i = int(client_paytree_max_i_str)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid integer for CLIENT_PAYTREE_MAX_I: {client_paytree_max_i_str!r}"
+            ) from e
+    else:
+        client_paytree_max_i = None
+
     return Settings(
         client_private_key_pem=client_private_key_pem,
         vendor_base_url=vendor_base_url,
@@ -131,4 +153,6 @@ def get_settings() -> Settings:
         client_payment_mode=client_payment_mode,
         client_payword_unit_value=client_payword_unit_value,
         client_payword_max_k=client_payword_max_k,
+        client_paytree_unit_value=client_paytree_unit_value,
+        client_paytree_max_i=client_paytree_max_i,
     )

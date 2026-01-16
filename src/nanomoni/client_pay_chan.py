@@ -18,13 +18,18 @@ from nanomoni.application.shared.payment_channel_payloads import (
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
 )
+from nanomoni.application.shared.paytree_payloads import (
+    PaytreeOpenChannelRequestPayload,
+)
 from nanomoni.application.vendor.dtos import (
     CloseChannelDTO,
     ReceivePaymentDTO,
 )
 from nanomoni.application.vendor.payword_dtos import ReceivePaywordPaymentDTO
+from nanomoni.application.vendor.paytree_dtos import ReceivePaytreePaymentDTO
 from nanomoni.crypto.certificates import generate_envelope, load_private_key_from_pem
 from nanomoni.crypto.payword import Payword
+from nanomoni.crypto.paytree import Paytree
 from nanomoni.envs.client_env import get_settings
 from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
@@ -48,8 +53,10 @@ async def run_client_flow() -> None:
     channel_amount = settings.client_channel_amount
 
     client_mode = settings.client_payment_mode
-    if client_mode not in {"signature", "payword"}:
-        raise RuntimeError("client_payment_mode must be 'signature' or 'payword'")
+    if client_mode not in {"signature", "payword", "paytree"}:
+        raise RuntimeError(
+            "client_payment_mode must be 'signature', 'payword', or 'paytree'"
+        )
 
     # Generate monotonic sequence:
     # - signature mode: these are owed_amount values
@@ -87,6 +94,10 @@ async def run_client_flow() -> None:
         payword_unit_value: Optional[int] = None
         payword_max_k: Optional[int] = None
         payword: Optional[Payword] = None
+        paytree_root_b64: Optional[str] = None
+        paytree_unit_value: Optional[int] = None
+        paytree_max_i: Optional[int] = None
+        paytree: Optional[Paytree] = None
 
         if client_mode == "payword":
             # PayWord mode:
@@ -109,6 +120,27 @@ async def run_client_flow() -> None:
             )
             payword_root_b64 = payword.commitment_root_b64
             final_owed_amount = (payments[-1] * payword_unit_value) if payments else 0
+        elif client_mode == "paytree":
+            # PayTree mode:
+            # - Each payment sends an index i; the money owed is owed_amount = i * unit_value.
+            # - max_i is part of the channel commitment (persisted/enforced by vendor + issuer).
+            #   We default max_i to payment_count for convenience, but they are different concepts:
+            #   payment_count = how many payments this run; max_i = channel capacity in steps.
+            # - The channel amount must cover the maximum possible owed amount:
+            #   (max_i * unit_value) <= channel_amount  (issuer validates this at open).
+            paytree_unit_value = settings.client_paytree_unit_value
+            paytree_max_i = (
+                settings.client_paytree_max_i
+                if settings.client_paytree_max_i is not None
+                else payment_count
+            )
+            if paytree_max_i < payment_count:
+                raise RuntimeError(
+                    "CLIENT_PAYTREE_MAX_I must be >= CLIENT_PAYMENT_COUNT"
+                )
+            paytree = Paytree.create(max_i=paytree_max_i)
+            paytree_root_b64 = paytree.commitment_root_b64
+            final_owed_amount = (payments[-1] * paytree_unit_value) if payments else 0
         else:
             final_owed_amount = payments[-1] if payments else 0
 
@@ -129,6 +161,22 @@ async def run_client_flow() -> None:
                 payword_max_k=payword_max_k,
                 payword_hash_alg="sha256",
             )
+        elif client_mode == "paytree":
+            if (
+                paytree_root_b64 is None
+                or paytree_unit_value is None
+                or paytree_max_i is None
+            ):
+                raise RuntimeError("PayTree parameters not initialized")
+            open_payload = PaytreeOpenChannelRequestPayload(
+                client_public_key_der_b64=settings.client_public_key_der_b64,
+                vendor_public_key_der_b64=vendor_pk.public_key_der_b64,
+                amount=channel_amount,
+                paytree_root_b64=paytree_root_b64,
+                paytree_unit_value=paytree_unit_value,
+                paytree_max_i=paytree_max_i,
+                paytree_hash_alg="sha256",
+            )
         else:
             open_payload = OpenChannelRequestPayload(
                 client_public_key_der_b64=settings.client_public_key_der_b64,
@@ -144,6 +192,9 @@ async def run_client_flow() -> None:
         if client_mode == "payword":
             payword_channel = await issuer.open_payword_payment_channel(open_dto)
             computed_id = payword_channel.computed_id
+        elif client_mode == "paytree":
+            paytree_channel = await issuer.open_paytree_payment_channel(open_dto)
+            computed_id = paytree_channel.computed_id
         else:
             sig_channel = await issuer.open_payment_channel(open_dto)
             computed_id = sig_channel.computed_id
@@ -177,21 +228,48 @@ async def run_client_flow() -> None:
                     computed_id,
                     ReceivePaymentDTO(envelope=pay_env),
                 )
-        else:
+        elif client_mode == "payword":
             if payword is None:
                 raise RuntimeError("PayWord not initialized")
+            # Precompute payment proofs before sending requests, so the runtime path
+            # measures mostly network + server-side verification.
+            payword_payments: list[ReceivePaywordPaymentDTO] = []
             for k in payments:
-                token_b64 = payword.payment_proof_b64(k=k)
-                await vendor.send_payword_payment(
+                payword_payments.append(
+                    ReceivePaywordPaymentDTO(
+                        k=k, token_b64=payword.payment_proof_b64(k=k)
+                    )
+                )
+
+            for payword_dto in payword_payments:
+                await vendor.send_payword_payment(computed_id, payword_dto)
+        else:  # paytree
+            if paytree is None:
+                raise RuntimeError("PayTree not initialized")
+            # Note: We generate proofs on-demand in the loop rather than precomputing them.
+            # In our experiments, precomputing all PayTree proofs (i, leaf_b64, siblings_b64[])
+            # did not improve TPS but caused significant memory growth, especially for large
+            # payment counts. The siblings_b64 arrays can be large (O(log n) per proof).
+            # Although the tree leaves are still loaded in memory (as part of the Paytree
+            # object), generating proofs on-demand reduces peak memory usage.
+            for i in payments:
+                i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
+                await vendor.send_paytree_payment(
                     computed_id,
-                    ReceivePaywordPaymentDTO(k=k, token_b64=token_b64),
+                    ReceivePaytreePaymentDTO(
+                        i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                    ),
                 )
 
         # 6) Closure request (vendor will call issuer settlement)
         if client_mode == "signature":
             await vendor.request_close_channel(CloseChannelDTO(computed_id=computed_id))
-        else:
+        elif client_mode == "payword":
             await vendor.request_close_channel_payword(
+                CloseChannelDTO(computed_id=computed_id)
+            )
+        else:  # paytree
+            await vendor.request_close_channel_paytree(
                 CloseChannelDTO(computed_id=computed_id)
             )
 
@@ -200,6 +278,9 @@ async def run_client_flow() -> None:
             get_dto = GetPaymentChannelRequestDTO(computed_id=computed_id)
             if client_mode == "payword":
                 if (await issuer.get_payword_payment_channel(get_dto)).is_closed:
+                    break
+            elif client_mode == "paytree":
+                if (await issuer.get_paytree_payment_channel(get_dto)).is_closed:
                     break
             else:
                 if (await issuer.get_payment_channel(get_dto)).is_closed:

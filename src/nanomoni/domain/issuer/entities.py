@@ -41,5 +41,11 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
     payword_max_k: Optional[int] = None
     payword_hash_alg: Optional[str] = None
 
+    # Optional PayTree (Merkle tree) commitment for PayTree-enabled channels.
+    paytree_root_b64: Optional[str] = None
+    paytree_unit_value: Optional[int] = None
+    paytree_max_i: Optional[int] = None
+    paytree_hash_alg: Optional[str] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None

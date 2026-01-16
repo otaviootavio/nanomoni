@@ -13,6 +13,10 @@ from ...application.vendor.payword_dtos import (
     PaywordPaymentResponseDTO,
     ReceivePaywordPaymentDTO,
 )
+from ...application.vendor.paytree_dtos import (
+    PaytreePaymentResponseDTO,
+    ReceivePaytreePaymentDTO,
+)
 from ..http.http_client import AsyncHttpClient
 
 
@@ -64,6 +68,21 @@ class VendorClientAsync:
     async def request_close_channel_payword(self, dto: CloseChannelDTO) -> None:
         """Ask the vendor to close a PayWord payment channel."""
         path = f"/vendor/channels/payword/{dto.computed_id}/closure-requests"
+        await self._http.post(path, json=dto.model_dump())
+
+    async def send_paytree_payment(
+        self,
+        computed_id: str,
+        dto: ReceivePaytreePaymentDTO,
+    ) -> PaytreePaymentResponseDTO:
+        """Send a PayTree payment to the vendor API."""
+        path = f"/vendor/channels/paytree/{computed_id}/payments"
+        resp = await self._http.post(path, json=dto.model_dump())
+        return PaytreePaymentResponseDTO.model_validate(resp.json())
+
+    async def request_close_channel_paytree(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to close a PayTree payment channel."""
+        path = f"/vendor/channels/paytree/{dto.computed_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def aclose(self) -> None:

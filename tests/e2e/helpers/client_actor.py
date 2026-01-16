@@ -17,8 +17,12 @@ from nanomoni.application.shared.payment_channel_payloads import (
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
 )
+from nanomoni.application.shared.paytree_payloads import (
+    PaytreeOpenChannelRequestPayload,
+)
 from nanomoni.crypto.certificates import Envelope, generate_envelope
 from nanomoni.crypto.payword import Payword
+from nanomoni.crypto.paytree import Paytree
 
 
 class ClientActor:
@@ -133,4 +137,44 @@ class ClientActor:
                 open_signature_b64=envelope.signature_b64,
             ),
             payword,
+        )
+
+    def create_open_channel_request_paytree(
+        self,
+        vendor_public_key_der_b64: str,
+        *,
+        amount: int,
+        unit_value: int,
+        max_i: int,
+    ) -> tuple[OpenChannelRequestDTO, Paytree]:
+        """
+        Create an open channel request with an embedded PayTree commitment.
+
+        Returns:
+            (OpenChannelRequestDTO, Paytree) so tests can generate proofs efficiently.
+        """
+        if unit_value <= 0:
+            raise ValueError("unit_value must be > 0")
+
+        paytree = Paytree.create(max_i=max_i)
+        root_b64 = paytree.commitment_root_b64
+
+        payload = PaytreeOpenChannelRequestPayload(
+            client_public_key_der_b64=self.public_key_der_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            paytree_root_b64=root_b64,
+            paytree_unit_value=unit_value,
+            paytree_max_i=max_i,
+            paytree_hash_alg="sha256",
+        )
+        envelope = generate_envelope(self.private_key, payload.model_dump())
+
+        return (
+            OpenChannelRequestDTO(
+                client_public_key_der_b64=self.public_key_der_b64,
+                open_payload_b64=envelope.payload_b64,
+                open_signature_b64=envelope.signature_b64,
+            ),
+            paytree,
         )
