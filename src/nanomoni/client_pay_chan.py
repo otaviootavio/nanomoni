@@ -129,7 +129,11 @@ async def run_client_flow() -> None:
             # - The channel amount must cover the maximum possible owed amount:
             #   (max_i * unit_value) <= channel_amount  (issuer validates this at open).
             paytree_unit_value = settings.client_paytree_unit_value
-            paytree_max_i = settings.client_paytree_max_i or payment_count
+            paytree_max_i = (
+                settings.client_paytree_max_i
+                if settings.client_paytree_max_i is not None
+                else payment_count
+            )
             if paytree_max_i < payment_count:
                 raise RuntimeError(
                     "CLIENT_PAYTREE_MAX_I must be >= CLIENT_PAYMENT_COUNT"
