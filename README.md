@@ -34,9 +34,11 @@ source ./envs/client.env.sh
 Issuer and vendor will start their Redis dependencies via `depends_on`.
 
 ```sh
-docker compose up -d issuer --build
-docker compose up -d vendor --build
-docker compose up client --build
+docker compose build
+
+source ./envs/issuer.env.sh && docker compose up issuer --build
+source ./envs/vendor.env.sh && docker compose up vendor --build
+source ./envs/client.env.sh && docker compose up client --build
 ```
 
 ### 5) Stop everything
@@ -75,7 +77,7 @@ E2E tests are true end-to-end tests that exercise the full system via HTTP. They
 source ./envs/issuer.env.sh
 source ./envs/vendor.env.sh
 docker compose up -d issuer redis-issuer
-docker compose up -d vendor  redis-vendor
+docker compose up -d vendor redis-vendor
 
 # 2. Wait for services to be ready, then run tests
 poetry run pytest -m e2e tests/e2e

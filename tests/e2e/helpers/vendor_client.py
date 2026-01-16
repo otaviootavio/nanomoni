@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import httpx
+import aiohttp
 
 from nanomoni.application.vendor.dtos import (
     VendorPublicKeyDTO,
@@ -20,6 +20,8 @@ from nanomoni.application.vendor.paytree_dtos import (
 )
 from nanomoni.crypto.certificates import Envelope
 
+from tests.e2e.helpers.http import AiohttpResponse
+
 
 class VendorTestClient:
     """HTTP client for interacting with the Vendor API in E2E tests."""
@@ -29,7 +31,7 @@ class VendorTestClient:
         base_url: str,
         timeout: float = 30.0,
         *,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: aiohttp.ClientSession | None = None,
     ) -> None:
         """
         Initialize the vendor test client.
@@ -45,6 +47,30 @@ class VendorTestClient:
         self.timeout = timeout
         self._http_client = http_client
 
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        json: dict | None = None,
+    ) -> AiohttpResponse:
+        if self._http_client is not None:
+            session = self._http_client
+            close_session = False
+        else:
+            session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            )
+            close_session = True
+
+        try:
+            async with session.request(method, url, json=json) as resp:
+                content = await resp.read()
+                return AiohttpResponse(status_code=resp.status, content=content)
+        finally:
+            if close_session:
+                await session.close()
+
     async def get_public_key(self) -> VendorPublicKeyDTO:
         """
         Get the vendor's public key.
@@ -52,13 +78,7 @@ class VendorTestClient:
         Returns:
             VendorPublicKeyDTO with vendor's public key in DER base64 format
         """
-        if self._http_client is not None:
-            response = await self._http_client.get(
-                f"{self.base_url}/vendor/keys/public"
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(f"{self.base_url}/vendor/keys/public")
+        response = await self._request("GET", f"{self.base_url}/vendor/keys/public")
 
         response.raise_for_status()
         return VendorPublicKeyDTO.model_validate(response.json())
@@ -77,17 +97,11 @@ class VendorTestClient:
             OffChainTxResponseDTO with payment details
         """
         dto = ReceivePaymentDTO(envelope=payment_envelope)
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         return OffChainTxResponseDTO.model_validate(response.json())
@@ -100,17 +114,11 @@ class VendorTestClient:
             channel_id: Payment channel computed ID
         """
         dto = CloseChannelDTO(computed_id=channel_id)
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         assert response.status_code == 204
@@ -120,56 +128,38 @@ class VendorTestClient:
     ) -> PaywordPaymentResponseDTO:
         """Submit a PayWord payment to the vendor."""
         dto = ReceivePaywordPaymentDTO(k=k, token_b64=token_b64)
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         return PaywordPaymentResponseDTO.model_validate(response.json())
 
     async def receive_payword_payment_raw(
         self, channel_id: str, *, k: int, token_b64: str
-    ) -> httpx.Response:
+    ) -> AiohttpResponse:
         """
         Submit a PayWord payment to the vendor without raising on error status.
 
         Returns the raw HTTP response for error case testing.
         """
         dto = ReceivePaywordPaymentDTO(k=k, token_b64=token_b64)
-        if self._http_client is not None:
-            return await self._http_client.post(
-                f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.post(
-                f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
+        return await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/payword/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
 
     async def request_channel_closure_payword(self, channel_id: str) -> None:
         """Request closure of a PayWord channel."""
         dto = CloseChannelDTO(computed_id=channel_id)
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/payword/{channel_id}/closure-requests",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/payword/{channel_id}/closure-requests",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/payword/{channel_id}/closure-requests",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         assert response.status_code == 204
@@ -181,17 +171,11 @@ class VendorTestClient:
         dto = ReceivePaytreePaymentDTO(
             i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
         )
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         return PaytreePaymentResponseDTO.model_validate(response.json())
@@ -199,57 +183,39 @@ class VendorTestClient:
     async def request_channel_closure_paytree(self, channel_id: str) -> None:
         """Request closure of a PayTree channel."""
         dto = CloseChannelDTO(computed_id=channel_id)
-        if self._http_client is not None:
-            response = await self._http_client.post(
-                f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
-                json=dto.model_dump(),
-            )
-        else:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
-                    json=dto.model_dump(),
-                )
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
+            json=dto.model_dump(),
+        )
 
         response.raise_for_status()
         assert response.status_code == 204
 
     async def receive_payment_raw(
         self, channel_id: str, payment_envelope: Envelope
-    ) -> httpx.Response:
+    ) -> AiohttpResponse:
         """
         Submit a payment to the vendor without raising on error status.
 
         Returns the raw HTTP response for error case testing.
         """
         dto = ReceivePaymentDTO(envelope=payment_envelope)
-        if self._http_client is not None:
-            return await self._http_client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
+        return await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
-                json=dto.model_dump(),
-            )
-
-    async def request_channel_closure_raw(self, channel_id: str) -> httpx.Response:
+    async def request_channel_closure_raw(self, channel_id: str) -> AiohttpResponse:
         """
         Request channel closure without raising on error status.
 
         Returns the raw HTTP response for error case testing.
         """
         dto = CloseChannelDTO(computed_id=channel_id)
-        if self._http_client is not None:
-            return await self._http_client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
-                json=dto.model_dump(),
-            )
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.post(
-                f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
-                json=dto.model_dump(),
-            )
+        return await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
+            json=dto.model_dump(),
+        )

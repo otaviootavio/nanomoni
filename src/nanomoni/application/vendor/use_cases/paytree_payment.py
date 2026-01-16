@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-import httpx
 from pydantic import ValidationError
 
 from ....application.issuer.dtos import GetPaymentChannelRequestDTO
@@ -17,6 +16,7 @@ from ....crypto.paytree import (
 )
 from ....domain.vendor.entities import PaymentChannel, PaytreeState
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import CloseChannelDTO
 from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
@@ -64,11 +64,11 @@ class PaytreePaymentService:
 
                 return payment_channel
 
-        except httpx.HTTPStatusError as e:
+        except HttpResponseError as e:
             if e.response.status_code == 404:
                 raise ValueError("Payment channel not found on issuer")
             raise ValueError(f"Failed to verify payment channel: {e}")
-        except httpx.RequestError as e:
+        except HttpRequestError as e:
             raise ValueError(f"Could not connect to issuer: {e}")
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
