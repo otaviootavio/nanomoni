@@ -114,4 +114,3 @@ async def test_open_close_payword_attack_5000_clients_max_k_1_000_000(
     elapsed = time.perf_counter() - started
     # Minimal sanity check: the run completed; details validated by smaller e2e tests.
     assert elapsed >= 0.0
-
