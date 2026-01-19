@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from dataclasses import dataclass
@@ -38,6 +39,11 @@ class HttpRequestError(HttpError):
 
     def __init__(self, message: str, *, cause: Exception | None = None) -> None:
         super().__init__(message)
+        # Expose the underlying exception in a stable attribute for callers that
+        # want to classify transient errors (e.g., retries). Also set __cause__
+        # so exception chaining works naturally (and for backwards compat with
+        # code that inspects __cause__ directly).
+        self.cause = cause
         self.__cause__ = cause
 
 
@@ -354,6 +360,8 @@ class AsyncHttpClient:
             ) as resp:
                 content = await resp.read()
                 response = HttpResponse(status_code=resp.status, content=content)
+        except asyncio.TimeoutError as e:
+            raise HttpRequestError(f"Request failed: {method} {url}", cause=e) from e
         except aiohttp.ClientError as e:
             raise HttpRequestError(f"Request failed: {method} {url}", cause=e) from e
 

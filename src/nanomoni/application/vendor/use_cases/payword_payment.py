@@ -175,7 +175,27 @@ class PaywordPaymentService:
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
 
+        # Idempotency + replay protection:
+        # - If the client retries the *exact same* payment (same k + same token),
+        #   accept it and return the stored state (handles transient disconnects).
+        # - If k is the same but token differs, reject as a replay/double-spend attempt.
+        # - Otherwise, enforce strictly increasing k.
         if dto.k <= prev_k:
+            if latest_state is not None and dto.k == prev_k:
+                if dto.token_b64 != latest_state.token_b64:
+                    raise ValueError(
+                        "Duplicate PayWord k with mismatched token (possible replay attack)"
+                    )
+                owed_amount = compute_owed_amount(
+                    k=latest_state.k, unit_value=payment_channel.payword_unit_value
+                )
+                return PaywordPaymentResponseDTO(
+                    computed_id=latest_state.computed_id,
+                    k=latest_state.k,
+                    owed_amount=owed_amount,
+                    created_at=latest_state.created_at,
+                )
+
             raise ValueError(
                 f"PayWord k must be increasing. Got {dto.k}, expected > {prev_k}"
             )

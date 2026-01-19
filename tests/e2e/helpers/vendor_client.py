@@ -180,6 +180,23 @@ class VendorTestClient:
         response.raise_for_status()
         return PaytreePaymentResponseDTO.model_validate(response.json())
 
+    async def receive_paytree_payment_raw(
+        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+    ) -> AiohttpResponse:
+        """
+        Submit a PayTree payment to the vendor without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        dto = ReceivePaytreePaymentDTO(
+            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+        )
+        return await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+            json=dto.model_dump(),
+        )
+
     async def request_channel_closure_paytree(self, channel_id: str) -> None:
         """Request closure of a PayTree channel."""
         dto = CloseChannelDTO(computed_id=channel_id)
