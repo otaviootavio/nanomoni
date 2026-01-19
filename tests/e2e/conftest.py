@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
-import httpx
 import pytest
 
 
@@ -15,13 +16,18 @@ def check_service_health(url: str, timeout: float = 5.0) -> None:
     Raises RuntimeError if the service is not available.
     """
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(url)
-            if response.status_code != 200:
+        req = Request(url, headers={"Accept": "application/json"})
+        with urlopen(req, timeout=timeout) as resp:
+            status_code = getattr(resp, "status", 200)
+            if status_code != 200:
                 raise RuntimeError(
-                    f"Service at {url} returned status {response.status_code}, expected 200"
+                    f"Service at {url} returned status {status_code}, expected 200"
                 )
-    except httpx.RequestError as e:
+    except HTTPError as e:
+        raise RuntimeError(
+            f"Service at {url} returned status {e.code}, expected 200"
+        ) from e
+    except URLError as e:
         raise RuntimeError(f"Failed to connect to service at {url}: {e}") from e
 
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 import base64
-import httpx
 
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 
 from nanomoni.application.issuer.dtos import RegistrationRequestDTO
+from nanomoni.infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 
 
@@ -62,17 +62,18 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
         async with AsyncIssuerClient(settings.issuer_base_url) as issuer_client:
             await issuer_client.register(reg_dto)
             print("Vendor registered with issuer successfully.")
-    except httpx.HTTPStatusError as e:
-        if e.response is not None and e.response.status_code == 400:
+    except HttpResponseError as e:
+        if e.response.status_code == 400:
             try:
-                detail = e.response.json().get("detail")
+                body = e.response.json() or {}
+                detail = body.get("detail")
             except Exception:
                 detail = e.response.text
             if detail and "Account already registered" in str(detail):
                 print("Vendor already registered; skipping registration.")
                 return
         print(f"Error registering vendor with issuer: {e}")
-    except httpx.RequestError as e:
+    except HttpRequestError as e:
         print(
             f"Could not connect to issuer at {settings.issuer_base_url} to register vendor: {e}"
         )

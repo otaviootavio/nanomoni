@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-import httpx
 from pydantic import ValidationError
 
 from ....application.shared.payment_channel_payloads import (
@@ -25,6 +24,7 @@ from ....crypto.certificates import (
 )
 from ....domain.vendor.entities import OffChainTx, PaymentChannel
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import (
     CloseChannelDTO,
@@ -82,11 +82,11 @@ class PaymentService:
 
                 return payment_channel
 
-        except httpx.HTTPStatusError as e:
+        except HttpResponseError as e:
             if e.response.status_code == 404:
                 raise ValueError("Payment channel not found on issuer")
             raise ValueError(f"Failed to verify payment channel: {e}")
-        except httpx.RequestError as e:
+        except HttpRequestError as e:
             raise ValueError(f"Could not connect to issuer: {e}")
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
@@ -198,8 +198,23 @@ class PaymentService:
         )
         verify_envelope(client_public_key, dto.envelope)
 
-        # 5) Check for double spending - owed amount must be increasing
-        if payload.owed_amount <= prev_owed_amount:
+        # 5) Idempotency + double spending protection.
+        #
+        # If the client retries the *exact same* payment (e.g., due to a transient
+        # disconnect after the vendor stored the tx but before the client read the
+        # response), accept the duplicate and return the stored tx.
+        if latest_tx and payload.owed_amount == prev_owed_amount:
+            if (
+                dto.envelope.payload_b64 != latest_tx.payload_b64
+                or dto.envelope.signature_b64 != latest_tx.client_signature_b64
+            ):
+                raise ValueError(
+                    "Duplicate owed amount with mismatched payload/signature (possible replay attack)"
+                )
+            return OffChainTxResponseDTO(**latest_tx.model_dump())
+
+        # Otherwise, enforce strictly increasing owed amount.
+        if payload.owed_amount < prev_owed_amount:
             raise ValueError(
                 f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
             )

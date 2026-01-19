@@ -96,7 +96,7 @@ async def test_open_close_payword_attack_5000_clients_max_k_1_000_000(
 
     # IMPORTANT:
     # If any single client flow fails, we still need to await all in-flight tasks.
-    # Otherwise pytest will tear down fixtures (closing the shared httpx client)
+    # Otherwise pytest will tear down fixtures (closing the shared HTTP client/session)
     # while background tasks are still running, causing:
     #   RuntimeError: Cannot send a request, as the client has been closed.
     results = await asyncio.gather(

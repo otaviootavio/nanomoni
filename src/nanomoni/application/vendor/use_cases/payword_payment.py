@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-import httpx
 from pydantic import ValidationError
 
 from ....application.issuer.dtos import GetPaymentChannelRequestDTO
@@ -19,6 +18,7 @@ from ....crypto.payword import (
 )
 from ....domain.vendor.entities import PaymentChannel, PaywordState
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import CloseChannelDTO
 from ..payword_dtos import PaywordPaymentResponseDTO, ReceivePaywordPaymentDTO
@@ -66,11 +66,11 @@ class PaywordPaymentService:
 
                 return payment_channel
 
-        except httpx.HTTPStatusError as e:
+        except HttpResponseError as e:
             if e.response.status_code == 404:
                 raise ValueError("Payment channel not found on issuer")
             raise ValueError(f"Failed to verify payment channel: {e}")
-        except httpx.RequestError as e:
+        except HttpRequestError as e:
             raise ValueError(f"Could not connect to issuer: {e}")
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
@@ -175,7 +175,27 @@ class PaywordPaymentService:
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
 
+        # Idempotency + replay protection:
+        # - If the client retries the *exact same* payment (same k + same token),
+        #   accept it and return the stored state (handles transient disconnects).
+        # - If k is the same but token differs, reject as a replay/double-spend attempt.
+        # - Otherwise, enforce strictly increasing k.
         if dto.k <= prev_k:
+            if latest_state is not None and dto.k == prev_k:
+                if dto.token_b64 != latest_state.token_b64:
+                    raise ValueError(
+                        "Duplicate PayWord k with mismatched token (possible replay attack)"
+                    )
+                owed_amount = compute_owed_amount(
+                    k=latest_state.k, unit_value=payment_channel.payword_unit_value
+                )
+                return PaywordPaymentResponseDTO(
+                    computed_id=latest_state.computed_id,
+                    k=latest_state.k,
+                    owed_amount=owed_amount,
+                    created_at=latest_state.created_at,
+                )
+
             raise ValueError(
                 f"PayWord k must be increasing. Got {dto.k}, expected > {prev_k}"
             )

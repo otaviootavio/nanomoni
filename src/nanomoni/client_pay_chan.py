@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 
-import httpx
-
 from nanomoni.application.issuer.dtos import (
     OpenChannelRequestDTO,
     RegistrationRequestDTO,
@@ -22,6 +20,7 @@ from nanomoni.crypto.certificates import generate_envelope, load_private_key_fro
 from nanomoni.crypto.paytree import Paytree
 from nanomoni.crypto.payword import Payword
 from nanomoni.envs.client_env import get_settings
+from nanomoni.infrastructure.http.http_client import HttpError
 from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
@@ -64,7 +63,7 @@ async def run_client_flow() -> None:
                     client_public_key_der_b64=vendor_pk.public_key_der_b64
                 )
             )
-        except httpx.HTTPStatusError:
+        except HttpError:
             # Vendor may already be registered; ignore 4xx/5xx here to keep runner minimal.
             pass
 
