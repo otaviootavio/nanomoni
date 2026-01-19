@@ -70,6 +70,12 @@ class VendorClientAsync:
                 if transient_status and attempt < self._payment_retries:
                     await asyncio.sleep(self._payment_retry_backoff_s * (2**attempt))
                     continue
+                # If the HTTP layer returned an error response instead of raising,
+                # preserve HttpResponseError semantics for upstream callers.
+                if status >= 400:
+                    raise HttpResponseError(resp)
+                # If we reach here, either we got a successful response or we've
+                # exhausted retries without encountering an HTTP error.
                 return resp
             except HttpResponseError as e:
                 # AsyncHttpClient raises for non-2xx/3xx responses; recover the response
@@ -80,7 +86,9 @@ class VendorClientAsync:
                 if transient_status and attempt < self._payment_retries:
                     await asyncio.sleep(self._payment_retry_backoff_s * (2**attempt))
                     continue
-                return resp
+                # Non-transient HTTP error, or transient but we've exhausted retries:
+                # re-raise so callers still see an exception.
+                raise
             except HttpRequestError as e:
                 # HttpRequestError exposes the underlying exception on .cause,
                 # but also fall back to __cause__ for safety.
