@@ -1434,7 +1434,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1445,12 +1445,64 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[1m])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "F"
         }
       ],
       "title": "Vendor Payment TPS (success)",
@@ -1576,6 +1628,84 @@
           "legendFormat": "P50",
           "range": true,
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Payword P99",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Payword P95",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Payword P50",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree P99",
+          "range": true,
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree P95",
+          "range": true,
+          "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree P50",
+          "range": true,
+          "refId": "I"
         }
       ],
       "title": "Vendor Payment Duration Average (ms)",
@@ -1663,12 +1793,12 @@
     "list": []
   },
   "time": {
-    "from": "2026-01-03T08:34:05.601Z",
-    "to": "2026-01-03T08:37:07.027Z"
+    "from": "now-5m",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Vendor Dashboard",
   "uid": "52fe04d2-3de3-4bb6-8359-34904ef733ae",
-  "version": 5
+  "version": 6
 }
