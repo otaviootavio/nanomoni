@@ -23,6 +23,7 @@ from ...application.vendor.paytree_dtos import (
 from ..http.http_client import HttpResponse
 from ..http.http_client import AsyncHttpClient
 from ..http.http_client import HttpRequestError
+from ..http.http_client import HttpResponseError
 
 
 class VendorClientAsync:
@@ -63,7 +64,23 @@ class VendorClientAsync:
         """
         for attempt in range(self._payment_retries + 1):
             try:
-                return await self._http.post(path, json=json)
+                resp = await self._http.post(path, json=json)
+                status = getattr(resp, "status", None) or resp.status_code
+                transient_status = status == 429 or 500 <= status <= 599
+                if transient_status and attempt < self._payment_retries:
+                    await asyncio.sleep(self._payment_retry_backoff_s * (2**attempt))
+                    continue
+                return resp
+            except HttpResponseError as e:
+                # AsyncHttpClient raises for non-2xx/3xx responses; recover the response
+                # so we can treat some HTTP statuses as transient and retry.
+                resp = e.response
+                status = getattr(resp, "status", None) or resp.status_code
+                transient_status = status == 429 or 500 <= status <= 599
+                if transient_status and attempt < self._payment_retries:
+                    await asyncio.sleep(self._payment_retry_backoff_s * (2**attempt))
+                    continue
+                return resp
             except HttpRequestError as e:
                 # HttpRequestError exposes the underlying exception on .cause,
                 # but also fall back to __cause__ for safety.
