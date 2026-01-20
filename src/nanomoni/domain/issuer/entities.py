@@ -24,7 +24,7 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
     id: UUID = Field(default_factory=uuid4)
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str

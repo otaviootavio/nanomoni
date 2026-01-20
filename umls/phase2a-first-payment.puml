@@ -9,27 +9,27 @@ database "Vendor DB\n(Redis)" as VendorDB
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Build OffChainTxPayload
-Client -> Client: Wrap payload in Envelope\nsigned with client private key
+Client -> Client: Build payment payload\n(mode-specific proof/signature)
+Client -> Client: Sign payload
 
-Client -> Vendor: Submit Payment\nEnvelope<OffChainTxPayload>
+Client -> Vendor: Submit Payment
 activate Vendor
 
-Vendor -> Vendor: Verify envelope &\ndeserialize payload
+Vendor -> Vendor: Verify envelope and parse payload
 
-Vendor -> VendorDB: Get Channel Aggregate (metadata + latest_tx)
-VendorDB --> Vendor: none (not in cache)
+Vendor -> VendorDB: Load channel state
+VendorDB --> Vendor: none (cache miss)
 
-Vendor -> Issuer: Verify Channel State
+Vendor -> Issuer: Fetch channel details (first payment)
 activate Issuer
 Issuer -> IssuerDB: Get PaymentChannel
 IssuerDB --> Issuer: PaymentChannel
 Issuer --> Vendor: PaymentChannel
 deactivate Issuer
 
-Vendor -> Vendor: Validate channel & payment
+Vendor -> Vendor: Validate payment against channel
 
-Vendor -> VendorDB: Save Channel & OffChainTx
+Vendor -> VendorDB: Cache channel state and latest payment
 
 Vendor --> Client: 201 Created
 deactivate Vendor

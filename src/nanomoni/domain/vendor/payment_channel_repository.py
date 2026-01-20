@@ -17,7 +17,7 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
+    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
         """Get the full channel aggregate (metadata + latest tx)."""
         pass
 
@@ -50,7 +50,7 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_payword_state(self, computed_id: str) -> Optional[PaywordState]:
+    async def get_payword_state(self, channel_id: str) -> Optional[PaywordState]:
         """Get the latest PayWord state for this channel."""
         pass
 
@@ -82,7 +82,7 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_paytree_state(self, computed_id: str) -> Optional[PaytreeState]:
+    async def get_paytree_state(self, channel_id: str) -> Optional[PaytreeState]:
         """Get the latest PayTree state for this channel."""
         pass
 
@@ -126,7 +126,7 @@ class PaymentChannelRepository(ABC):
     @abstractmethod
     async def mark_closed(
         self,
-        computed_id: str,
+        channel_id: str,
         close_payload_b64: Optional[str],
         client_close_signature_b64: Optional[str],
         *,

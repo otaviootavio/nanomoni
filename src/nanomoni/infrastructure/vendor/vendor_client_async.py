@@ -114,7 +114,7 @@ class VendorClientAsync:
 
     async def send_off_chain_payment(
         self,
-        computed_id: str,
+        channel_id: str,
         dto: ReceivePaymentDTO,
     ) -> OffChainTxResponseDTO:
         """Send an off-chain payment to the vendor API.
@@ -123,43 +123,43 @@ class VendorClientAsync:
         as ``OffChainTxResponseDTO`` to keep this client aligned with the
         vendor API contract.
         """
-        path = f"/vendor/channels/signature/{computed_id}/payments"
+        path = f"/vendor/channels/signature/{channel_id}/payments"
         resp = await self._post_with_payment_retries(path, json=dto.model_dump())
         return OffChainTxResponseDTO.model_validate(resp.json())
 
     async def send_payword_payment(
         self,
-        computed_id: str,
+        channel_id: str,
         dto: ReceivePaywordPaymentDTO,
     ) -> PaywordPaymentResponseDTO:
         """Send a PayWord payment to the vendor API."""
-        path = f"/vendor/channels/payword/{computed_id}/payments"
+        path = f"/vendor/channels/payword/{channel_id}/payments"
         resp = await self._post_with_payment_retries(path, json=dto.model_dump())
         return PaywordPaymentResponseDTO.model_validate(resp.json())
 
-    async def request_close_channel(self, dto: CloseChannelDTO) -> None:
-        """Ask the vendor to close a payment channel."""
-        path = f"/vendor/channels/signature/{dto.computed_id}/closure-requests"
+    async def request_settle_channel(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to settle a payment channel."""
+        path = f"/vendor/channels/signature/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
-    async def request_close_channel_payword(self, dto: CloseChannelDTO) -> None:
-        """Ask the vendor to close a PayWord payment channel."""
-        path = f"/vendor/channels/payword/{dto.computed_id}/closure-requests"
+    async def request_settle_channel_payword(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to settle a PayWord payment channel."""
+        path = f"/vendor/channels/payword/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def send_paytree_payment(
         self,
-        computed_id: str,
+        channel_id: str,
         dto: ReceivePaytreePaymentDTO,
     ) -> PaytreePaymentResponseDTO:
         """Send a PayTree payment to the vendor API."""
-        path = f"/vendor/channels/paytree/{computed_id}/payments"
+        path = f"/vendor/channels/paytree/{channel_id}/payments"
         resp = await self._post_with_payment_retries(path, json=dto.model_dump())
         return PaytreePaymentResponseDTO.model_validate(resp.json())
 
-    async def request_close_channel_paytree(self, dto: CloseChannelDTO) -> None:
-        """Ask the vendor to close a PayTree payment channel."""
-        path = f"/vendor/channels/paytree/{dto.computed_id}/closure-requests"
+    async def request_settle_channel_paytree(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to settle a PayTree payment channel."""
+        path = f"/vendor/channels/paytree/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def aclose(self) -> None:

@@ -9,9 +9,11 @@ from pydantic import ValidationError
 
 from ....application.issuer.dtos import GetPaymentChannelRequestDTO
 from ....application.issuer.paytree_dtos import PaytreeSettlementRequestDTO
-from ....crypto.certificates import json_to_bytes, load_private_key_from_pem, sign_bytes
+from ....application.shared.paytree_payloads import PaytreeSettlementPayload
+from ....application.shared.serialization import payload_to_bytes
+from ....crypto.certificates import load_private_key_from_pem, sign_bytes
 from ....crypto.paytree import (
-    compute_owed_amount,
+    compute_cumulative_owed_amount,
     verify_paytree_proof,
 )
 from ....domain.vendor.entities import PaymentChannel, PaytreeState
@@ -38,7 +40,7 @@ class PaytreePaymentService:
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
-    async def _verify_paytree_channel(self, computed_id: str) -> PaymentChannel:
+    async def _verify_paytree_channel(self, channel_id: str) -> PaymentChannel:
         """
         Verify that the PayTree channel exists on the issuer side and return it.
 
@@ -47,7 +49,7 @@ class PaytreePaymentService:
         """
         try:
             async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-                dto = GetPaymentChannelRequestDTO(computed_id=computed_id)
+                dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
                 issuer_channel = await issuer_client.get_paytree_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
 
@@ -76,7 +78,7 @@ class PaytreePaymentService:
     async def _save_paytree_payment_with_retry(
         self,
         *,
-        computed_id: str,
+        channel_id: str,
         payment_channel: PaymentChannel,
         new_state: PaytreeState,
         is_first_payment: bool,
@@ -111,8 +113,8 @@ class PaytreePaymentService:
 
                 # status == 0: cache collision; switch to subsequent-save flow
                 is_first_payment = False
-                cached = await self.payment_channel_repository.get_by_computed_id(
-                    computed_id
+                cached = await self.payment_channel_repository.get_by_channel_id(
+                    channel_id
                 )
                 if not cached:
                     raise RuntimeError(
@@ -133,7 +135,7 @@ class PaytreePaymentService:
             # status == 2: vendor cache is missing the channel; fetch from issuer,
             # then cache it and retry the save flow once.
             if attempt == 0:
-                payment_channel = await self._verify_paytree_channel(computed_id)
+                payment_channel = await self._verify_paytree_channel(channel_id)
                 is_first_payment = True
                 continue
 
@@ -142,16 +144,16 @@ class PaytreePaymentService:
         return status, stored_state, payment_channel
 
     async def receive_paytree_payment(
-        self, computed_id: str, dto: ReceivePaytreePaymentDTO
+        self, channel_id: str, dto: ReceivePaytreePaymentDTO
     ) -> PaytreePaymentResponseDTO:
         """Receive and validate a PayTree (Merkle proof) payment from a client."""
-        payment_channel = await self.payment_channel_repository.get_by_computed_id(
-            computed_id
+        payment_channel = await self.payment_channel_repository.get_by_channel_id(
+            channel_id
         )
 
         is_first_payment = False
         if not payment_channel:
-            payment_channel = await self._verify_paytree_channel(computed_id)
+            payment_channel = await self._verify_paytree_channel(channel_id)
             is_first_payment = True
 
         if payment_channel.is_closed:
@@ -169,7 +171,7 @@ class PaytreePaymentService:
             raise ValueError("Unsupported PayTree hash algorithm")
 
         latest_state = await self.payment_channel_repository.get_paytree_state(
-            computed_id
+            channel_id
         )
         prev_i = latest_state.i if latest_state else -1
 
@@ -187,13 +189,13 @@ class PaytreePaymentService:
                     raise ValueError(
                         "Duplicate PayTree i with mismatched proof (possible replay attack)"
                     )
-                owed_amount = compute_owed_amount(
+                cumulative_owed_amount = compute_cumulative_owed_amount(
                     i=latest_state.i, unit_value=payment_channel.paytree_unit_value
                 )
                 return PaytreePaymentResponseDTO(
-                    computed_id=latest_state.computed_id,
+                    channel_id=latest_state.channel_id,
                     i=latest_state.i,
-                    owed_amount=owed_amount,
+                    cumulative_owed_amount=cumulative_owed_amount,
                     created_at=latest_state.created_at,
                 )
 
@@ -204,12 +206,12 @@ class PaytreePaymentService:
         if dto.i > payment_channel.paytree_max_i:
             raise ValueError("PayTree i exceeds channel max_i")
 
-        owed_amount = compute_owed_amount(
+        cumulative_owed_amount = compute_cumulative_owed_amount(
             i=dto.i, unit_value=payment_channel.paytree_unit_value
         )
-        if owed_amount > payment_channel.amount:
+        if cumulative_owed_amount > payment_channel.amount:
             raise ValueError(
-                f"Owed amount {owed_amount} exceeds payment channel amount {payment_channel.amount}"
+                f"cumulative_owed_amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
         # Verify Merkle proof against root
@@ -222,7 +224,7 @@ class PaytreePaymentService:
             raise ValueError("Invalid PayTree proof (root mismatch)")
 
         new_state = PaytreeState(
-            computed_id=computed_id,
+            channel_id=channel_id,
             i=dto.i,
             leaf_b64=dto.leaf_b64,
             siblings_b64=dto.siblings_b64,
@@ -234,7 +236,7 @@ class PaytreePaymentService:
             stored_state,
             payment_channel,
         ) = await self._save_paytree_payment_with_retry(
-            computed_id=computed_id,
+            channel_id=channel_id,
             payment_channel=payment_channel,
             new_state=new_state,
             is_first_payment=is_first_payment,
@@ -246,9 +248,9 @@ class PaytreePaymentService:
                     "Unexpected: save_paytree_payment returned success but no state"
                 )
             return PaytreePaymentResponseDTO(
-                computed_id=stored_state.computed_id,
+                channel_id=stored_state.channel_id,
                 i=stored_state.i,
-                owed_amount=owed_amount,
+                cumulative_owed_amount=cumulative_owed_amount,
                 created_at=stored_state.created_at,
             )
         elif status == 0:
@@ -261,10 +263,10 @@ class PaytreePaymentService:
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
-    async def close_channel(self, dto: CloseChannelDTO) -> None:
-        """Close a PayTree channel by settling the latest PayTree state on the issuer."""
-        channel = await self.payment_channel_repository.get_by_computed_id(
-            dto.computed_id
+    async def settle_channel(self, dto: CloseChannelDTO) -> None:
+        """Settle a PayTree channel by settling the latest PayTree state on the issuer."""
+        channel = await self.payment_channel_repository.get_by_channel_id(
+            dto.channel_id
         )
         if not channel:
             raise ValueError("Payment channel not found")
@@ -279,24 +281,24 @@ class PaytreePaymentService:
             raise ValueError("Payment channel is not PayTree-enabled")
 
         latest_state = await self.payment_channel_repository.get_paytree_state(
-            dto.computed_id
+            dto.channel_id
         )
         if not latest_state:
             raise ValueError("No PayTree payments received for this channel")
 
-        owed_amount = compute_owed_amount(
+        cumulative_owed_amount = compute_cumulative_owed_amount(
             i=latest_state.i, unit_value=channel.paytree_unit_value
         )
-        if owed_amount > channel.amount:
+        if cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
-        settlement_payload = {
-            "computed_id": dto.computed_id,
-            "i": latest_state.i,
-            "leaf_b64": latest_state.leaf_b64,
-            "siblings_b64": latest_state.siblings_b64,
-        }
-        payload_bytes = json_to_bytes(settlement_payload)
+        settlement_payload = PaytreeSettlementPayload(
+            channel_id=dto.channel_id,
+            i=latest_state.i,
+            leaf_b64=latest_state.leaf_b64,
+            siblings_b64=latest_state.siblings_b64,
+        )
+        payload_bytes = payload_to_bytes(settlement_payload)
 
         if not self.vendor_private_key_pem:
             raise ValueError("Vendor private key is not configured")
@@ -313,15 +315,15 @@ class PaytreePaymentService:
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
             await issuer_client.settle_paytree_payment_channel(
-                dto.computed_id, request_dto
+                dto.channel_id, request_dto
             )
 
         await self.payment_channel_repository.mark_closed(
-            computed_id=dto.computed_id,
+            channel_id=dto.channel_id,
             close_payload_b64="",
             client_close_signature_b64="",
             amount=channel.amount,
-            balance=owed_amount,
+            balance=cumulative_owed_amount,
             vendor_close_signature_b64=vendor_signature_b64,
         )
 

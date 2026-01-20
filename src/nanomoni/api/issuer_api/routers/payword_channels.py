@@ -56,7 +56,7 @@ async def get_payword_channel(
     channel_id: str,
     service: PaywordChannelService = Depends(get_payword_channel_service),
 ) -> PaywordPaymentChannelResponseDTO:
-    payload = GetPaymentChannelRequestDTO(computed_id=channel_id)
+    payload = GetPaymentChannelRequestDTO(channel_id=channel_id)
     try:
         return await service.get_channel(payload)
     except ValueError as err:

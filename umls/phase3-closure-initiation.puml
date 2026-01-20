@@ -7,30 +7,30 @@ actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
 
-Client -> Vendor: Request Channel Closure\nCloseChannelRequest
+Client -> Vendor: Request Channel Closure
 activate Vendor
 
-Vendor -> VendorDB: Get Channel Aggregate
-VendorDB --> Vendor: PaymentChannel + latest_tx
+Vendor -> VendorDB: Load channel state
+VendorDB --> Vendor: PaymentChannel + latest payment
 
-Vendor -> Vendor: Validate channel & payments
+Vendor -> Vendor: Validate latest payment and channel state
 
-Vendor -> Vendor: Build CloseChannelRequestPayload\nfrom latest OffChainTx
-Vendor -> Vendor: Wrap payload in Envelope\nsigned with vendor private key
+Vendor -> Vendor: Prepare settlement request
+Vendor -> Vendor: Sign settlement request
 
-Vendor -> Issuer: Settle & Close Channel\nEnvelope<CloseChannelRequestPayload>
+Vendor -> Issuer: Settle & Close Channel
 activate Issuer
 
 Issuer -> Issuer: Receive & validate envelope
 
-Issuer -> IssuerDB: Get PaymentChannel \nfrom computed_id
+Issuer -> IssuerDB: Get PaymentChannel (by channel_id)
 IssuerDB --> Issuer: PaymentChannel
 
-Issuer -> Issuer: Validate settlement logic
+Issuer -> Issuer: Validate settlement
 
-Issuer -> IssuerDB: UPDATE vendor Account\nbalance += owed_amount
-Issuer -> IssuerDB: UPDATE client Account\nbalance += (amount - owed_amount)
-Issuer -> IssuerDB: UPDATE PaymentChannel\nMark as closed
+Issuer -> IssuerDB: Update Vendor Account
+Issuer -> IssuerDB: Update Client Account
+Issuer -> IssuerDB: Update PaymentChannel\nMark as closed
 
 Issuer --> Vendor: 200 OK\nCloseChannelResponse
 deactivate Issuer

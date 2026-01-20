@@ -22,7 +22,7 @@ class ReceivePaytreePaymentDTO(BaseModel):
 class PaytreePaymentResponseDTO(CommonSerializersMixin, BaseModel):
     """DTO for returning PayTree payment acceptance data."""
 
-    computed_id: str
+    channel_id: str
     i: int
-    owed_amount: int
+    cumulative_owed_amount: int
     created_at: datetime

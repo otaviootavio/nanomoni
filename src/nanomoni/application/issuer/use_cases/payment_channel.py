@@ -30,7 +30,7 @@ from ....crypto.certificates import (
 )
 from ....application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
-    CloseChannelRequestPayload,
+    SignatureSettlementPayload,
 )
 
 
@@ -108,19 +108,19 @@ class PaymentChannelService:
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
 
-        computed_id = self._compute_channel_id(
+        channel_id = self._compute_channel_id(
             open_req_payload.client_public_key_der_b64,
             open_req_payload.vendor_public_key_der_b64,
             salt_b64,
         )
 
-        existing = await self.channel_repo.get_by_computed_id(computed_id)
+        existing = await self.channel_repo.get_by_channel_id(channel_id)
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
         # Create the channel and lock the funds into the channel
         channel = PaymentChannel(
-            computed_id=computed_id,
+            channel_id=channel_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
             salt_b64=salt_b64,
@@ -140,12 +140,12 @@ class PaymentChannelService:
                 open_req_payload.client_public_key_der_b64, -open_req_payload.amount
             )
         except Exception:
-            await self.channel_repo.delete_by_computed_id(computed_id)
+            await self.channel_repo.delete_by_channel_id(channel_id)
             raise
 
         # Issue a plain response describing the opened channel
         return OpenChannelResponseDTO(
-            computed_id=created.computed_id,
+            channel_id=created.channel_id,
             client_public_key_der_b64=created.client_public_key_der_b64,
             vendor_public_key_der_b64=created.vendor_public_key_der_b64,
             salt_b64=created.salt_b64,
@@ -153,29 +153,54 @@ class PaymentChannelService:
             balance=created.balance,
         )
 
-    async def close_channel(
+    async def settle_channel(
         self, dto: CloseChannelRequestDTO
     ) -> CloseChannelResponseDTO:
-        # Deserialize and verify client close-channel envelope (client signature)
+        # Close-channel payload is a "thin" statement: (channel_id, cumulative_owed_amount).
+        # The Issuer infers client/vendor keys from the PaymentChannel stored by channel_id.
+        try:
+            close_payload_bytes = base64.b64decode(dto.close_payload_b64)
+            close_payload_unverified = SignatureSettlementPayload.model_validate_json(
+                close_payload_bytes.decode("utf-8")
+            )
+        except Exception as err:
+            raise ValueError("Invalid close payload format") from err
+
+        # Ensure channel exists (authoritative binding for keys)
+        channel_id = close_payload_unverified.channel_id
+        cumulative_owed_amount = close_payload_unverified.cumulative_owed_amount
+
+        channel = await self.channel_repo.get_by_channel_id(channel_id)
+        if not channel:
+            raise ValueError("Payment channel not found")
+        if channel.is_closed:
+            raise ValueError("Payment channel already closed")
+
+        if cumulative_owed_amount < 0 or cumulative_owed_amount > channel.amount:
+            raise ValueError("Invalid owed amount")
+
+        # Verify client signature (detached, over close_payload_b64 bytes)
         client_public_key: ec.EllipticCurvePublicKey = load_public_key_from_der_b64(
-            DERB64(dto.client_public_key_der_b64)
+            DERB64(channel.client_public_key_der_b64)
         )
         client_envelope: Envelope = Envelope(
             payload_b64=PayloadB64(dto.close_payload_b64),
             signature_b64=SignatureB64(dto.client_close_signature_b64),
         )
         try:
-            client_payload_bytes = verify_envelope_and_get_payload_bytes(
+            verified_client_bytes = verify_envelope_and_get_payload_bytes(
                 client_public_key, client_envelope
             )
-        except InvalidSignature:
-            raise ValueError("Invalid closing certificate signature")
-        except Exception:
-            raise ValueError("Invalid certificate payload format")
+        except InvalidSignature as err:
+            raise ValueError("Invalid client signature for closing") from err
 
-        # Deserialize and verify vendor close-channel envelope (vendor signature)
+        # Ensure what we verified is exactly what we parsed
+        if verified_client_bytes != close_payload_bytes:
+            raise ValueError("Close payload mismatch for client signature")
+
+        # Verify vendor signature (detached, over same payload bytes)
         vendor_public_key: ec.EllipticCurvePublicKey = load_public_key_from_der_b64(
-            DERB64(dto.vendor_public_key_der_b64)
+            DERB64(channel.vendor_public_key_der_b64)
         )
         vendor_envelope: Envelope = Envelope(
             payload_b64=PayloadB64(dto.close_payload_b64),
@@ -186,68 +211,41 @@ class PaymentChannelService:
         except InvalidSignature:
             raise ValueError("Invalid vendor signature for closing")
 
-        # Parse and validate the close payload using already-decoded bytes
-        close_payload: CloseChannelRequestPayload = (
-            CloseChannelRequestPayload.model_validate_json(
-                client_payload_bytes.decode("utf-8")
-            )
-        )
-
-        # Ensure channel exists
-        channel = await self.channel_repo.get_by_computed_id(close_payload.computed_id)
-        if not channel:
-            raise ValueError("Payment channel not found")
-        if channel.is_closed:
-            raise ValueError("Payment channel already closed")
-
-        # Basic consistency checks
-        if close_payload.client_public_key_der_b64 != channel.client_public_key_der_b64:
-            raise ValueError("Mismatched client public key for channel")
-        if close_payload.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
-            raise ValueError("Mismatched vendor public key for channel")
-
-        if close_payload.owed_amount < 0 or close_payload.owed_amount > channel.amount:
-            raise ValueError("Invalid owed amount")
-
         # Ensure vendor account exists
-        vendor_acc = await self.account_repo.get_by_public_key(
-            close_payload.vendor_public_key_der_b64
-        )
+        vendor_key = channel.vendor_public_key_der_b64
+
+        vendor_acc = await self.account_repo.get_by_public_key(vendor_key)
         if not vendor_acc:
-            vendor_acc = Account(
-                public_key_der_b64=close_payload.vendor_public_key_der_b64, balance=0
-            )
+            vendor_acc = Account(public_key_der_b64=vendor_key, balance=0)
             await self.account_repo.upsert(vendor_acc)
 
         # Return the remainder to client
-        remainder = channel.amount - close_payload.owed_amount
+        remainder = channel.amount - cumulative_owed_amount
 
         # The following three operations must behave transactionally:
         # 1) credit vendor, 2) refund client remainder, 3) mark channel closed.
         # If any step fails, roll back prior balance changes before propagating
         # the error to avoid leaving inconsistent balances.
         vendor_acc = await self.account_repo.update_balance(
-            close_payload.vendor_public_key_der_b64, close_payload.owed_amount
+            vendor_key, cumulative_owed_amount
         )
         try:
             client_acc = await self.account_repo.update_balance(
-                close_payload.client_public_key_der_b64, remainder
+                channel.client_public_key_der_b64, remainder
             )
         except Exception:
             # Roll back vendor credit if client refund fails.
-            await self.account_repo.update_balance(
-                close_payload.vendor_public_key_der_b64, -close_payload.owed_amount
-            )
+            await self.account_repo.update_balance(vendor_key, -cumulative_owed_amount)
             raise
 
         try:
             # Mark channel closed and persist the closing signature, updating channel amounts
             await self.channel_repo.mark_closed(
-                close_payload.computed_id,
+                channel_id,
                 dto.close_payload_b64,
                 dto.client_close_signature_b64,
                 amount=channel.amount,
-                balance=close_payload.owed_amount,
+                balance=cumulative_owed_amount,
                 vendor_close_signature_b64=dto.vendor_close_signature_b64,
             )
         except Exception as close_err:
@@ -255,13 +253,13 @@ class PaymentChannelService:
             rollback_errors: list[Exception] = []
             try:
                 await self.account_repo.update_balance(
-                    close_payload.vendor_public_key_der_b64, -close_payload.owed_amount
+                    vendor_key, -cumulative_owed_amount
                 )
             except Exception as e:
                 rollback_errors.append(e)
             try:
                 await self.account_repo.update_balance(
-                    close_payload.client_public_key_der_b64, -remainder
+                    channel.client_public_key_der_b64, -remainder
                 )
             except Exception as e:
                 rollback_errors.append(e)
@@ -273,7 +271,7 @@ class PaymentChannelService:
             raise
 
         return CloseChannelResponseDTO(
-            computed_id=close_payload.computed_id,
+            channel_id=channel_id,
             client_balance=client_acc.balance,
             vendor_balance=vendor_acc.balance,
         )
@@ -281,7 +279,7 @@ class PaymentChannelService:
     async def get_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaymentChannelResponseDTO:
-        channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
+        channel = await self.channel_repo.get_by_channel_id(dto.channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
         # Signature flow response should not expose PayWord fields.

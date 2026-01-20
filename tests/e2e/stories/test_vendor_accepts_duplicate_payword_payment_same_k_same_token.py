@@ -32,22 +32,22 @@ async def test_vendor_accepts_duplicate_payword_payment_same_k_same_token(
         pebble_count=8,
     )
     channel_response = await issuer_client.open_payword_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     k = 10
     token_b64 = payword.payment_proof_b64(k=k)
 
     first = await vendor_client.receive_payword_payment(
-        computed_id, k=k, token_b64=token_b64
+        channel_id, k=k, token_b64=token_b64
     )
     dup = await vendor_client.receive_payword_payment(
-        computed_id, k=k, token_b64=token_b64
+        channel_id, k=k, token_b64=token_b64
     )
 
-    assert first.computed_id == computed_id
+    assert first.channel_id == channel_id
     assert first.k == k
-    assert first.owed_amount == k
+    assert first.cumulative_owed_amount == k
 
-    assert dup.computed_id == computed_id
+    assert dup.channel_id == channel_id
     assert dup.k == k
-    assert dup.owed_amount == k
+    assert dup.cumulative_owed_amount == k

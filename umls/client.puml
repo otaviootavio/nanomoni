@@ -14,7 +14,13 @@ skinparam Ranksep 5
 
 rectangle "Client Context" #FFF9E6 {
     rectangle "Client Orchestration" as client_orchestration #FFECB3 {
-        file "**client_pay_chan.py**\n\n• register_into_issuer_using_private_key()\n• open_payment_channel()\n• client_create_off_tx_to_vendor()\n• vendor_validate_client_off_tx()\n• send_payment_to_vendor()\n• request_vendor_close_channel()\n• main()"
+        file "**client_pay_chan.py**\n\n• register_into_issuer_using_private_key()\n• open_payment_channel()\n• client_create_off_tx_to_vendor()\n• vendor_validate_client_off_tx()\n• send_payment_to_vendor()\n• request_vendor_settle_channel()\n• main()"
+    }
+
+    rectangle "Commitment Scheme Clients" as commitment_clients #FFE0B2 {
+        file "**client/payword.py**\ninit_commitment()\nbuild_open_payload()\nsend_payments()" as payword_client
+        file "**client/paytree.py**\ninit_commitment()\nbuild_open_payload()\nsend_payments()" as paytree_client
+        file "**client/common.py**\nvalidate_mode()\nopen_channel_for_mode()\nrequest_settle_for_mode()\ncompute_final_cumulative_owed_amount()" as common_client
     }
 
     rectangle "HTTP Clients (SDK)" as http_clients #E8F4F8 {
@@ -28,7 +34,13 @@ rectangle "Client Context" #FFF9E6 {
             file "vendor_client.py\nVendorClient"
         }
     }
-    client_orchestration -[hidden]down-> http_clients
+    client_orchestration -[hidden]down-> commitment_clients
+    commitment_clients -[hidden]down-> http_clients
+
+    
+    payword_client -[hidden]down-> http_clients
+    paytree_client -[hidden]down-> http_clients
+    common_client -[hidden]down-> http_clients
 }
 
 @enduml

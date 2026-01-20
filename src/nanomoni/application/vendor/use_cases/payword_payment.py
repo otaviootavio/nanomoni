@@ -9,10 +9,12 @@ from pydantic import ValidationError
 
 from ....application.issuer.dtos import GetPaymentChannelRequestDTO
 from ....application.issuer.payword_dtos import PaywordSettlementRequestDTO
-from ....crypto.certificates import json_to_bytes, load_private_key_from_pem, sign_bytes
+from ....application.shared.payword_payloads import PaywordSettlementPayload
+from ....application.shared.serialization import payload_to_bytes
+from ....crypto.certificates import load_private_key_from_pem, sign_bytes
 from ....crypto.payword import (
     b64_to_bytes,
-    compute_owed_amount,
+    compute_cumulative_owed_amount,
     verify_token_against_root,
     verify_token_incremental,
 )
@@ -40,7 +42,7 @@ class PaywordPaymentService:
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
-    async def _verify_payword_channel(self, computed_id: str) -> PaymentChannel:
+    async def _verify_payword_channel(self, channel_id: str) -> PaymentChannel:
         """
         Verify that the PayWord channel exists on the issuer side and return it.
 
@@ -49,7 +51,7 @@ class PaywordPaymentService:
         """
         try:
             async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-                dto = GetPaymentChannelRequestDTO(computed_id=computed_id)
+                dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
                 issuer_channel = await issuer_client.get_payword_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
 
@@ -78,7 +80,7 @@ class PaywordPaymentService:
     async def _save_payword_payment_with_retry(
         self,
         *,
-        computed_id: str,
+        channel_id: str,
         payment_channel: PaymentChannel,
         new_state: PaywordState,
         is_first_payment: bool,
@@ -112,8 +114,8 @@ class PaywordPaymentService:
 
                 # status == 0: cache collision; switch to subsequent-save flow
                 is_first_payment = False
-                cached = await self.payment_channel_repository.get_by_computed_id(
-                    computed_id
+                cached = await self.payment_channel_repository.get_by_channel_id(
+                    channel_id
                 )
                 if not cached:
                     raise RuntimeError(
@@ -134,7 +136,7 @@ class PaywordPaymentService:
             # status == 2: vendor cache is missing the channel; fetch from issuer,
             # then cache it and retry the save flow once.
             if attempt == 0:
-                payment_channel = await self._verify_payword_channel(computed_id)
+                payment_channel = await self._verify_payword_channel(channel_id)
                 is_first_payment = True
                 continue
 
@@ -143,16 +145,16 @@ class PaywordPaymentService:
         return status, stored_state, payment_channel
 
     async def receive_payword_payment(
-        self, computed_id: str, dto: ReceivePaywordPaymentDTO
+        self, channel_id: str, dto: ReceivePaywordPaymentDTO
     ) -> PaywordPaymentResponseDTO:
         """Receive and validate a PayWord (hash-chain) payment from a client."""
-        payment_channel = await self.payment_channel_repository.get_by_computed_id(
-            computed_id
+        payment_channel = await self.payment_channel_repository.get_by_channel_id(
+            channel_id
         )
 
         is_first_payment = False
         if not payment_channel:
-            payment_channel = await self._verify_payword_channel(computed_id)
+            payment_channel = await self._verify_payword_channel(channel_id)
             is_first_payment = True
 
         if payment_channel.is_closed:
@@ -170,7 +172,7 @@ class PaywordPaymentService:
             raise ValueError("Unsupported PayWord hash algorithm")
 
         latest_state = await self.payment_channel_repository.get_payword_state(
-            computed_id
+            channel_id
         )
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
@@ -186,13 +188,13 @@ class PaywordPaymentService:
                     raise ValueError(
                         "Duplicate PayWord k with mismatched token (possible replay attack)"
                     )
-                owed_amount = compute_owed_amount(
+                cumulative_owed_amount = compute_cumulative_owed_amount(
                     k=latest_state.k, unit_value=payment_channel.payword_unit_value
                 )
                 return PaywordPaymentResponseDTO(
-                    computed_id=latest_state.computed_id,
+                    channel_id=latest_state.channel_id,
                     k=latest_state.k,
-                    owed_amount=owed_amount,
+                    cumulative_owed_amount=cumulative_owed_amount,
                     created_at=latest_state.created_at,
                 )
 
@@ -203,12 +205,12 @@ class PaywordPaymentService:
         if dto.k > payment_channel.payword_max_k:
             raise ValueError("PayWord k exceeds channel max_k")
 
-        owed_amount = compute_owed_amount(
+        cumulative_owed_amount = compute_cumulative_owed_amount(
             k=dto.k, unit_value=payment_channel.payword_unit_value
         )
-        if owed_amount > payment_channel.amount:
+        if cumulative_owed_amount > payment_channel.amount:
             raise ValueError(
-                f"Owed amount {owed_amount} exceeds payment channel amount {payment_channel.amount}"
+                f"Owed amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
         try:
@@ -237,7 +239,7 @@ class PaywordPaymentService:
                 raise ValueError("Invalid PayWord token for k (incremental mismatch)")
 
         new_state = PaywordState(
-            computed_id=computed_id,
+            channel_id=channel_id,
             k=dto.k,
             token_b64=dto.token_b64,
             created_at=datetime.now(timezone.utc),
@@ -248,7 +250,7 @@ class PaywordPaymentService:
             stored_state,
             payment_channel,
         ) = await self._save_payword_payment_with_retry(
-            computed_id=computed_id,
+            channel_id=channel_id,
             payment_channel=payment_channel,
             new_state=new_state,
             is_first_payment=is_first_payment,
@@ -260,9 +262,9 @@ class PaywordPaymentService:
                     "Unexpected: save_payword_payment returned success but no state"
                 )
             return PaywordPaymentResponseDTO(
-                computed_id=stored_state.computed_id,
+                channel_id=stored_state.channel_id,
                 k=stored_state.k,
-                owed_amount=owed_amount,
+                cumulative_owed_amount=cumulative_owed_amount,
                 created_at=stored_state.created_at,
             )
         elif status == 0:
@@ -273,11 +275,11 @@ class PaywordPaymentService:
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
-    async def close_channel(self, dto: CloseChannelDTO) -> None:
-        """Close a PayWord channel by settling the latest PayWord state on the issuer."""
-        channel = await self.payment_channel_repository.get_by_computed_id(
-            dto.computed_id
-        )
+    async def settle_channel(self, channel_id: str, dto: CloseChannelDTO) -> None:
+        """Settle a PayWord channel by settling the latest PayWord state on the issuer."""
+        if dto.channel_id != channel_id:
+            raise ValueError("Channel ID mismatch between path and payload")
+        channel = await self.payment_channel_repository.get_by_channel_id(channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
@@ -291,23 +293,23 @@ class PaywordPaymentService:
             raise ValueError("Payment channel is not PayWord-enabled")
 
         latest_state = await self.payment_channel_repository.get_payword_state(
-            dto.computed_id
+            channel_id
         )
         if not latest_state:
             raise ValueError("No PayWord payments received for this channel")
 
-        owed_amount = compute_owed_amount(
+        cumulative_owed_amount = compute_cumulative_owed_amount(
             k=latest_state.k, unit_value=channel.payword_unit_value
         )
-        if owed_amount > channel.amount:
+        if cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
-        settlement_payload = {
-            "computed_id": dto.computed_id,
-            "k": latest_state.k,
-            "token_b64": latest_state.token_b64,
-        }
-        payload_bytes = json_to_bytes(settlement_payload)
+        settlement_payload = PaywordSettlementPayload(
+            channel_id=channel_id,
+            k=latest_state.k,
+            token_b64=latest_state.token_b64,
+        )
+        payload_bytes = payload_to_bytes(settlement_payload)
 
         if not self.vendor_private_key_pem:
             raise ValueError("Vendor private key is not configured")
@@ -322,16 +324,14 @@ class PaywordPaymentService:
         )
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-            await issuer_client.settle_payword_payment_channel(
-                dto.computed_id, request_dto
-            )
+            await issuer_client.settle_payword_payment_channel(channel_id, request_dto)
 
         await self.payment_channel_repository.mark_closed(
-            computed_id=dto.computed_id,
+            channel_id=channel_id,
             close_payload_b64="",
             client_close_signature_b64="",
             amount=channel.amount,
-            balance=owed_amount,
+            balance=cumulative_owed_amount,
             vendor_close_signature_b64=vendor_signature_b64,
         )
 

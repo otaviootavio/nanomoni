@@ -203,7 +203,7 @@ class Payword:
         return self._cache.payment_proof_b64(k=k)
 
 
-def compute_owed_amount(*, k: int, unit_value: int) -> int:
+def compute_cumulative_owed_amount(*, k: int, unit_value: int) -> int:
     """Compute owed amount from the PayWord counter k and unit value."""
     if k < 0:
         raise ValueError("k must be >= 0")

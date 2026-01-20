@@ -25,6 +25,10 @@ from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 
+PAYWORD_NOT_INITIALIZED = "PayWord object should be initialized"
+PAYTREE_NOT_INITIALIZED = "PayTree object should be initialized"
+
+
 async def run_client_flow() -> None:
     """
     Minimal client runner.
@@ -45,8 +49,8 @@ async def run_client_flow() -> None:
     client_mode = common.validate_mode(settings.client_payment_mode)
 
     # Generate monotonic sequence:
-    # - signature mode: these are owed_amount values
-    # - payword mode: these are k counters (owed_amount = k * unit_value)
+    # - signature mode: these are cumulative_owed_amount values
+    # - payword mode: these are k counters (cumulative_owed_amount = k * unit_value)
     payments: list[int] = list(range(1, payment_count + 1))
 
     async with (
@@ -77,7 +81,7 @@ async def run_client_flow() -> None:
 
         # 4) Open channel (client-signed envelope)
         # Initialize mode-specific commitments and compute final owed amount
-        final_owed_amount: int
+        final_cumulative_owed_amount: int
         open_payload_base: (
             OpenChannelRequestPayload
             | PaywordOpenChannelRequestPayload
@@ -98,7 +102,7 @@ async def run_client_flow() -> None:
                 payword_unit_value,
                 payword_max_k,
             )
-            final_owed_amount = common.compute_final_owed_amount(
+            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, payword_unit_value
             )
         elif client_mode == "paytree":
@@ -113,7 +117,7 @@ async def run_client_flow() -> None:
                 paytree_unit_value,
                 paytree_max_i,
             )
-            final_owed_amount = common.compute_final_owed_amount(
+            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, paytree_unit_value
             )
         else:
@@ -122,7 +126,9 @@ async def run_client_flow() -> None:
                 vendor_pk.public_key_der_b64,
                 channel_amount,
             )
-            final_owed_amount = common.compute_final_owed_amount(client_mode, payments)
+            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
+                client_mode, payments
+            )
 
         # Sign and send open channel request
         open_env = generate_envelope(client_private_key, open_payload_base.model_dump())
@@ -131,7 +137,7 @@ async def run_client_flow() -> None:
             open_payload_b64=open_env.payload_b64,
             open_signature_b64=open_env.signature_b64,
         )
-        computed_id = await common.open_channel_for_mode(issuer, client_mode, open_dto)
+        channel_id = await common.open_channel_for_mode(issuer, client_mode, open_dto)
 
         # Read balance after lock (issuer register is idempotent; using it as a "get balance").
         after_open = await issuer.register(
@@ -144,39 +150,39 @@ async def run_client_flow() -> None:
         # 5) Payments
         if client_mode == "signature":
             payment_dtos = signature.prepare_payments(
-                computed_id,
+                channel_id,
                 settings.client_public_key_der_b64,
                 vendor_pk.public_key_der_b64,
                 client_private_key,
                 payments,
             )
-            await signature.send_payments(vendor, computed_id, payment_dtos)
+            await signature.send_payments(vendor, channel_id, payment_dtos)
         elif client_mode == "payword":
             if payword_obj is None:
-                raise RuntimeError("PayWord object should be initialized")
+                raise RuntimeError(PAYWORD_NOT_INITIALIZED)
             # Type narrowing: mypy now knows payword_obj is not None after the check
             payword_for_payments: Payword = payword_obj
             payword_payments = payword.prepare_payments(payword_for_payments, payments)
-            await payword.send_payments(vendor, computed_id, payword_payments)
+            await payword.send_payments(vendor, channel_id, payword_payments)
         else:  # paytree
             if paytree_obj is None:
-                raise RuntimeError("PayTree object should be initialized")
+                raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             # Type narrowing: mypy now knows paytree_obj is not None after the check
             paytree_for_payments: Paytree = paytree_obj
             await paytree.send_payments(
-                vendor, computed_id, paytree_for_payments, payments
+                vendor, channel_id, paytree_for_payments, payments
             )
 
         # 6) Closure request (vendor will call issuer settlement)
-        await common.request_close_for_mode(vendor, client_mode, computed_id)
+        await common.request_settle_for_mode(vendor, client_mode, channel_id)
 
         # Wait until issuer marks the channel closed.
-        await common.wait_until_closed(issuer, client_mode, computed_id)
+        await common.wait_until_closed(issuer, client_mode, channel_id)
 
         # 7) Assertion: client received remainder back on settlement.
         # Expected:
         # - After open: initial - channel_amount
-        # - After close: initial - final_owed_amount
+        # - After close: initial - final_cumulative_owed_amount
         final = await issuer.register(
             RegistrationRequestDTO(
                 client_public_key_der_b64=settings.client_public_key_der_b64
@@ -185,8 +191,8 @@ async def run_client_flow() -> None:
         final_balance = final.balance
 
         expected_after_open = initial_balance - channel_amount
-        expected_final = initial_balance - final_owed_amount
-        expected_remainder = channel_amount - final_owed_amount
+        expected_final = initial_balance - final_cumulative_owed_amount
+        expected_remainder = channel_amount - final_cumulative_owed_amount
 
         assert balance_after_open == expected_after_open, (
             f"Unexpected balance after open. got={balance_after_open}, "

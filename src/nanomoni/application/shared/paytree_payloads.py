@@ -26,3 +26,14 @@ class PaytreeOpenChannelRequestPayload(BaseModel):
     paytree_hash_alg: str = Field(
         "sha256", description="Hash algorithm (currently only sha256)"
     )
+
+
+class PaytreeSettlementPayload(BaseModel):
+    """Payload signed by the vendor when settling a PayTree channel on the issuer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str
+    i: int = Field(..., ge=0)
+    leaf_b64: str
+    siblings_b64: list[str]

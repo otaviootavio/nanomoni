@@ -17,14 +17,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         self.store = store
 
     @staticmethod
-    def _computed_id_key(computed_id: str) -> str:
-        # Key channels directly by computed_id to avoid an extra id lookup.
-        return f"payment_channel:{computed_id}"
+    def _channel_id_key(channel_id: str) -> str:
+        # Key channels directly by channel_id to avoid an extra id lookup.
+        return f"payment_channel:{channel_id}"
 
     async def create(self, channel: PaymentChannel) -> PaymentChannel:
-        # Store channel JSON keyed directly by computed_id.
+        # Store channel JSON keyed directly by channel_id.
         # Use a Lua script to ensure we don't overwrite an existing channel.
-        key = self._computed_id_key(channel.computed_id)
+        key = self._channel_id_key(channel.channel_id)
         script = (
             "if redis.call('EXISTS', KEYS[1]) == 1 then "
             "  return 0 "
@@ -39,18 +39,18 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             raise ValueError("Payment channel already exists")
         return channel
 
-    async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
-        data = await self.store.get(self._computed_id_key(computed_id))
+    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+        data = await self.store.get(self._channel_id_key(channel_id))
         if not data:
             return None
         return PaymentChannel.model_validate_json(data)
 
-    async def delete_by_computed_id(self, computed_id: str) -> int:
-        return await self.store.delete(self._computed_id_key(computed_id))
+    async def delete_by_channel_id(self, channel_id: str) -> int:
+        return await self.store.delete(self._channel_id_key(channel_id))
 
     async def mark_closed(
         self,
-        computed_id: str,
+        channel_id: str,
         close_payload_b64: Optional[str],
         client_close_signature_b64: Optional[str],
         *,
@@ -58,7 +58,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         balance: int,
         vendor_close_signature_b64: str,
     ) -> PaymentChannel:
-        existing = await self.get_by_computed_id(computed_id)
+        existing = await self.get_by_channel_id(channel_id)
         if not existing:
             raise ValueError("Payment channel not found")
         if existing.is_closed:
@@ -71,6 +71,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         existing.amount = amount
         existing.balance = balance
         await self.store.set(
-            self._computed_id_key(existing.computed_id), existing.model_dump_json()
+            self._channel_id_key(existing.channel_id), existing.model_dump_json()
         )
         return existing

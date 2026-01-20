@@ -38,7 +38,7 @@ async def test_vendor_rejects_invalid_payword_token(
         pebble_count=8,
     )
     channel_response = await issuer_client.open_payword_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     # When: Client sends a payment with tampered token
     valid_token_b64 = payword.payment_proof_b64(k=10)
@@ -46,7 +46,7 @@ async def test_vendor_rejects_invalid_payword_token(
 
     # Then: Vendor rejects the invalid token
     response = await vendor_client.receive_payword_payment_raw(
-        computed_id, k=10, token_b64=tampered_token_b64
+        channel_id, k=10, token_b64=tampered_token_b64
     )
     assert response.status_code == 400, "Should reject invalid PayWord token"
     response_data = response.json()

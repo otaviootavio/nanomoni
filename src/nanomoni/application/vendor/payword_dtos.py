@@ -19,7 +19,7 @@ class ReceivePaywordPaymentDTO(BaseModel):
 class PaywordPaymentResponseDTO(CommonSerializersMixin, BaseModel):
     """DTO for returning PayWord payment acceptance data."""
 
-    computed_id: str
+    channel_id: str
     k: int
-    owed_amount: int
+    cumulative_owed_amount: int
     created_at: datetime

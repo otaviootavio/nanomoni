@@ -106,7 +106,7 @@ class IssuerTestClient:
             open_channel_request: Pre-signed open channel request
 
         Returns:
-            OpenChannelResponseDTO with channel details including computed_id
+            OpenChannelResponseDTO with channel details including channel_id
         """
         response = await self._request(
             "POST",
@@ -132,34 +132,34 @@ class IssuerTestClient:
             json=open_channel_request.model_dump(),
         )
 
-    async def get_channel(self, computed_id: str) -> PaymentChannelResponseDTO:
+    async def get_channel(self, channel_id: str) -> PaymentChannelResponseDTO:
         """
-        Get payment channel state by computed ID.
+        Get payment channel state by channel ID.
 
         Args:
-            computed_id: Channel's computed ID
+            channel_id: Channel ID for the payment channel to fetch
 
         Returns:
             PaymentChannelResponseDTO with channel state
         """
         response = await self._request(
             "GET",
-            f"{self.base_url}/issuer/channels/signature/{computed_id}",
+            f"{self.base_url}/issuer/channels/signature/{channel_id}",
         )
 
         response.raise_for_status()
         return PaymentChannelResponseDTO.model_validate(response.json())
 
-    async def close_channel(
+    async def settle_channel(
         self,
-        computed_id: str,
+        channel_id: str,
         close_request: CloseChannelRequestDTO,
     ) -> CloseChannelResponseDTO:
         """
         Close and settle a payment channel.
 
         Args:
-            computed_id: Channel's computed ID
+            channel_id: Channel ID for the payment channel to close
             close_request: Close channel request with signatures
 
         Returns:
@@ -167,7 +167,7 @@ class IssuerTestClient:
         """
         response = await self._request(
             "POST",
-            f"{self.base_url}/issuer/channels/signature/{computed_id}/settlements",
+            f"{self.base_url}/issuer/channels/signature/{channel_id}/settlements",
             json=close_request.model_dump(),
         )
 
@@ -204,12 +204,12 @@ class IssuerTestClient:
         )
 
     async def get_payword_channel(
-        self, computed_id: str
+        self, channel_id: str
     ) -> PaywordPaymentChannelResponseDTO:
-        """Get PayWord payment channel state by computed ID."""
+        """Get PayWord payment channel state by channel ID."""
         response = await self._request(
             "GET",
-            f"{self.base_url}/issuer/channels/payword/{computed_id}",
+            f"{self.base_url}/issuer/channels/payword/{channel_id}",
         )
 
         response.raise_for_status()
@@ -245,12 +245,12 @@ class IssuerTestClient:
         )
 
     async def get_paytree_channel(
-        self, computed_id: str
+        self, channel_id: str
     ) -> PaytreePaymentChannelResponseDTO:
-        """Get PayTree payment channel state by computed ID."""
+        """Get PayTree payment channel state by channel ID."""
         response = await self._request(
             "GET",
-            f"{self.base_url}/issuer/channels/paytree/{computed_id}",
+            f"{self.base_url}/issuer/channels/paytree/{channel_id}",
         )
 
         response.raise_for_status()

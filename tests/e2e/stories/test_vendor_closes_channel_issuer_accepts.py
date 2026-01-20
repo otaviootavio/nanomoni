@@ -31,21 +31,21 @@ async def test_vendor_closes_channel_issuer_accepts(
 
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 2000)
     channel_response = await issuer_client.open_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     # Client makes payments
     payments = [50, 150, 300, 500]
-    for owed_amount in payments:
+    for cumulative_owed_amount in payments:
         payment_envelope = client.create_payment_envelope(
-            computed_id, vendor_public_key_der_b64, owed_amount
+            channel_id, cumulative_owed_amount
         )
-        await vendor_client.receive_payment(computed_id, payment_envelope)
+        await vendor_client.receive_payment(channel_id, payment_envelope)
 
     # When: Vendor initiates closure
-    await vendor_client.request_channel_closure(computed_id)
+    await vendor_client.request_channel_settlement(channel_id)
 
     # Then: Channel is closed with correct final balance
-    channel_state = await issuer_client.get_channel(computed_id)
+    channel_state = await issuer_client.get_channel(channel_id)
     assert channel_state.is_closed is True
     assert channel_state.balance == 500  # Final payment amount
 
@@ -72,16 +72,14 @@ async def test_vendor_tries_to_close_already_closed_channel_vendor_handles_grace
 
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 1000)
     channel_response = await issuer_client.open_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     # Receive payment and close
-    payment = client.create_payment_envelope(
-        computed_id, vendor_public_key_der_b64, 300
-    )
-    await vendor_client.receive_payment(computed_id, payment)
-    await vendor_client.request_channel_closure(computed_id)
+    payment = client.create_payment_envelope(channel_id, 300)
+    await vendor_client.receive_payment(channel_id, payment)
+    await vendor_client.request_channel_settlement(channel_id)
 
     # When: Vendor tries to close again
     # Then: Second closure should be handled gracefully (idempotent or rejected)
     # The implementation returns None if already closed, which is acceptable
-    await vendor_client.request_channel_closure(computed_id)  # Should not raise
+    await vendor_client.request_channel_settlement(channel_id)  # Should not raise
