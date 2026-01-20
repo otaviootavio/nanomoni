@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional
+from typing import Optional
 
 from ...domain.vendor.entities import (
     PaymentChannelBase,
@@ -378,13 +378,18 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
     async def get_all(
         self, skip: int = 0, limit: int = 100
-    ) -> List[PaymentChannelBase]:
+    ) -> list[PaymentChannelBase]:
         ids: list[str] = await self.store.zrevrange(
             "payment_channels:all", skip, skip + limit - 1
         )
-        channels: List[PaymentChannelBase] = []
-        for channel_id in ids:
-            data = await self.store.get(f"payment_channel:{channel_id}")
+        if not ids:
+            return []
+
+        keys = [f"payment_channel:{channel_id}" for channel_id in ids]
+        results = await self.store.mget(keys)
+
+        channels: list[PaymentChannelBase] = []
+        for data in results:
             if data:
                 channels.append(self._deserialize_channel(data))
         return channels
@@ -430,8 +435,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     async def mark_closed(
         self,
         channel_id: str,
-        close_payload_b64: Optional[str],
-        client_close_signature_b64: Optional[str],
         vendor_close_signature_b64: str,
         *,
         amount: int,

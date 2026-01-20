@@ -22,20 +22,20 @@ from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
 from ...envs.vendor_env import Settings, get_settings as _get_settings
 
 
-@lru_cache()
+@lru_cache
 def get_settings_dependency() -> Settings:
     """Process-wide cached settings (safe because env vars are static at runtime)."""
     return _get_settings()
 
 
-@lru_cache()
+@lru_cache
 def get_database_client_dependency() -> DatabaseClient:
     """Process-wide cached DB client."""
     settings = get_settings_dependency()
     return get_database_client(settings)
 
 
-@lru_cache()
+@lru_cache
 def get_key_value_store_dependency() -> KeyValueStore:
     """Process-wide cached store."""
     return RedisKeyValueStore(get_database_client_dependency())

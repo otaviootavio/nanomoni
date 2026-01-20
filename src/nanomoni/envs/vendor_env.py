@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import base64
 from functools import lru_cache
 
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 
 from nanomoni.application.issuer.dtos import RegistrationRequestDTO
+from nanomoni.crypto.key_utils import compute_public_key_der_b64_from_private_pem
 from nanomoni.infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 
@@ -82,7 +82,7 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
         print(f"An unexpected error occurred during vendor registration: {e}")
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     database_echo_str = os.environ.get("VENDOR_DATABASE_ECHO")
     api_debug_str = os.environ.get("VENDOR_API_DEBUG")
@@ -122,12 +122,9 @@ def get_settings() -> Settings:
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode()
 
-    vendor_public_key_der_b64 = base64.b64encode(
-        public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-    ).decode("utf-8")
+    vendor_public_key_der_b64 = compute_public_key_der_b64_from_private_pem(
+        vendor_private_key_pem
+    )
 
     return Settings(
         database_url=database_url,

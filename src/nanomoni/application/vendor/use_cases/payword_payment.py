@@ -159,7 +159,7 @@ class PaywordPaymentService:
             payment_channel = await self._verify_payword_channel(channel_id)
             is_first_payment = True
         elif not isinstance(payment_channel, PaywordPaymentChannel):
-            raise ValueError("Payment channel is not PayWord-enabled")
+            raise TypeError("Payment channel is not PayWord-enabled")
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
@@ -280,7 +280,7 @@ class PaywordPaymentService:
         if not channel:
             raise ValueError("Payment channel not found")
         if not isinstance(channel, PaywordPaymentChannel):
-            raise ValueError("Payment channel is not PayWord-enabled")
+            raise TypeError("Payment channel is not PayWord-enabled")
         if channel.is_closed:
             return None
 
@@ -320,8 +320,6 @@ class PaywordPaymentService:
 
         await self.payment_channel_repository.mark_closed(
             channel_id=channel_id,
-            close_payload_b64=None,
-            client_close_signature_b64=None,
             amount=channel.amount,
             balance=cumulative_owed_amount,
             vendor_close_signature_b64=vendor_signature_b64,

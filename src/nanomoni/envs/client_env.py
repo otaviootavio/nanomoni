@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import os
 from functools import lru_cache
 from typing import Optional
@@ -8,6 +7,8 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 from urllib.parse import urlparse
+
+from nanomoni.crypto.key_utils import compute_public_key_der_b64_from_private_pem
 
 
 class Settings(BaseModel):
@@ -64,20 +65,7 @@ class Settings(BaseModel):
         return v
 
 
-def _compute_public_key_der_b64_from_private_pem(private_key_pem: str) -> str:
-    private_key = serialization.load_pem_private_key(
-        private_key_pem.encode(),
-        password=None,
-    )
-    public_key = private_key.public_key()
-    public_key_der = public_key.public_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return base64.b64encode(public_key_der).decode("utf-8")
-
-
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     client_private_key_pem = os.environ.get("CLIENT_PRIVATE_KEY_PEM")
     vendor_base_url = os.environ.get("VENDOR_BASE_URL")
@@ -148,7 +136,7 @@ def get_settings() -> Settings:
 
     return Settings(
         client_private_key_pem=client_private_key_pem,
-        client_public_key_der_b64=_compute_public_key_der_b64_from_private_pem(
+        client_public_key_der_b64=compute_public_key_der_b64_from_private_pem(
             client_private_key_pem
         ),
         vendor_base_url=vendor_base_url,

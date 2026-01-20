@@ -176,7 +176,7 @@ class PaymentChannelService:
         if channel.is_closed:
             raise ValueError("Payment channel already closed")
         if not isinstance(channel, SignaturePaymentChannel):
-            raise ValueError("Payment channel is not signature-mode")
+            raise TypeError("Payment channel is not signature-mode")
 
         if cumulative_owed_amount < 0 or cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
@@ -285,6 +285,6 @@ class PaymentChannelService:
         if not channel:
             raise ValueError("Payment channel not found")
         if not isinstance(channel, SignaturePaymentChannel):
-            raise ValueError("Payment channel is not signature-mode")
+            raise TypeError("Payment channel is not signature-mode")
         data = channel.model_dump()
         return PaymentChannelResponseDTO(**data)

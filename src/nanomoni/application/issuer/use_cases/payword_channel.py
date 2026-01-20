@@ -192,7 +192,7 @@ class PaywordChannelService:
         if channel.is_closed:
             raise ValueError("Payment channel already closed")
         if not isinstance(channel, PaywordPaymentChannel):
-            raise ValueError("Payment channel is not PayWord-enabled")
+            raise TypeError("Payment channel is not PayWord-enabled")
 
         if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
             raise ValueError("Mismatched vendor public key for channel")
@@ -308,7 +308,7 @@ class PaywordChannelService:
             raise ValueError("Payment channel not found")
 
         if not isinstance(channel, PaywordPaymentChannel):
-            raise ValueError("Payment channel is not PayWord-enabled")
+            raise TypeError("Payment channel is not PayWord-enabled")
 
         data = channel.model_dump()
         return PaywordPaymentChannelResponseDTO(**data)

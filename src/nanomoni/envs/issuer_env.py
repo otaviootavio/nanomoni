@@ -39,7 +39,7 @@ class Settings(BaseModel):
         return v
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     database_echo_str = os.environ.get("ISSUER_DATABASE_ECHO")
     api_debug_str = os.environ.get("ISSUER_API_DEBUG")

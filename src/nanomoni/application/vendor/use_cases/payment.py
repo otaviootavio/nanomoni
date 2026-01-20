@@ -135,7 +135,7 @@ class PaymentService:
                         "Race condition handling failed: channel missing after collision"
                     )
                 if not isinstance(cached, SignaturePaymentChannel):
-                    raise RuntimeError("Cached channel is not signature-mode")
+                    raise TypeError("Cached channel is not signature-mode")
                 payment_channel = cached
 
             status, stored_state = await self.payment_channel_repository.save_payment(
@@ -175,7 +175,7 @@ class PaymentService:
             payment_channel = await self._verify_payment_channel(payload.channel_id)
             is_first_payment = True
         elif not isinstance(payment_channel, SignaturePaymentChannel):
-            raise ValueError("Payment channel is not signature-mode")
+            raise TypeError("Payment channel is not signature-mode")
 
         latest_state = payment_channel.signature_state
         prev_cumulative_owed_amount = (
@@ -278,7 +278,7 @@ class PaymentService:
         if not channel:
             raise ValueError("Payment channel not found")
         if not isinstance(channel, SignaturePaymentChannel):
-            raise ValueError("Payment channel is not signature-mode")
+            raise TypeError("Payment channel is not signature-mode")
         if channel.is_closed:
             return None
 
@@ -317,8 +317,6 @@ class PaymentService:
         # 6) Mark closed locally
         await self.payment_channel_repository.mark_closed(
             channel_id=dto.channel_id,
-            close_payload_b64=None,
-            client_close_signature_b64=None,
             amount=channel.amount,
             balance=latest_state.cumulative_owed_amount,
             vendor_close_signature_b64=vendor_close_signature_b64,

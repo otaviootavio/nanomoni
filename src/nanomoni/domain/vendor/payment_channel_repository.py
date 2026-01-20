@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Optional
 
 from .entities import (
     PaymentChannelBase,
@@ -126,7 +126,7 @@ class PaymentChannelRepository(ABC):
     @abstractmethod
     async def get_all(
         self, skip: int = 0, limit: int = 100
-    ) -> List[PaymentChannelBase]:
+    ) -> list[PaymentChannelBase]:
         """Get all payment_channels with pagination."""
         pass
 
@@ -139,8 +139,6 @@ class PaymentChannelRepository(ABC):
     async def mark_closed(
         self,
         channel_id: str,
-        close_payload_b64: Optional[str],
-        client_close_signature_b64: Optional[str],
         *,
         amount: int,
         balance: int,
