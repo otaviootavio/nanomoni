@@ -126,10 +126,6 @@ class PaymentChannelService:
             salt_b64=salt_b64,
             amount=open_req_payload.amount,
             balance=0,
-            payword_root_b64=None,
-            payword_unit_value=None,
-            payword_max_k=None,
-            payword_hash_alg=None,
         )
         created = await self.channel_repo.create(channel)
 
