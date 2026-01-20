@@ -42,7 +42,7 @@ class OpenChannelRequestDTO(BaseModel):
 class OpenChannelResponseDTO(BaseModel):
     """Response containing the opened channel details."""
 
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str
@@ -53,8 +53,6 @@ class OpenChannelResponseDTO(BaseModel):
 class CloseChannelRequestDTO(BaseModel):
     """Vendor presents client-signed close envelope plus vendor's consent signature (detached) for closing."""
 
-    client_public_key_der_b64: str
-    vendor_public_key_der_b64: str
     close_payload_b64: str
     client_close_signature_b64: str
     vendor_close_signature_b64: str
@@ -63,7 +61,7 @@ class CloseChannelRequestDTO(BaseModel):
 class CloseChannelResponseDTO(BaseModel):
     """Response after closing the channel with updated balances."""
 
-    computed_id: str
+    channel_id: str
     client_balance: int
     vendor_balance: int
 
@@ -71,14 +69,14 @@ class CloseChannelResponseDTO(BaseModel):
 class GetPaymentChannelRequestDTO(BaseModel):
     """Request to get a payment channel by its computed ID."""
 
-    computed_id: str
+    channel_id: str
 
 
 class PaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     """Response with payment channel details."""
 
     id: UUID
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str

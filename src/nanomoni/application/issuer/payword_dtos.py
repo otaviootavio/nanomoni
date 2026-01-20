@@ -14,7 +14,7 @@ from nanomoni.domain.shared.serializers import CommonSerializersMixin
 class PaywordOpenChannelResponseDTO(BaseModel):
     """Response containing an opened PayWord-enabled channel details."""
 
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str
@@ -31,7 +31,7 @@ class PaywordPaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     """Response with PayWord-enabled payment channel details."""
 
     id: UUID
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str

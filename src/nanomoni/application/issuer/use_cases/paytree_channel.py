@@ -19,7 +19,11 @@ from ....application.issuer.paytree_dtos import (
     PaytreePaymentChannelResponseDTO,
     PaytreeSettlementRequestDTO,
 )
-from ....application.shared.paytree_payloads import PaytreeOpenChannelRequestPayload
+from ....application.shared.paytree_payloads import (
+    PaytreeOpenChannelRequestPayload,
+    PaytreeSettlementPayload,
+)
+from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import (
     DERB64,
     Envelope,
@@ -32,7 +36,7 @@ from ....crypto.certificates import (
 )
 from ....crypto.paytree import (
     b64_to_bytes,
-    compute_owed_amount,
+    compute_cumulative_owed_amount,
     verify_paytree_proof,
 )
 from ....domain.issuer.entities import Account, PaymentChannel
@@ -114,7 +118,7 @@ class PaytreeChannelService:
         except Exception as e:
             raise ValueError(f"Invalid paytree_root_b64: {e}") from e
 
-        max_owed = compute_owed_amount(
+        max_owed = compute_cumulative_owed_amount(
             i=open_req_payload.paytree_max_i,
             unit_value=open_req_payload.paytree_unit_value,
         )
@@ -126,18 +130,18 @@ class PaytreeChannelService:
 
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
-        computed_id = self._compute_channel_id(
+        channel_id = self._compute_channel_id(
             open_req_payload.client_public_key_der_b64,
             open_req_payload.vendor_public_key_der_b64,
             salt_b64,
         )
 
-        existing = await self.channel_repo.get_by_computed_id(computed_id)
+        existing = await self.channel_repo.get_by_channel_id(channel_id)
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
         channel = PaymentChannel(
-            computed_id=computed_id,
+            channel_id=channel_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
             salt_b64=salt_b64,
@@ -157,7 +161,7 @@ class PaytreeChannelService:
                 open_req_payload.client_public_key_der_b64, -open_req_payload.amount
             )
         except Exception:
-            await self.channel_repo.delete_by_computed_id(computed_id)
+            await self.channel_repo.delete_by_channel_id(channel_id)
             raise
 
         if (
@@ -168,7 +172,7 @@ class PaytreeChannelService:
             raise RuntimeError("Unexpected: persisted PayTree fields are missing")
 
         return PaytreeOpenChannelResponseDTO(
-            computed_id=created.computed_id,
+            channel_id=created.channel_id,
             client_public_key_der_b64=created.client_public_key_der_b64,
             vendor_public_key_der_b64=created.vendor_public_key_der_b64,
             salt_b64=created.salt_b64,
@@ -181,9 +185,9 @@ class PaytreeChannelService:
         )
 
     async def settle_channel(
-        self, computed_id: str, dto: PaytreeSettlementRequestDTO
+        self, channel_id: str, dto: PaytreeSettlementRequestDTO
     ) -> CloseChannelResponseDTO:
-        channel = await self.channel_repo.get_by_computed_id(computed_id)
+        channel = await self.channel_repo.get_by_channel_id(channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
@@ -206,13 +210,13 @@ class PaytreeChannelService:
         if dto.i > channel.paytree_max_i:
             raise ValueError("i exceeds PayTree max_i for this channel")
 
-        settlement_payload = {
-            "computed_id": computed_id,
-            "i": dto.i,
-            "leaf_b64": dto.leaf_b64,
-            "siblings_b64": dto.siblings_b64,
-        }
-        payload_bytes = json_to_bytes(settlement_payload)
+        settlement_payload = PaytreeSettlementPayload(
+            channel_id=channel_id,
+            i=dto.i,
+            leaf_b64=dto.leaf_b64,
+            siblings_b64=dto.siblings_b64,
+        )
+        payload_bytes = payload_to_bytes(settlement_payload)
         vendor_public_key = load_public_key_from_der_b64(
             DERB64(channel.vendor_public_key_der_b64)
         )
@@ -237,10 +241,10 @@ class PaytreeChannelService:
         ):
             raise ValueError("Invalid PayTree proof (root mismatch)")
 
-        owed_amount = compute_owed_amount(
+        cumulative_owed_amount = compute_cumulative_owed_amount(
             i=dto.i, unit_value=channel.paytree_unit_value
         )
-        if owed_amount > channel.amount:
+        if cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
         vendor_acc = await self.account_repo.get_by_public_key(
@@ -252,13 +256,13 @@ class PaytreeChannelService:
             )
             await self.account_repo.upsert(vendor_acc)
 
-        remainder = channel.amount - owed_amount
+        remainder = channel.amount - cumulative_owed_amount
         # The following three operations must behave transactionally:
         # 1) credit vendor, 2) refund client remainder, 3) mark channel closed.
         # If any step fails, roll back prior balance changes before propagating
         # the error to avoid leaving inconsistent balances.
         vendor_acc = await self.account_repo.update_balance(
-            channel.vendor_public_key_der_b64, owed_amount
+            channel.vendor_public_key_der_b64, cumulative_owed_amount
         )
         try:
             client_acc = await self.account_repo.update_balance(
@@ -267,17 +271,17 @@ class PaytreeChannelService:
         except Exception:
             # Roll back vendor credit if client refund fails.
             await self.account_repo.update_balance(
-                channel.vendor_public_key_der_b64, -owed_amount
+                channel.vendor_public_key_der_b64, -cumulative_owed_amount
             )
             raise
 
         try:
             await self.channel_repo.mark_closed(
-                computed_id,
+                channel_id,
                 close_payload_b64="",
                 client_close_signature_b64="",
                 amount=channel.amount,
-                balance=owed_amount,
+                balance=cumulative_owed_amount,
                 vendor_close_signature_b64=dto.vendor_signature_b64,
             )
         except Exception as close_err:
@@ -285,7 +289,7 @@ class PaytreeChannelService:
             rollback_errors: list[Exception] = []
             try:
                 await self.account_repo.update_balance(
-                    channel.vendor_public_key_der_b64, -owed_amount
+                    channel.vendor_public_key_der_b64, -cumulative_owed_amount
                 )
             except Exception as e:
                 rollback_errors.append(e)
@@ -303,7 +307,7 @@ class PaytreeChannelService:
             raise
 
         return CloseChannelResponseDTO(
-            computed_id=computed_id,
+            channel_id=channel_id,
             client_balance=client_acc.balance,
             vendor_balance=vendor_acc.balance,
         )
@@ -311,7 +315,7 @@ class PaytreeChannelService:
     async def get_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaytreePaymentChannelResponseDTO:
-        channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
+        channel = await self.channel_repo.get_by_channel_id(dto.channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
 

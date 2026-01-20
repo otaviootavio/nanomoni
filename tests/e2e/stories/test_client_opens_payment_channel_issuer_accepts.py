@@ -37,7 +37,7 @@ async def test_client_opens_payment_channel_issuer_accepts(
     channel_response = await issuer_client.open_channel(open_request)
 
     # Then: Channel is created with correct details
-    assert channel_response.computed_id
+    assert channel_response.channel_id
     assert channel_response.amount == channel_amount
     assert channel_response.balance == 0, "New channel starts with zero balance"
     assert channel_response.client_public_key_der_b64 == client.public_key_der_b64
@@ -67,13 +67,13 @@ async def test_client_queries_channel_state_issuer_returns(
 
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 500)
     channel_response = await issuer_client.open_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     # When: Querying the channel state
-    channel_state = await issuer_client.get_channel(computed_id)
+    channel_state = await issuer_client.get_channel(channel_id)
 
     # Then: Channel details are returned correctly
-    assert channel_state.computed_id == computed_id
+    assert channel_state.channel_id == channel_id
     assert channel_state.amount == 500
     assert channel_state.is_closed is False
     assert channel_state.client_public_key_der_b64 == client.public_key_der_b64

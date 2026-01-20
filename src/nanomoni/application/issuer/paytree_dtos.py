@@ -14,7 +14,7 @@ from nanomoni.domain.shared.serializers import CommonSerializersMixin
 class PaytreeOpenChannelResponseDTO(BaseModel):
     """Response containing an opened PayTree-enabled channel details."""
 
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str
@@ -31,7 +31,7 @@ class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     """Response with PayTree-enabled payment channel details."""
 
     id: UUID
-    computed_id: str
+    channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str

@@ -105,13 +105,13 @@ async def receive_payment(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-async def close_channel(
+async def settle_channel(
     payload: CloseChannelDTO,
     channel_id: str = Path(..., description="Payment channel identifier"),
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> Response:
     try:
-        await payment_service.close_channel(payload)
+        await payment_service.settle_channel(payload)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

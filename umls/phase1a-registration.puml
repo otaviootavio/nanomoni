@@ -7,19 +7,16 @@ actor "Client" as Client
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Generate key pair
+Client -> Client: Create identity\n(generate key pair)
 
-Client -> Issuer: Register Client\nRegistrationRequest
+Client -> Issuer: Register\n(client identity)
 activate Issuer
 
-Issuer -> Issuer: Receive request & basic validation
+Issuer -> Issuer: Validate request
+Issuer -> IssuerDB: Create or fetch account
+IssuerDB --> Issuer: Account
 
-Issuer -> IssuerDB: Get Account
-IssuerDB --> Issuer: Account? (existing or none)
-
-Issuer -> IssuerDB: Create Account with initial balance\nif not exists
-
-Issuer --> Client: 201 Created\nRegistrationResponse
+Issuer --> Client: 201 Created\nRegistration confirmed
 deactivate Issuer
 
 @enduml

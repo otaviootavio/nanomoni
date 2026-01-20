@@ -22,3 +22,11 @@ class PaywordOpenChannelRequestPayload(BaseModel):
     payword_hash_alg: str = Field(
         "sha256", description="Hash algorithm (currently only sha256)"
     )
+
+
+class PaywordSettlementPayload(BaseModel):
+    """Payload signed by the vendor when settling a PayWord channel on the issuer."""
+
+    channel_id: str
+    k: int = Field(..., ge=0)
+    token_b64: str

@@ -12,7 +12,7 @@ from nanomoni.application.issuer.dtos import (
 )
 from nanomoni.application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
-    OffChainTxPayload,
+    SignaturePaymentPayload,
 )
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
@@ -70,26 +70,22 @@ class ClientActor:
 
     def create_payment_envelope(
         self,
-        computed_id: str,
-        vendor_public_key_der_b64: str,
-        owed_amount: int,
+        channel_id: str,
+        cumulative_owed_amount: int,
     ) -> Envelope:
         """
         Create a signed payment envelope for an off-chain transaction.
 
         Args:
-            computed_id: Payment channel computed ID
-            vendor_public_key_der_b64: Vendor's public key
-            owed_amount: Amount owed to vendor
+            channel_id: Payment channel computed ID
+            cumulative_owed_amount: Amount owed to vendor
 
         Returns:
             Signed Envelope containing the payment payload
         """
-        payload = OffChainTxPayload(
-            computed_id=computed_id,
-            client_public_key_der_b64=self.public_key_der_b64,
-            vendor_public_key_der_b64=vendor_public_key_der_b64,
-            owed_amount=owed_amount,
+        payload = SignaturePaymentPayload(
+            channel_id=channel_id,
+            cumulative_owed_amount=cumulative_owed_amount,
         )
         return generate_envelope(self.private_key, payload.model_dump())
 

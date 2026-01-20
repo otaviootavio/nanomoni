@@ -22,7 +22,7 @@ def init_commitment(
     """Initialize PayWord commitment and return related values.
 
     PayWord mode:
-    - Each payment sends a counter k; the money owed is owed_amount = k * unit_value.
+    - Each payment sends a counter k; the money owed is cumulative_owed_amount = k * unit_value.
     - max_k is part of the channel commitment (persisted/enforced by vendor + issuer).
       We default max_k to payment_count for convenience, but they are different concepts:
       payment_count = how many payments this run; max_k = channel capacity in steps.
@@ -108,15 +108,15 @@ def prepare_payments(
 
 async def send_payments(
     vendor: VendorClientAsync,
-    computed_id: str,
+    channel_id: str,
     payment_dtos: list[ReceivePaywordPaymentDTO],
 ) -> None:
     """Send PayWord payments to the vendor.
 
     Args:
         vendor: The vendor client instance
-        computed_id: The channel computed ID
+        channel_id: The channel computed ID
         payment_dtos: List of precomputed PayWord payment DTOs
     """
     for payword_dto in payment_dtos:
-        await vendor.send_payword_payment(computed_id, payword_dto)
+        await vendor.send_payword_payment(channel_id, payword_dto)

@@ -41,7 +41,7 @@ async def test_vendor_rejects_payword_token_from_wrong_root(
         pebble_count=8,
     )
     channel_response = await issuer_client.open_payword_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
     assert channel_response.payword_root_b64 == paywordA.commitment_root_b64
 
     # When: Client tries to send a token from PaywordB (different root)
@@ -54,7 +54,7 @@ async def test_vendor_rejects_payword_token_from_wrong_root(
 
     # Then: Vendor rejects the token from wrong root
     response = await vendor_client.receive_payword_payment_raw(
-        computed_id, k=10, token_b64=token_from_wrong_root
+        channel_id, k=10, token_b64=token_from_wrong_root
     )
     assert response.status_code == 400, "Should reject token from wrong root"
     response_data = response.json()

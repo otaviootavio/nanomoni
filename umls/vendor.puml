@@ -20,16 +20,16 @@ rectangle "Vendor Context" #E6FFE6 {
         rectangle "api/vendor_api" {
             file "app.py\ndependencies.py" as api_files
             rectangle "routers/" {
-                file "users.py\ntasks.py\npayments.py"
+                file "users.py\ntasks.py\npayments.py\npayword_payments.py\npaytree_payments.py"
             }
         }
     }
     
     rectangle "Application Layer" as app #FFF8DC {
         rectangle "application/vendor" {
-            file "dtos.py"
+            file "dtos.py\npayword_dtos.py\npaytree_dtos.py"
             rectangle "use_cases/" {
-                file "user.py\ntask.py\npayment.py"
+                file "user.py\ntask.py\npayment.py\npayword_payment.py\npaytree_payment.py"
             }
         }
     }

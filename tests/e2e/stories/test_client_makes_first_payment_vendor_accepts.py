@@ -32,19 +32,19 @@ async def test_client_makes_first_payment_vendor_accepts(
 
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 1000)
     channel_response = await issuer_client.open_channel(open_request)
-    computed_id = channel_response.computed_id
+    channel_id = channel_response.channel_id
 
     # When: Client sends first payment
     first_payment_owed = 50
     payment_envelope = client.create_payment_envelope(
-        computed_id, vendor_public_key_der_b64, first_payment_owed
+        channel_id, first_payment_owed
     )
     payment_response = await vendor_client.receive_payment(
-        computed_id, payment_envelope
+        channel_id, payment_envelope
     )
 
     # Then: Payment is accepted
-    assert payment_response.owed_amount == first_payment_owed
-    assert payment_response.computed_id == computed_id
+    assert payment_response.cumulative_owed_amount == first_payment_owed
+    assert payment_response.channel_id == channel_id
     assert payment_response.client_public_key_der_b64 == client.public_key_der_b64
     assert payment_response.vendor_public_key_der_b64 == vendor_public_key_der_b64
