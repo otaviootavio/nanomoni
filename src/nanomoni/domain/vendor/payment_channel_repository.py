@@ -65,6 +65,13 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_payword_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaywordPaymentChannel], Optional[PaywordState]]:
+        """Get PayWord channel metadata and latest state in one call."""
+        pass
+
+    @abstractmethod
     async def save_payword_payment(
         self, channel: PaywordPaymentChannel, new_state: PaywordState
     ) -> tuple[int, Optional[PaywordState]]:
@@ -94,6 +101,13 @@ class PaymentChannelRepository(ABC):
     @abstractmethod
     async def get_paytree_state(self, channel_id: str) -> Optional[PaytreeState]:
         """Get the latest PayTree state for this channel."""
+        pass
+
+    @abstractmethod
+    async def get_paytree_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaytreePaymentChannel], Optional[PaytreeState]]:
+        """Get PayTree channel metadata and latest state in one call."""
         pass
 
     @abstractmethod
