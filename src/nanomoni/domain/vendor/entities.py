@@ -139,7 +139,7 @@ class OffChainTx(DatetimeSerializerMixin, BaseModel):
 class PaywordState(DatetimeSerializerMixin, BaseModel):
     """Latest PayWord payment state (monotonic counter + token)."""
 
-    channel_id: str = Field(..., description="Payment channel computed ID")
+    channel_id: str = Field(..., description="Payment channel identifier")
     k: int = Field(..., ge=0, description="Monotonic PayWord counter")
     token_b64: str = Field(..., description="Base64 token for this k (preimage)")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -148,7 +148,7 @@ class PaywordState(DatetimeSerializerMixin, BaseModel):
 class PaytreeState(DatetimeSerializerMixin, BaseModel):
     """Latest PayTree payment state (monotonic index + Merkle proof)."""
 
-    channel_id: str = Field(..., description="Payment channel computed ID")
+    channel_id: str = Field(..., description="Payment channel identifier")
     i: int = Field(..., ge=0, description="Monotonic PayTree index")
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
     siblings_b64: list[str] = Field(

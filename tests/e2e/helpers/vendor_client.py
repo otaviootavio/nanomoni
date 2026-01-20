@@ -90,7 +90,7 @@ class VendorTestClient:
         Submit a payment to the vendor.
 
         Args:
-            channel_id: Payment channel computed ID
+            channel_id: Payment channel identifier
             payment_envelope: Signed payment envelope from client
 
         Returns:
@@ -111,7 +111,7 @@ class VendorTestClient:
         Request closure of a payment channel.
 
         Args:
-            channel_id: Payment channel computed ID
+            channel_id: Payment channel identifier
         """
         dto = CloseChannelDTO(channel_id=channel_id)
         response = await self._request(
