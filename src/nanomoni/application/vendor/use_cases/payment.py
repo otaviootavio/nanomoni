@@ -154,7 +154,10 @@ class PaymentService:
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
         # 1) Decode and validate payload (extract channel_id and key fields)
-        payload = deserialize_signature_payment(dto.envelope)
+        try:
+            payload = deserialize_signature_payment(dto.envelope)
+        except ValidationError as exc:
+            raise ValueError("invalid payment payload") from exc
 
         # 2) Get full channel aggregate (lazy load)
         payment_channel = await self.payment_channel_repository.get_by_channel_id(

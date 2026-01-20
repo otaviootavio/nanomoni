@@ -206,7 +206,7 @@ class IssuerTestClient:
     async def get_payword_channel(
         self, channel_id: str
     ) -> PaywordPaymentChannelResponseDTO:
-        """Get PayWord payment channel state by computed ID."""
+        """Get PayWord payment channel state by channel ID."""
         response = await self._request(
             "GET",
             f"{self.base_url}/issuer/channels/payword/{channel_id}",
@@ -247,7 +247,7 @@ class IssuerTestClient:
     async def get_paytree_channel(
         self, channel_id: str
     ) -> PaytreePaymentChannelResponseDTO:
-        """Get PayTree payment channel state by computed ID."""
+        """Get PayTree payment channel state by channel ID."""
         response = await self._request(
             "GET",
             f"{self.base_url}/issuer/channels/paytree/{channel_id}",

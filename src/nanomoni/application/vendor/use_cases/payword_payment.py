@@ -279,9 +279,7 @@ class PaywordPaymentService:
         """Settle a PayWord channel by settling the latest PayWord state on the issuer."""
         if dto.channel_id != channel_id:
             raise ValueError("Channel ID mismatch between path and payload")
-        channel = await self.payment_channel_repository.get_by_channel_id(
-            channel_id
-        )
+        channel = await self.payment_channel_repository.get_by_channel_id(channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
@@ -326,9 +324,7 @@ class PaywordPaymentService:
         )
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-            await issuer_client.settle_payword_payment_channel(
-                channel_id, request_dto
-            )
+            await issuer_client.settle_payword_payment_channel(channel_id, request_dto)
 
         await self.payment_channel_repository.mark_closed(
             channel_id=channel_id,
