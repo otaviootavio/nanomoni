@@ -17,12 +17,11 @@ participant "**Issuer**\n(Trusted Authority)" as Issuer #FFE6E6
 
 Client -> Issuer: **1. Registration**\n(Create account with initial balance)
 activate Issuer
-Issuer --> Client: Account created
+Issuer --> Client: Account created\n(Balance: 10M)
 deactivate Issuer
 
-Client -> Issuer: **2. Channel Opening**\n(Open a payment channel and lock funds)
+Client -> Issuer: **2. Channel Opening**\n(Lock funds in payment channel)
 activate Issuer
-Issuer -> Issuer: Validate request\n(mode-specific data, if any)
 Issuer -> Issuer: Lock funds (e.g., 1M)
 Issuer --> Client: Channel opened\n(Channel ID: abc123)
 deactivate Issuer
@@ -32,16 +31,16 @@ Client -> Vendor: **3. Payment Streaming**\n(9,999 off-chain micropayments)
 activate Vendor
 
 loop 9,999 times
-  Client -> Vendor: Submit payment\n(mode-specific proof/signature)
+  Client -> Vendor: Signed payment\n(owed_amount: 1, 2, 3... 9,999)
   Vendor --> Client: Payment accepted
 end
 
 deactivate Vendor
 
-Vendor -> Issuer: **4. Channel Settlement**\n(Settle and close channel)
+Vendor -> Issuer: **4. Channel Closure**\n(Final settlement with last payment proof)
 activate Issuer
-Issuer -> Issuer: Validate settlement\n(mode-specific proof/signatures)
-Issuer -> Issuer: Transfer funds\n(Vendor: cumulative_owed_amount | Client: remainder)
+Issuer -> Issuer: Verify both signatures\n(Client + Vendor)
+Issuer -> Issuer: Transfer funds\n(Vendor: 9,999 | Client: remainder)
 Issuer --> Vendor: Settlement complete
 deactivate Issuer
 

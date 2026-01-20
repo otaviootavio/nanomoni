@@ -16,14 +16,14 @@ export CLIENT_PAYMENT_COUNT=5000
 export CLIENT_CHANNEL_AMOUNT=10000000
 
 # Client payment mode:
-# - "signature": send signed cumulative_owed_amount updates (existing behavior)
+# - "signature": send signed owed_amount updates (existing behavior)
 # - "payword": send PayWord hash-chain tokens (k, token_b64)
 # - "paytree": send PayTree Merkle proof payments (i, leaf_b64, siblings_b64[])
 export CLIENT_PAYMENT_MODE="payword"
 
 # PayWord mode mental model:
 # - You lock funds in the channel with CLIENT_CHANNEL_AMOUNT (money cap).
-# - You send a monotonic counter k; cumulative_owed_amount = k * CLIENT_PAYWORD_UNIT_VALUE (step value).
+# - You send a monotonic counter k; owed_amount = k * CLIENT_PAYWORD_UNIT_VALUE (step value).
 # - Constraints enforced by vendor/issuer:
 #   1) k must be increasing
 #   2) k <= CLIENT_PAYWORD_MAX_K (step cap committed when opening the channel)
@@ -45,7 +45,7 @@ export CLIENT_PAYWORD_MAX_K="$CLIENT_PAYMENT_COUNT"
 
 # PayTree mode mental model:
 # - You lock funds in the channel with CLIENT_CHANNEL_AMOUNT (money cap).
-# - You send a monotonic index i; cumulative_owed_amount = i * CLIENT_PAYTREE_UNIT_VALUE (step value).
+# - You send a monotonic index i; owed_amount = i * CLIENT_PAYTREE_UNIT_VALUE (step value).
 # - Constraints enforced by vendor/issuer:
 #   1) i must be increasing
 #   2) i <= CLIENT_PAYTREE_MAX_I (index cap committed when opening the channel)

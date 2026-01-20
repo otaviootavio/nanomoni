@@ -33,18 +33,18 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+    async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
         pass
 
     @abstractmethod
-    async def delete_by_channel_id(self, channel_id: str) -> int:
-        """Delete channel by channel_id. Returns number of deleted keys."""
+    async def delete_by_computed_id(self, computed_id: str) -> int:
+        """Delete channel by computed_id. Returns number of deleted keys."""
         pass
 
     @abstractmethod
     async def mark_closed(
         self,
-        channel_id: str,
+        computed_id: str,
         close_payload_b64: Optional[str],
         client_close_signature_b64: Optional[str],
         *,

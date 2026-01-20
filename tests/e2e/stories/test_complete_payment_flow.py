@@ -52,7 +52,7 @@ async def test_complete_payment_flow_all_actors_succeed(
         vendor_public_key_der_b64, channel_amount
     )
     channel_response = await issuer_client.open_channel(open_request)
-    channel_id = channel_response.channel_id
+    computed_id = channel_response.computed_id
 
     assert channel_response.amount == channel_amount
     assert channel_response.balance == 0
@@ -62,36 +62,38 @@ async def test_complete_payment_flow_all_actors_succeed(
     # Phase2a: First payment
     first_payment_owed = 50
     first_payment_envelope = client.create_payment_envelope(
-        channel_id, first_payment_owed
+        computed_id, vendor_public_key_der_b64, first_payment_owed
     )
     first_payment_response = await vendor_client.receive_payment(
-        channel_id, first_payment_envelope
+        computed_id, first_payment_envelope
     )
-    assert first_payment_response.cumulative_owed_amount == first_payment_owed
+    assert first_payment_response.owed_amount == first_payment_owed
 
     # Phase2b: Subsequent payments
     subsequent_payments = [100, 200, 350]
-    last_cumulative_owed_amount = first_payment_owed
+    last_owed_amount = first_payment_owed
 
     for payment_owed in subsequent_payments:
-        payment_envelope = client.create_payment_envelope(channel_id, payment_owed)
-        payment_response = await vendor_client.receive_payment(
-            channel_id, payment_envelope
+        payment_envelope = client.create_payment_envelope(
+            computed_id, vendor_public_key_der_b64, payment_owed
         )
-        assert payment_response.cumulative_owed_amount == payment_owed
-        assert payment_owed > last_cumulative_owed_amount
-        last_cumulative_owed_amount = payment_owed
+        payment_response = await vendor_client.receive_payment(
+            computed_id, payment_envelope
+        )
+        assert payment_response.owed_amount == payment_owed
+        assert payment_owed > last_owed_amount
+        last_owed_amount = payment_owed
 
-    final_cumulative_owed_amount = last_cumulative_owed_amount
+    final_owed_amount = last_owed_amount
 
     # Phase3: Vendor initiates closure
-    await vendor_client.request_channel_settlement(channel_id)
+    await vendor_client.request_channel_closure(computed_id)
 
     # Verify final state on issuer (authoritative source)
-    channel_state = await issuer_client.get_channel(channel_id)
+    channel_state = await issuer_client.get_channel(computed_id)
     assert channel_state.is_closed is True
-    assert channel_state.balance == final_cumulative_owed_amount
-    assert channel_state.channel_id == channel_id
+    assert channel_state.balance == final_owed_amount
+    assert channel_state.computed_id == computed_id
     assert channel_state.amount == channel_amount
 
 
@@ -128,5 +130,5 @@ async def test_client_registers_and_opens_channel_issuer_accepts(
     assert channel_response.amount == 500
     assert channel_response.balance == 0
     # Verify channel state via issuer query
-    channel_state = await issuer_client.get_channel(channel_response.channel_id)
+    channel_state = await issuer_client.get_channel(channel_response.computed_id)
     assert channel_state.is_closed is False

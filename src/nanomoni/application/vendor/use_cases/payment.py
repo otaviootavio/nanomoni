@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-import base64
 from typing import Optional
 
 from pydantic import ValidationError
 
 from ....application.shared.payment_channel_payloads import (
-    deserialize_signature_payment,
+    CloseChannelRequestPayload,
+    deserialize_off_chain_tx,
 )
 from ....application.issuer.dtos import (
     CloseChannelRequestDTO,
     GetPaymentChannelRequestDTO,
 )
 from ....crypto.certificates import (
+    json_to_bytes,
     load_private_key_from_pem,
     load_public_key_from_der_b64,
     sign_bytes,
@@ -48,7 +49,7 @@ class PaymentService:
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
-    async def _verify_payment_channel(self, channel_id: str) -> PaymentChannel:
+    async def _verify_payment_channel(self, computed_id: str) -> PaymentChannel:
         """
         Verify that the payment channel exists on the issuer side and return it.
 
@@ -62,7 +63,7 @@ class PaymentService:
         """
         try:
             async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-                dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
+                dto = GetPaymentChannelRequestDTO(computed_id=computed_id)
                 issuer_channel = await issuer_client.get_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
 
@@ -93,7 +94,7 @@ class PaymentService:
     async def _save_payment_with_retry(
         self,
         *,
-        channel_id: str,
+        computed_id: str,
         payment_channel: PaymentChannel,
         new_tx: OffChainTx,
         is_first_payment: bool,
@@ -124,8 +125,8 @@ class PaymentService:
 
                 # status == 0: cache collision; switch to subsequent-save flow
                 is_first_payment = False
-                cached = await self.payment_channel_repository.get_by_channel_id(
-                    channel_id
+                cached = await self.payment_channel_repository.get_by_computed_id(
+                    computed_id
                 )
                 if not cached:
                     raise RuntimeError(
@@ -143,7 +144,7 @@ class PaymentService:
             # status == 2: vendor cache is missing the channel; fetch from issuer,
             # then cache it and retry the save flow once.
             if attempt == 0:
-                payment_channel = await self._verify_payment_channel(channel_id)
+                payment_channel = await self._verify_payment_channel(computed_id)
                 is_first_payment = True
                 continue
 
@@ -153,31 +154,43 @@ class PaymentService:
 
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
-        # 1) Decode and validate payload (extract channel_id and key fields)
-        try:
-            payload = deserialize_signature_payment(dto.envelope)
-        except ValidationError as exc:
-            raise ValueError("invalid payment payload") from exc
+        # 1) Decode and validate payload (extract computed_id and key fields)
+        payload = deserialize_off_chain_tx(dto.envelope)
+
+        # 1.1) Ensure this payment is explicitly addressed to this vendor
+        if payload.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
+            raise ValueError("Payment not addressed to this vendor")
 
         # 2) Get full channel aggregate (lazy load)
-        payment_channel = await self.payment_channel_repository.get_by_channel_id(
-            payload.channel_id
+        payment_channel = await self.payment_channel_repository.get_by_computed_id(
+            payload.computed_id
         )
 
         # 2.1) If missing, verify with issuer and cache locally (First Payment flow)
         is_first_payment = False
         if not payment_channel:
-            payment_channel = await self._verify_payment_channel(payload.channel_id)
+            payment_channel = await self._verify_payment_channel(payload.computed_id)
             is_first_payment = True
 
         latest_tx = payment_channel.latest_tx
-        prev_cumulative_owed_amount = (
-            latest_tx.cumulative_owed_amount if latest_tx else 0
-        )
+        prev_owed_amount = latest_tx.owed_amount if latest_tx else 0
 
         # 2.2) Ensure the channel remains bound to this vendor
         if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
             raise ValueError("Payment channel is not for this vendor")
+
+        # 3) Consistency checks between payload and channel keys
+        if (
+            payload.client_public_key_der_b64
+            != payment_channel.client_public_key_der_b64
+        ):
+            raise ValueError("Mismatched client public key for channel")
+
+        if (
+            payload.vendor_public_key_der_b64
+            != payment_channel.vendor_public_key_der_b64
+        ):
+            raise ValueError("Mismatched vendor public key for channel")
 
         # 4) Verify client's signature using the channel-bound public key
         client_public_key = load_public_key_from_der_b64(
@@ -190,7 +203,7 @@ class PaymentService:
         # If the client retries the *exact same* payment (e.g., due to a transient
         # disconnect after the vendor stored the tx but before the client read the
         # response), accept the duplicate and return the stored tx.
-        if latest_tx and payload.cumulative_owed_amount == prev_cumulative_owed_amount:
+        if latest_tx and payload.owed_amount == prev_owed_amount:
             if (
                 dto.envelope.payload_b64 != latest_tx.payload_b64
                 or dto.envelope.signature_b64 != latest_tx.client_signature_b64
@@ -201,24 +214,24 @@ class PaymentService:
             return OffChainTxResponseDTO(**latest_tx.model_dump())
 
         # Otherwise, enforce strictly increasing owed amount.
-        if payload.cumulative_owed_amount < prev_cumulative_owed_amount:
+        if payload.owed_amount < prev_owed_amount:
             raise ValueError(
-                f"Owed amount must be increasing. Got {payload.cumulative_owed_amount}, expected > {prev_cumulative_owed_amount}"
+                f"Owed amount must be increasing. Got {payload.owed_amount}, expected > {prev_owed_amount}"
             )
 
-        # 6) Check if the payment channel amount is bigger than the cumulative_owed_amount
+        # 6) Check if the payment channel amount is bigger than the owed_amount
         # (Optimistic check for fast failure; authoritative check happens atomically in save_if_valid)
-        if payload.cumulative_owed_amount > payment_channel.amount:
+        if payload.owed_amount > payment_channel.amount:
             raise ValueError(
-                f"Owed amount {payload.cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
+                f"Owed amount {payload.owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
         # 7) Create the off-chain transaction object
         off_chain_tx = OffChainTx(
-            channel_id=payload.channel_id,
+            computed_id=payload.computed_id,
             client_public_key_der_b64=payment_channel.client_public_key_der_b64,
             vendor_public_key_der_b64=payment_channel.vendor_public_key_der_b64,
-            cumulative_owed_amount=payload.cumulative_owed_amount,
+            owed_amount=payload.owed_amount,
             payload_b64=dto.envelope.payload_b64,
             client_signature_b64=dto.envelope.signature_b64,
         )
@@ -228,7 +241,7 @@ class PaymentService:
             stored_tx,
             _payment_channel,
         ) = await self._save_payment_with_retry(
-            channel_id=payload.channel_id,
+            computed_id=payload.computed_id,
             payment_channel=payment_channel,
             new_tx=off_chain_tx,
             is_first_payment=is_first_payment,
@@ -243,19 +256,19 @@ class PaymentService:
             return OffChainTxResponseDTO(**stored_tx.model_dump())
         elif status == 0:
             # Rejected: amount was not greater than current or exceeded channel capacity
-            current_amt = stored_tx.cumulative_owed_amount if stored_tx else "unknown"
+            current_amt = stored_tx.owed_amount if stored_tx else "unknown"
             raise ValueError(
-                f"Owed amount must be increasing (race detected). Got {payload.cumulative_owed_amount}, DB has {current_amt}"
+                f"Owed amount must be increasing (race detected). Got {payload.owed_amount}, DB has {current_amt}"
             )
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
-    async def settle_channel(self, dto: CloseChannelDTO) -> None:
-        """Settle a payment channel by sending the latest off-chain tx to issuer and marking local channel closed."""
+    async def close_channel(self, dto: CloseChannelDTO) -> None:
+        """Close a payment channel by sending the latest off-chain tx to issuer and marking local channel closed."""
 
         # 1) Fetch channel aggregate (includes latest tx)
-        channel = await self.payment_channel_repository.get_by_channel_id(
-            dto.channel_id
+        channel = await self.payment_channel_repository.get_by_computed_id(
+            dto.computed_id
         )
 
         if not channel:
@@ -267,11 +280,16 @@ class PaymentService:
         if not latest_tx:
             raise ValueError("No off-chain payments received for this channel")
 
-        # 3) Vendor signs the exact same payload bytes the client signed in the last payment.
-        # The payload is "thin" (channel_id + cumulative_owed_amount). Issuer infers keys from channel state.
-        payload_bytes = base64.b64decode(latest_tx.payload_b64)
+        # 3) Build close payload from latest tx
+        close_payload = CloseChannelRequestPayload(
+            computed_id=latest_tx.computed_id,
+            client_public_key_der_b64=latest_tx.client_public_key_der_b64,
+            vendor_public_key_der_b64=latest_tx.vendor_public_key_der_b64,
+            owed_amount=latest_tx.owed_amount,
+        )
+        payload_bytes = json_to_bytes(close_payload.model_dump())
 
-        # 4) Vendor signs the same payload bytes (detached signature)
+        # 4) Vendor signs client's payload bytes
         if not self.vendor_private_key_pem:
             raise ValueError("Vendor private key is not configured")
         vendor_private_key = load_private_key_from_pem(self.vendor_private_key_pem)
@@ -279,25 +297,26 @@ class PaymentService:
 
         # 5) Send close request to issuer
         request_dto = CloseChannelRequestDTO(
-            channel_id=dto.channel_id,
+            client_public_key_der_b64=latest_tx.client_public_key_der_b64,
+            vendor_public_key_der_b64=latest_tx.vendor_public_key_der_b64,
             close_payload_b64=latest_tx.payload_b64,
             client_close_signature_b64=latest_tx.client_signature_b64,
             vendor_close_signature_b64=vendor_close_signature_b64,
         )
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
-            await issuer_client.settle_payment_channel(
-                dto.channel_id,
+            await issuer_client.close_payment_channel(
+                latest_tx.computed_id,
                 request_dto,
             )
 
         # 6) Mark closed locally
         await self.payment_channel_repository.mark_closed(
-            channel_id=dto.channel_id,
+            computed_id=dto.computed_id,
             close_payload_b64=latest_tx.payload_b64,
             client_close_signature_b64=latest_tx.client_signature_b64,
             amount=channel.amount,
-            balance=latest_tx.cumulative_owed_amount,
+            balance=latest_tx.owed_amount,
             vendor_close_signature_b64=vendor_close_signature_b64,
         )
 

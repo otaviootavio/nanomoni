@@ -32,14 +32,16 @@ async def test_vendor_rejects_tampered_payment_signature(
 
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 1000)
     channel_response = await issuer_client.open_channel(open_request)
-    channel_id = channel_response.channel_id
+    computed_id = channel_response.computed_id
 
     # When: Client sends a payment with tampered signature
-    valid_payment = client.create_payment_envelope(channel_id, 100)
+    valid_payment = client.create_payment_envelope(
+        computed_id, vendor_public_key_der_b64, 100
+    )
     tampered_payment = tamper_envelope_signature(valid_payment)
 
     # Then: Vendor rejects the payment
-    response = await vendor_client.receive_payment_raw(channel_id, tampered_payment)
+    response = await vendor_client.receive_payment_raw(computed_id, tampered_payment)
     assert response.status_code == 400, "Should reject tampered payment signature"
     response_data = response.json()
     assert "invalid signature" in response_data.get("detail", "").lower()

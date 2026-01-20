@@ -100,10 +100,10 @@ class ReceivePaymentDTO(BaseModel):
 class OffChainTxResponseDTO(DatetimeSerializerMixin, BaseModel):
     """DTO for returning off-chain transaction data."""
 
-    channel_id: str
+    computed_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
-    cumulative_owed_amount: int
+    owed_amount: int
     created_at: datetime
 
 
@@ -125,6 +125,6 @@ class VendorPublicKeyDTO(BaseModel):
 
 
 class CloseChannelDTO(BaseModel):
-    """DTO for requesting a close of a payment channel by its channel ID."""
+    """DTO for requesting a close of a payment channel by its computed ID."""
 
-    channel_id: str
+    computed_id: str

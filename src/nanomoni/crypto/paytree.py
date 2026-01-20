@@ -226,7 +226,7 @@ class Paytree:
         return i, leaf_b64, siblings_b64
 
 
-def compute_cumulative_owed_amount(*, i: int, unit_value: int) -> int:
+def compute_owed_amount(*, i: int, unit_value: int) -> int:
     """Compute owed amount from the PayTree index i and unit value."""
     if i < 0:
         raise ValueError("i must be >= 0")

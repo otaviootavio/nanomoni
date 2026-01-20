@@ -52,29 +52,7 @@ class HttpResponseError(HttpError):
 
     def __init__(self, response: HttpResponse, message: str | None = None) -> None:
         self.response = response
-        if message is None:
-            # Include response body (or JSON "detail") to make debugging upstream failures easier.
-            # This is especially important when services wrap other service errors (vendor -> issuer).
-            detail: str | None = None
-            try:
-                body = response.json()
-                if isinstance(body, dict) and isinstance(body.get("detail"), str):
-                    detail = body["detail"]
-            except Exception:
-                detail = None
-
-            msg = f"HTTP {response.status_code}"
-            if detail:
-                msg = f"{msg}: {detail}"
-            elif response.content:
-                # Fall back to raw text (capped for safety).
-                text = response.text
-                if len(text) > 500:
-                    text = text[:500] + "...(truncated)"
-                msg = f"{msg}: {text}"
-            super().__init__(msg)
-        else:
-            super().__init__(message)
+        super().__init__(message or f"HTTP {response.status_code}")
 
 
 class HttpClient:

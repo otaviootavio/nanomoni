@@ -37,18 +37,18 @@ async def test_vendor_rejects_nonmonotonic_payword_k(
         pebble_count=8,
     )
     channel_response = await issuer_client.open_payword_channel(open_request)
-    channel_id = channel_response.channel_id
+    computed_id = channel_response.computed_id
 
     # First payment at k=10
     token_k10 = payword.payment_proof_b64(k=10)
-    await vendor_client.receive_payword_payment(channel_id, k=10, token_b64=token_k10)
+    await vendor_client.receive_payword_payment(computed_id, k=10, token_b64=token_k10)
 
     # When: Client tries to send a payment with k=5 (decreasing)
     token_k5 = payword.payment_proof_b64(k=5)
 
     # Then: Vendor rejects the non-monotonic k
     response = await vendor_client.receive_payword_payment_raw(
-        channel_id, k=5, token_b64=token_k5
+        computed_id, k=5, token_b64=token_k5
     )
     assert response.status_code == 400, "Should reject non-monotonic k"
     response_data = response.json()

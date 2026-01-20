@@ -7,18 +7,30 @@ actor "Client" as Client
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Choose vendor
-Client -> Client: Prepare channel opening request\n(mode-specific commitment, if any)
-Client -> Client: Sign request
+Client -> Client: Get vendor_pk\nFetch Vendor Public Key
 
-Client -> Issuer: Open Payment Channel
+Client -> Client: Build OpenChannelRequestPayload
+Client -> Client: Wrap payload in Envelope\nsigned with client private key
+
+Client -> Issuer: Open Payment Channel\nEnvelope<OpenChannelRequestPayload>
 activate Issuer
 
-Issuer -> Issuer: Verify envelope and validate request
-Issuer -> IssuerDB: Lock funds and create channel
-IssuerDB --> Issuer: PaymentChannel
+Issuer -> Issuer: Verify client envelope &\ndeserialize payload
 
-Issuer --> Client: 201 Created\nChannel opened (channel_id)
+
+Issuer -> IssuerDB: Get client Account
+IssuerDB --> Issuer: Account
+
+Issuer -> IssuerDB: Ensure vendor Account exists\nby vendor_pk
+
+Issuer -> Issuer: Check amount > 0\nand client balance >= amount
+Issuer -> IssuerDB: Deduct amount from client Account
+
+Issuer -> Issuer: Generate random salt\nCompute channel ID
+Issuer -> IssuerDB: CREATE PaymentChannel
+
+Issuer -> Issuer: Build OpenChannelResponseDTO
+Issuer --> Client: 201 Created\nOpenChannelResponseDTO
 deactivate Issuer
 
 @enduml

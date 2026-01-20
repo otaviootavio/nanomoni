@@ -106,14 +106,14 @@ class VendorTestClient:
         response.raise_for_status()
         return OffChainTxResponseDTO.model_validate(response.json())
 
-    async def request_channel_settlement(self, channel_id: str) -> None:
+    async def request_channel_closure(self, channel_id: str) -> None:
         """
         Request closure of a payment channel.
 
         Args:
             channel_id: Payment channel computed ID
         """
-        dto = CloseChannelDTO(channel_id=channel_id)
+        dto = CloseChannelDTO(computed_id=channel_id)
         response = await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",
@@ -152,9 +152,9 @@ class VendorTestClient:
             json=dto.model_dump(),
         )
 
-    async def request_channel_settlement_payword(self, channel_id: str) -> None:
+    async def request_channel_closure_payword(self, channel_id: str) -> None:
         """Request closure of a PayWord channel."""
-        dto = CloseChannelDTO(channel_id=channel_id)
+        dto = CloseChannelDTO(computed_id=channel_id)
         response = await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/payword/{channel_id}/closure-requests",
@@ -197,9 +197,9 @@ class VendorTestClient:
             json=dto.model_dump(),
         )
 
-    async def request_channel_settlement_paytree(self, channel_id: str) -> None:
+    async def request_channel_closure_paytree(self, channel_id: str) -> None:
         """Request closure of a PayTree channel."""
-        dto = CloseChannelDTO(channel_id=channel_id)
+        dto = CloseChannelDTO(computed_id=channel_id)
         response = await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
@@ -224,13 +224,13 @@ class VendorTestClient:
             json=dto.model_dump(),
         )
 
-    async def request_channel_settlement_raw(self, channel_id: str) -> AiohttpResponse:
+    async def request_channel_closure_raw(self, channel_id: str) -> AiohttpResponse:
         """
         Request channel closure without raising on error status.
 
         Returns the raw HTTP response for error case testing.
         """
-        dto = CloseChannelDTO(channel_id=channel_id)
+        dto = CloseChannelDTO(computed_id=channel_id)
         return await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/signature/{channel_id}/closure-requests",

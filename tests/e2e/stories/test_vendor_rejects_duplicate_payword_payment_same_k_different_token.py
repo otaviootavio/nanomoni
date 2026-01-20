@@ -32,17 +32,17 @@ async def test_vendor_rejects_duplicate_payword_payment_same_k_different_token(
         pebble_count=8,
     )
     channel_response = await issuer_client.open_payword_channel(open_request)
-    channel_id = channel_response.channel_id
+    computed_id = channel_response.computed_id
 
     # First payment at k=10
     k = 10
     token_k10 = payword.payment_proof_b64(k=k)
-    await vendor_client.receive_payword_payment(channel_id, k=k, token_b64=token_k10)
+    await vendor_client.receive_payword_payment(computed_id, k=k, token_b64=token_k10)
 
     # Replay attempt: same k but token for a different k
     token_k11 = payword.payment_proof_b64(k=11)
     resp = await vendor_client.receive_payword_payment_raw(
-        channel_id, k=k, token_b64=token_k11
+        computed_id, k=k, token_b64=token_k11
     )
     assert resp.status_code == 400
     assert "duplicate" in (resp.json().get("detail", "").lower())

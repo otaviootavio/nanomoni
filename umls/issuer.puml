@@ -19,16 +19,16 @@ rectangle "Issuer Context" #FFE6E6 {
         rectangle "api/issuer_api" {
             file "app.py\ndependencies.py" as api_files
             rectangle "routers/" {
-                file "registration.py\npayment_channel.py\npayword_channels.py\npaytree_channels.py"
+                file "registration.py\npayment_channel.py"
             }
         }
     }
     
     rectangle "Application Layer" as app #FFF8DC {
         rectangle "application/issuer" {
-            file "dtos.py\npayword_dtos.py\npaytree_dtos.py"
+            file "dtos.py"
             rectangle "use_cases/" {
-                file "registration.py\npayment_channel.py\npayword_channel.py\npaytree_channel.py"
+                file "registration.py\npayment_channel.py"
             }
         }
     }
@@ -50,4 +50,5 @@ rectangle "Issuer Context" #FFE6E6 {
     api -[hidden]down-> infra
 }
 
+@enduml
 @enduml

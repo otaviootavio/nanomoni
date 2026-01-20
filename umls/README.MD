@@ -70,7 +70,7 @@ note over Client, IssuerDB
   **Channel is now OPEN**
   • Client balance: 9,000,000
   • Channel amount: 1,000,000 (locked)
-  • Channel ID: channel_id
+  • Channel ID: computed_id
   • Client can now make off-chain payments to vendor
 end note
 
@@ -94,14 +94,14 @@ end note
 
 note over Vendor
   **Verification details (first payment):**
-  1. Decode envelope → get channel_id and keys
-  2. Fetch PaymentChannel from Issuer by channel_id
+  1. Decode envelope → get computed_id and keys
+  2. Fetch PaymentChannel from Issuer by computed_id
   3. Validate channel:
      • channel not closed
      • PaymentChannel.vendor_public_key_der_b64 == this vendor's configured public key
   4. Validate payment:
-     • cumulative_owed_amount > 0
-     • cumulative_owed_amount ≤ channel.amount
+     • owed_amount > 0
+     • owed_amount ≤ channel.amount
   5. Validate keys:
      • payload.client_public_key_der_b64 == channel.client_public_key_der_b64
      • payload.vendor_public_key_der_b64 == channel.vendor_public_key_der_b64
@@ -127,7 +127,7 @@ note over Client
   **Prerequisites:**
   • First payment completed
   • Channel cached at Vendor
-  • Current cumulative_owed_amount: 1
+  • Current owed_amount: 1
 end note
 
 
@@ -140,11 +140,11 @@ end note
 
 note over Vendor
   **Verification details (subsequent payments):**
-  1. Decode envelope → get channel_id and keys
-  2. Fetch Channel Aggregate (channel + latest tx) by channel_id
+  1. Decode envelope → get computed_id and keys
+  2. Fetch Channel Aggregate (channel + latest tx) by computed_id
   3. Check:
-     • cumulative_owed_amount > previous.cumulative_owed_amount
-     • cumulative_owed_amount ≤ channel.amount
+     • owed_amount > previous.owed_amount
+     • owed_amount ≤ channel.amount
   5. Validate keys:
      • payload.client_public_key_der_b64 == channel.client_public_key_der_b64
      • payload.vendor_public_key_der_b64 == channel.vendor_public_key_der_b64
@@ -156,7 +156,7 @@ end note
 note over Client, VendorDB
   **Result:**
   • 9,999 total payments completed
-  • Latest state: cumulative_owed_amount = 9,999
+  • Latest state: owed_amount = 9,999
   • Ready to close channel
 end note
 
@@ -187,15 +187,14 @@ note right: Storage optimization:\nOnly keep latest payment state
 
 **Prerequisites:**
 - Channel abc123 is open
-- Latest payment: cumulative_owed_amount = 9,999
+- Latest payment: owed_amount = 9,999
 - Client wants to close the channel
 
 **Key Insight:**
 Client doesn't sign a new closure request. The last off-chain payment signature will be reused for settlement.
 
 **Flow:**
-1. Client sends POST `/api/v1/vendor/channels/{mode}/{channel_id}/closure-requests` with channel_id: "abc123"
-   - mode is one of: `signature` | `payword` | `paytree`
+1. Client sends POST /api/v1/vendor/channels/{channel_id}/closure-requests with computed_id: "abc123"
 2. Vendor retrieves PaymentChannel from local DB
 3. Vendor retrieves latest OffChainTx (contains client signature from last payment)
 4. Vendor loads vendor private key
@@ -218,7 +217,7 @@ Vendor now has both signatures needed for settlement:
 
 **Request to Issuer:**
 ```
-POST /api/v1/issuer/channels/{mode}/{channel_id}/settlements
+POST /api/v1/issuer/channels/{channel_id}/settlements
 {
   client_public_key,
   vendor_public_key,

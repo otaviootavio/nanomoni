@@ -17,23 +17,20 @@ from ....application.issuer.payword_dtos import (
     PaywordPaymentChannelResponseDTO,
     PaywordSettlementRequestDTO,
 )
-from ....application.shared.payword_payloads import (
-    PaywordOpenChannelRequestPayload,
-    PaywordSettlementPayload,
-)
-from ....application.shared.serialization import payload_to_bytes
+from ....application.shared.payword_payloads import PaywordOpenChannelRequestPayload
 from ....crypto.certificates import (
     DERB64,
     Envelope,
     PayloadB64,
     SignatureB64,
+    json_to_bytes,
     load_public_key_from_der_b64,
     verify_envelope_and_get_payload_bytes,
     verify_signature_bytes,
 )
 from ....crypto.payword import (
     b64_to_bytes,
-    compute_cumulative_owed_amount,
+    compute_owed_amount,
     verify_token_against_root,
 )
 from ....domain.issuer.entities import Account, PaymentChannel
@@ -115,7 +112,7 @@ class PaywordChannelService:
         except Exception as e:
             raise ValueError(f"Invalid payword_root_b64: {e}") from e
 
-        max_owed = compute_cumulative_owed_amount(
+        max_owed = compute_owed_amount(
             k=open_req_payload.payword_max_k,
             unit_value=open_req_payload.payword_unit_value,
         )
@@ -127,18 +124,18 @@ class PaywordChannelService:
 
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
-        channel_id = self._compute_channel_id(
+        computed_id = self._compute_channel_id(
             open_req_payload.client_public_key_der_b64,
             open_req_payload.vendor_public_key_der_b64,
             salt_b64,
         )
 
-        existing = await self.channel_repo.get_by_channel_id(channel_id)
+        existing = await self.channel_repo.get_by_computed_id(computed_id)
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
         channel = PaymentChannel(
-            channel_id=channel_id,
+            computed_id=computed_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
             salt_b64=salt_b64,
@@ -158,7 +155,7 @@ class PaywordChannelService:
                 open_req_payload.client_public_key_der_b64, -open_req_payload.amount
             )
         except Exception:
-            await self.channel_repo.delete_by_channel_id(channel_id)
+            await self.channel_repo.delete_by_computed_id(computed_id)
             raise
 
         if (
@@ -169,7 +166,7 @@ class PaywordChannelService:
             raise RuntimeError("Unexpected: persisted PayWord fields are missing")
 
         return PaywordOpenChannelResponseDTO(
-            channel_id=created.channel_id,
+            computed_id=created.computed_id,
             client_public_key_der_b64=created.client_public_key_der_b64,
             vendor_public_key_der_b64=created.vendor_public_key_der_b64,
             salt_b64=created.salt_b64,
@@ -182,9 +179,9 @@ class PaywordChannelService:
         )
 
     async def settle_channel(
-        self, channel_id: str, dto: PaywordSettlementRequestDTO
+        self, computed_id: str, dto: PaywordSettlementRequestDTO
     ) -> CloseChannelResponseDTO:
-        channel = await self.channel_repo.get_by_channel_id(channel_id)
+        channel = await self.channel_repo.get_by_computed_id(computed_id)
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
@@ -207,12 +204,12 @@ class PaywordChannelService:
         if dto.k > channel.payword_max_k:
             raise ValueError("k exceeds PayWord max_k for this channel")
 
-        settlement_payload = PaywordSettlementPayload(
-            channel_id=channel_id,
-            k=dto.k,
-            token_b64=dto.token_b64,
-        )
-        payload_bytes = payload_to_bytes(settlement_payload)
+        settlement_payload = {
+            "computed_id": computed_id,
+            "k": dto.k,
+            "token_b64": dto.token_b64,
+        }
+        payload_bytes = json_to_bytes(settlement_payload)
         vendor_public_key = load_public_key_from_der_b64(
             DERB64(channel.vendor_public_key_der_b64)
         )
@@ -232,10 +229,10 @@ class PaywordChannelService:
         if not verify_token_against_root(token=token, k=dto.k, root=root):
             raise ValueError("Invalid PayWord token for k (root mismatch)")
 
-        cumulative_owed_amount = compute_cumulative_owed_amount(
+        owed_amount = compute_owed_amount(
             k=dto.k, unit_value=channel.payword_unit_value
         )
-        if cumulative_owed_amount > channel.amount:
+        if owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
         vendor_acc = await self.account_repo.get_by_public_key(
@@ -247,13 +244,13 @@ class PaywordChannelService:
             )
             await self.account_repo.upsert(vendor_acc)
 
-        remainder = channel.amount - cumulative_owed_amount
+        remainder = channel.amount - owed_amount
         # The following three operations must behave transactionally:
         # 1) credit vendor, 2) refund client remainder, 3) mark channel closed.
         # If any step fails, roll back prior balance changes before propagating
         # the error to avoid leaving inconsistent balances.
         vendor_acc = await self.account_repo.update_balance(
-            channel.vendor_public_key_der_b64, cumulative_owed_amount
+            channel.vendor_public_key_der_b64, owed_amount
         )
         try:
             client_acc = await self.account_repo.update_balance(
@@ -262,17 +259,17 @@ class PaywordChannelService:
         except Exception:
             # Roll back vendor credit if client refund fails.
             await self.account_repo.update_balance(
-                channel.vendor_public_key_der_b64, -cumulative_owed_amount
+                channel.vendor_public_key_der_b64, -owed_amount
             )
             raise
 
         try:
             await self.channel_repo.mark_closed(
-                channel_id,
+                computed_id,
                 close_payload_b64="",
                 client_close_signature_b64="",
                 amount=channel.amount,
-                balance=cumulative_owed_amount,
+                balance=owed_amount,
                 vendor_close_signature_b64=dto.vendor_signature_b64,
             )
         except Exception as close_err:
@@ -280,7 +277,7 @@ class PaywordChannelService:
             rollback_errors: list[Exception] = []
             try:
                 await self.account_repo.update_balance(
-                    channel.vendor_public_key_der_b64, -cumulative_owed_amount
+                    channel.vendor_public_key_der_b64, -owed_amount
                 )
             except Exception as e:
                 rollback_errors.append(e)
@@ -298,7 +295,7 @@ class PaywordChannelService:
             raise
 
         return CloseChannelResponseDTO(
-            channel_id=channel_id,
+            computed_id=computed_id,
             client_balance=client_acc.balance,
             vendor_balance=vendor_acc.balance,
         )
@@ -306,7 +303,7 @@ class PaywordChannelService:
     async def get_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaywordPaymentChannelResponseDTO:
-        channel = await self.channel_repo.get_by_channel_id(dto.channel_id)
+        channel = await self.channel_repo.get_by_computed_id(dto.computed_id)
         if not channel:
             raise ValueError("Payment channel not found")
 

@@ -61,7 +61,7 @@ async def get_paytree_channel(
     channel_id: str,
     service: PaytreeChannelService = Depends(get_paytree_channel_service),
 ) -> PaytreePaymentChannelResponseDTO:
-    payload = GetPaymentChannelRequestDTO(channel_id=channel_id)
+    payload = GetPaymentChannelRequestDTO(computed_id=channel_id)
     try:
         return await service.get_channel(payload)
     except ValueError as err:

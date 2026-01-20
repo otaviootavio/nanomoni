@@ -36,18 +36,13 @@ async def open_payment_channel(
     response_model=CloseChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
-async def settle_payment_channel(
+async def close_payment_channel(
     channel_id: str,
     payload: CloseChannelRequestDTO,
     service: PaymentChannelService = Depends(get_payment_channel_service),
 ) -> CloseChannelResponseDTO:
     try:
-        if payload.channel_id != channel_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Channel ID mismatch between path and payload",
-            )
-        return await service.settle_channel(payload)
+        return await service.close_channel(payload)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -61,5 +56,5 @@ async def get_payment_channel(
     channel_id: str,
     service: PaymentChannelService = Depends(get_payment_channel_service),
 ) -> PaymentChannelResponseDTO:
-    payload = GetPaymentChannelRequestDTO(channel_id=channel_id)
+    payload = GetPaymentChannelRequestDTO(computed_id=channel_id)
     return await service.get_channel(payload)

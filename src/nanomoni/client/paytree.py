@@ -22,7 +22,7 @@ def init_commitment(
     """Initialize PayTree commitment and return related values.
 
     PayTree mode:
-    - Each payment sends an index i; the money owed is cumulative_owed_amount = i * unit_value.
+    - Each payment sends an index i; the money owed is owed_amount = i * unit_value.
     - max_i is part of the channel commitment (persisted/enforced by vendor + issuer).
       We default max_i to payment_count for convenience, but they are different concepts:
       payment_count = how many payments this run; max_i = channel capacity in steps.
@@ -86,7 +86,7 @@ def build_open_payload(
 
 async def send_payments(
     vendor: VendorClientAsync,
-    channel_id: str,
+    computed_id: str,
     paytree: Paytree,
     payments: list[int],
 ) -> None:
@@ -101,14 +101,14 @@ async def send_payments(
 
     Args:
         vendor: The vendor client instance
-        channel_id: The channel computed ID
+        computed_id: The channel computed ID
         paytree: The PayTree instance
         payments: List of i index values (monotonic sequence)
     """
     for i in payments:
         i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
         await vendor.send_paytree_payment(
-            channel_id,
+            computed_id,
             ReceivePaytreePaymentDTO(
                 i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
             ),

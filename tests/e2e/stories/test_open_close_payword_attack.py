@@ -84,15 +84,15 @@ async def test_open_close_payword_attack_5000_clients_max_k_1_000_000(
                 payword_root_b64=payword_root_b64,
             )
             channel_response = await issuer_client.open_payword_channel(open_request)
-            channel_id = channel_response.channel_id
+            computed_id = channel_response.computed_id
 
             # Max payment (forces vendor verification ~ max_k hashes).
             await vendor_client.receive_payword_payment(
-                channel_id, k=max_k, token_b64=token_b64
+                computed_id, k=max_k, token_b64=token_b64
             )
 
             # Close channel (forces issuer verification again during settlement).
-            await vendor_client.request_channel_settlement_payword(channel_id)
+            await vendor_client.request_channel_closure_payword(computed_id)
 
     # IMPORTANT:
     # If any single client flow fails, we still need to await all in-flight tasks.

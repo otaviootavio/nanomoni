@@ -22,17 +22,17 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
     async def save_channel(self, payment_channel: PaymentChannel) -> PaymentChannel:
         """
-        Store vendor-side cached channels keyed directly by channel_id to
+        Store vendor-side cached channels keyed directly by computed_id to
         avoid extra lookups.
 
         Keys:
-          - payment_channel:{channel_id} -> PaymentChannel JSON
-          - payment_channels:all|open|closed -> sorted sets of channel_id
+          - payment_channel:{computed_id} -> PaymentChannel JSON
+          - payment_channels:all|open|closed -> sorted sets of computed_id
         """
-        channel_key = f"payment_channel:{payment_channel.channel_id}"
+        channel_key = f"payment_channel:{payment_channel.computed_id}"
         existing = await self.store.get(channel_key)
         if existing is not None:
-            raise ValueError("Payment channel with this channel_id already exists")
+            raise ValueError("Payment channel with this computed_id already exists")
 
         # Ensure latest_tx is None when caching for the first time
         payment_channel.latest_tx = None
@@ -44,27 +44,27 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         created_ts = payment_channel.created_at.timestamp()
         await self.store.zadd(
-            "payment_channels:all", {payment_channel.channel_id: created_ts}
+            "payment_channels:all", {payment_channel.computed_id: created_ts}
         )
 
         if not payment_channel.is_closed:
             await self.store.zadd(
-                "payment_channels:open", {payment_channel.channel_id: created_ts}
+                "payment_channels:open", {payment_channel.computed_id: created_ts}
             )
         else:
             await self.store.zadd(
-                "payment_channels:closed", {payment_channel.channel_id: created_ts}
+                "payment_channels:closed", {payment_channel.computed_id: created_ts}
             )
 
         return payment_channel
 
-    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+    async def get_by_computed_id(self, computed_id: str) -> Optional[PaymentChannel]:
         """
         Get the full channel aggregate (metadata + latest tx).
         Uses MGET to fetch both keys in a single round trip.
         """
-        channel_key = f"payment_channel:{channel_id}"
-        tx_key = f"off_chain_tx:latest:{channel_id}"
+        channel_key = f"payment_channel:{computed_id}"
+        tx_key = f"off_chain_tx:latest:{computed_id}"
 
         results = await self.store.mget([channel_key, tx_key])
 
@@ -83,8 +83,8 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         return channel
 
-    async def get_payword_state(self, channel_id: str) -> Optional[PaywordState]:
-        key = f"payword_state:latest:{channel_id}"
+    async def get_payword_state(self, computed_id: str) -> Optional[PaywordState]:
+        key = f"payword_state:latest:{computed_id}"
         raw = await self.store.get(key)
         if not raw:
             return None
@@ -124,7 +124,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         end
         
         local current = cjson.decode(current_raw)
-        local current_amount = tonumber(current.cumulative_owed_amount)
+        local current_amount = tonumber(current.owed_amount)
         if new_amount > current_amount then
             redis.call('SET', latest_key, new_val)
             return {1, new_val}
@@ -133,18 +133,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         end
         """
 
-        latest_key = f"off_chain_tx:latest:{new_tx.channel_id}"
-        channel_key = f"payment_channel:{new_tx.channel_id}"
+        latest_key = f"off_chain_tx:latest:{new_tx.computed_id}"
+        channel_key = f"payment_channel:{new_tx.computed_id}"
         payload_json = new_tx.model_dump_json()
 
         result = await self.store.eval(
             script,
             keys=[latest_key, channel_key],
-            args=[
-                payload_json,
-                str(new_tx.cumulative_owed_amount),
-                str(channel.amount),
-            ],
+            args=[payload_json, str(new_tx.owed_amount), str(channel.amount)],
         )
 
         code = (
@@ -212,11 +208,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         end
         """
 
-        if channel.channel_id != new_state.channel_id:
-            raise ValueError("Channel channel_id mismatch for PayWord payment")
+        if channel.computed_id != new_state.computed_id:
+            raise ValueError("Channel computed_id mismatch for PayWord payment")
 
-        latest_key = f"payword_state:latest:{new_state.channel_id}"
-        channel_key = f"payment_channel:{new_state.channel_id}"
+        latest_key = f"payword_state:latest:{new_state.computed_id}"
+        channel_key = f"payment_channel:{new_state.computed_id}"
         payload_json = new_state.model_dump_json()
 
         result = await self.store.eval(
@@ -259,7 +255,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         local channel_json = ARGV[1]
         local tx_json = ARGV[2]
         local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
+        local computed_id = ARGV[4]
         
         -- Check if channel already exists
         if redis.call('EXISTS', channel_key) == 1 then
@@ -278,14 +274,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         redis.call('SET', latest_key, tx_json)
         
         -- 3. Update Indices
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+        redis.call('ZADD', 'payment_channels:all', created_ts, computed_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, computed_id)
         
         return {1, tx_json}
         """
 
-        channel_key = f"payment_channel:{channel.channel_id}"
-        latest_key = f"off_chain_tx:latest:{channel.channel_id}"
+        channel_key = f"payment_channel:{channel.computed_id}"
+        latest_key = f"off_chain_tx:latest:{channel.computed_id}"
 
         # Prepare channel JSON (excluding latest_tx as per our pattern)
         channel.latest_tx = None
@@ -296,7 +292,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         result = await self.store.eval(
             script,
             keys=[channel_key, latest_key],
-            args=[channel_json, tx_json, str(created_ts), channel.channel_id],
+            args=[channel_json, tx_json, str(created_ts), channel.computed_id],
         )
 
         code = int(result[0])
@@ -320,7 +316,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         local channel_json = ARGV[1]
         local state_json = ARGV[2]
         local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
+        local computed_id = ARGV[4]
 
         if redis.call('EXISTS', channel_key) == 1 then
             return {0, ''}
@@ -333,14 +329,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         redis.call('SET', channel_key, channel_json)
         redis.call('SET', latest_key, state_json)
 
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+        redis.call('ZADD', 'payment_channels:all', created_ts, computed_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, computed_id)
 
         return {1, state_json}
         """
 
-        channel_key = f"payment_channel:{channel.channel_id}"
-        latest_key = f"payword_state:latest:{channel.channel_id}"
+        channel_key = f"payment_channel:{channel.computed_id}"
+        latest_key = f"payword_state:latest:{channel.computed_id}"
 
         channel.latest_tx = None
         channel_json = channel.model_dump_json(exclude={"latest_tx"})
@@ -350,7 +346,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         result = await self.store.eval(
             script,
             keys=[channel_key, latest_key],
-            args=[channel_json, state_json, str(created_ts), channel.channel_id],
+            args=[channel_json, state_json, str(created_ts), channel.computed_id],
         )
 
         code = int(result[0])
@@ -364,14 +360,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             "payment_channels:all", skip, skip + limit - 1
         )
         channels: List[PaymentChannel] = []
-        for channel_id in ids:
-            data = await self.store.get(f"payment_channel:{channel_id}")
+        for computed_id in ids:
+            data = await self.store.get(f"payment_channel:{computed_id}")
             if data:
                 channels.append(PaymentChannel.model_validate_json(data))
         return channels
 
     async def update(self, payment_channel: PaymentChannel) -> PaymentChannel:
-        channel_key = f"payment_channel:{payment_channel.channel_id}"
+        channel_key = f"payment_channel:{payment_channel.computed_id}"
 
         existing_raw = await self.store.get(channel_key)
         old_is_closed: Optional[bool] = None
@@ -385,25 +381,25 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             created_ts = payment_channel.created_at.timestamp()
             if payment_channel.is_closed:
                 await self.store.zrem(
-                    "payment_channels:open", payment_channel.channel_id
+                    "payment_channels:open", payment_channel.computed_id
                 )
                 await self.store.zadd(
                     "payment_channels:closed",
-                    {payment_channel.channel_id: created_ts},
+                    {payment_channel.computed_id: created_ts},
                 )
             else:
                 await self.store.zrem(
-                    "payment_channels:closed", payment_channel.channel_id
+                    "payment_channels:closed", payment_channel.computed_id
                 )
                 await self.store.zadd(
-                    "payment_channels:open", {payment_channel.channel_id: created_ts}
+                    "payment_channels:open", {payment_channel.computed_id: created_ts}
                 )
 
         return payment_channel
 
     async def mark_closed(
         self,
-        channel_id: str,
+        computed_id: str,
         close_payload_b64: Optional[str],
         client_close_signature_b64: Optional[str],
         vendor_close_signature_b64: str,
@@ -411,7 +407,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         amount: int,
         balance: int,
     ) -> PaymentChannel:
-        channel = await self.get_by_channel_id(channel_id)
+        channel = await self.get_by_computed_id(computed_id)
         if not channel:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
@@ -429,8 +425,8 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         return await self.update(channel)
 
-    async def get_paytree_state(self, channel_id: str) -> Optional[PaytreeState]:
-        key = f"paytree_state:latest:{channel_id}"
+    async def get_paytree_state(self, computed_id: str) -> Optional[PaytreeState]:
+        key = f"paytree_state:latest:{computed_id}"
         raw = await self.store.get(key)
         if not raw:
             return None
@@ -481,11 +477,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         end
         """
 
-        if channel.channel_id != new_state.channel_id:
-            raise ValueError("Channel channel_id mismatch for PayTree payment")
+        if channel.computed_id != new_state.computed_id:
+            raise ValueError("Channel computed_id mismatch for PayTree payment")
 
-        latest_key = f"paytree_state:latest:{new_state.channel_id}"
-        channel_key = f"payment_channel:{new_state.channel_id}"
+        latest_key = f"paytree_state:latest:{new_state.computed_id}"
+        channel_key = f"payment_channel:{new_state.computed_id}"
         payload_json = new_state.model_dump_json()
 
         result = await self.store.eval(
@@ -528,7 +524,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         local channel_json = ARGV[1]
         local state_json = ARGV[2]
         local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
+        local computed_id = ARGV[4]
 
         if redis.call('EXISTS', channel_key) == 1 then
             return {0, ''}
@@ -541,14 +537,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         redis.call('SET', channel_key, channel_json)
         redis.call('SET', latest_key, state_json)
 
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+        redis.call('ZADD', 'payment_channels:all', created_ts, computed_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, computed_id)
 
         return {1, state_json}
         """
 
-        channel_key = f"payment_channel:{channel.channel_id}"
-        latest_key = f"paytree_state:latest:{channel.channel_id}"
+        channel_key = f"payment_channel:{channel.computed_id}"
+        latest_key = f"paytree_state:latest:{channel.computed_id}"
 
         channel.latest_tx = None
         channel_json = channel.model_dump_json(exclude={"latest_tx"})
@@ -558,7 +554,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         result = await self.store.eval(
             script,
             keys=[channel_key, latest_key],
-            args=[channel_json, state_json, str(created_ts), channel.channel_id],
+            args=[channel_json, state_json, str(created_ts), channel.computed_id],
         )
 
         code = int(result[0])

@@ -29,7 +29,7 @@ class VendorClient:
 
     def send_off_chain_payment(
         self,
-        channel_id: str,
+        computed_id: str,
         dto: ReceivePaymentDTO,
     ) -> OffChainTxResponseDTO:
         """Send an off-chain payment to the vendor API.
@@ -38,13 +38,13 @@ class VendorClient:
         as ``OffChainTxResponseDTO`` to keep this client aligned with the
         vendor API contract.
         """
-        path = f"/vendor/channels/signature/{channel_id}/payments"
+        path = f"/vendor/channels/signature/{computed_id}/payments"
         resp = self._http.post(path, json=dto.model_dump())
         return OffChainTxResponseDTO.model_validate(resp.json())
 
-    def request_settle_channel(self, dto: CloseChannelDTO) -> None:
-        """Ask the vendor to settle a payment channel."""
-        path = f"/vendor/channels/signature/{dto.channel_id}/closure-requests"
+    def request_close_channel(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to close a payment channel."""
+        path = f"/vendor/channels/signature/{dto.computed_id}/closure-requests"
         self._http.post(path, json=dto.model_dump())
 
     def close(self) -> None:

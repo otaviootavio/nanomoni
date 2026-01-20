@@ -119,16 +119,14 @@ class Task(CommonSerializersMixin, BaseModel):
 class OffChainTx(DatetimeSerializerMixin, BaseModel):
     """Off-chain transaction entity representing the latest payment channel state."""
 
-    channel_id: str = Field(..., description="Payment channel identifier")
+    computed_id: str = Field(..., description="Payment channel computed ID")
     client_public_key_der_b64: str = Field(
         ..., description="Client's public key in DER format (base64)"
     )
     vendor_public_key_der_b64: str = Field(
         ..., description="Vendor's public key in DER format (base64)"
     )
-    cumulative_owed_amount: int = Field(
-        ..., ge=0, description="Cumulative amount owed to vendor"
-    )
+    owed_amount: int = Field(..., ge=0, description="Amount owed to vendor")
     payload_b64: str = Field(..., description="Base64-encoded payload")
     client_signature_b64: str = Field(
         ..., description="Base64-encoded client signature"
@@ -139,7 +137,7 @@ class OffChainTx(DatetimeSerializerMixin, BaseModel):
 class PaywordState(DatetimeSerializerMixin, BaseModel):
     """Latest PayWord payment state (monotonic counter + token)."""
 
-    channel_id: str = Field(..., description="Payment channel computed ID")
+    computed_id: str = Field(..., description="Payment channel computed ID")
     k: int = Field(..., ge=0, description="Monotonic PayWord counter")
     token_b64: str = Field(..., description="Base64 token for this k (preimage)")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -148,7 +146,7 @@ class PaywordState(DatetimeSerializerMixin, BaseModel):
 class PaytreeState(DatetimeSerializerMixin, BaseModel):
     """Latest PayTree payment state (monotonic index + Merkle proof)."""
 
-    channel_id: str = Field(..., description="Payment channel computed ID")
+    computed_id: str = Field(..., description="Payment channel computed ID")
     i: int = Field(..., ge=0, description="Monotonic PayTree index")
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
     siblings_b64: list[str] = Field(
@@ -161,7 +159,7 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
     """Represents a unidirectional client→vendor payment channel."""
 
     id: UUID = Field(default_factory=uuid4)
-    channel_id: str
+    computed_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
     salt_b64: str
@@ -192,4 +190,4 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
 
     @property
     def current_balance(self) -> int:
-        return self.latest_tx.cumulative_owed_amount if self.latest_tx else 0
+        return self.latest_tx.owed_amount if self.latest_tx else 0

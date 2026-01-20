@@ -7,22 +7,22 @@ actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
 
-loop for each subsequent payment
+loop for each subsequent payment (i = 2 to 9_999)
 
-    Client -> Client: Build payment payload\n    (mode-specific proof/signature)\n    (must advance channel state)
-    Client -> Client: Sign payload
+    Client -> Client: Build OffChainTxPayload
+    Client -> Client: Wrap payload in Envelope\n    signed with client private key
 
-    Client -> Vendor: Submit Payment
+    Client -> Vendor: Submit Payment\n    Envelope<OffChainTxPayload>
     activate Vendor
 
-    Vendor -> Vendor: Verify envelope and parse payload
+    Vendor -> Vendor: Verify envelope &\ndeserialize payload
 
-    Vendor -> VendorDB: Load channel state
-    VendorDB --> Vendor: channel + latest payment
+    Vendor -> VendorDB: Get Channel Aggregate\n(metadata + latest_tx)
+    VendorDB --> Vendor: channel + previous_tx
 
-    Vendor -> Vendor: Validate payment against channel state
+    Vendor -> Vendor: Validate Payment + Channel
 
-    Vendor -> VendorDB: Update channel state\n(store latest payment)
+    Vendor -> VendorDB: UPDATE Channel Aggregate\n(set latest_tx)
     
     Vendor --> Client: 201 Created\n
     deactivate Vendor
