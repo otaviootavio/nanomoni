@@ -35,9 +35,7 @@ async def test_vendor_rejects_tampered_payment_signature(
     channel_id = channel_response.channel_id
 
     # When: Client sends a payment with tampered signature
-    valid_payment = client.create_payment_envelope(
-        channel_id, 100
-    )
+    valid_payment = client.create_payment_envelope(channel_id, 100)
     tampered_payment = tamper_envelope_signature(valid_payment)
 
     # Then: Vendor rejects the payment

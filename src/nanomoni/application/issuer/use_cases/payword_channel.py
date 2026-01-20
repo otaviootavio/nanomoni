@@ -27,7 +27,6 @@ from ....crypto.certificates import (
     Envelope,
     PayloadB64,
     SignatureB64,
-    json_to_bytes,
     load_public_key_from_der_b64,
     verify_envelope_and_get_payload_bytes,
     verify_signature_bytes,

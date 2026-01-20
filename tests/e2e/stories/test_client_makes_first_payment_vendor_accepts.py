@@ -36,12 +36,8 @@ async def test_client_makes_first_payment_vendor_accepts(
 
     # When: Client sends first payment
     first_payment_owed = 50
-    payment_envelope = client.create_payment_envelope(
-        channel_id, first_payment_owed
-    )
-    payment_response = await vendor_client.receive_payment(
-        channel_id, payment_envelope
-    )
+    payment_envelope = client.create_payment_envelope(channel_id, first_payment_owed)
+    payment_response = await vendor_client.receive_payment(channel_id, payment_envelope)
 
     # Then: Payment is accepted
     assert payment_response.cumulative_owed_amount == first_payment_owed

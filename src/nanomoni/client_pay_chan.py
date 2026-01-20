@@ -122,7 +122,9 @@ async def run_client_flow() -> None:
                 vendor_pk.public_key_der_b64,
                 channel_amount,
             )
-            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(client_mode, payments)
+            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
+                client_mode, payments
+            )
 
         # Sign and send open channel request
         open_env = generate_envelope(client_private_key, open_payload_base.model_dump())

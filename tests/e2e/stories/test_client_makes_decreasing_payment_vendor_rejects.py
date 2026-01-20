@@ -34,15 +34,11 @@ async def test_client_makes_decreasing_payment_vendor_rejects(
     channel_id = channel_response.channel_id
 
     # First payment: 200
-    first_payment = client.create_payment_envelope(
-        channel_id, 200
-    )
+    first_payment = client.create_payment_envelope(channel_id, 200)
     await vendor_client.receive_payment(channel_id, first_payment)
 
     # When: Client tries to send a payment with lower cumulative_owed_amount
-    decreasing_payment = client.create_payment_envelope(
-        channel_id, 150
-    )
+    decreasing_payment = client.create_payment_envelope(channel_id, 150)
 
     # Then: Payment is rejected
     response = await vendor_client.receive_payment_raw(channel_id, decreasing_payment)

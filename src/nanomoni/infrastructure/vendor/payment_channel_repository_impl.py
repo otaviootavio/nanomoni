@@ -140,7 +140,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         result = await self.store.eval(
             script,
             keys=[latest_key, channel_key],
-            args=[payload_json, str(new_tx.cumulative_owed_amount), str(channel.amount)],
+            args=[
+                payload_json,
+                str(new_tx.cumulative_owed_amount),
+                str(channel.amount),
+            ],
         )
 
         code = (

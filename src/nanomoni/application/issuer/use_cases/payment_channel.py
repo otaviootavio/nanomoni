@@ -235,9 +235,7 @@ class PaymentChannelService:
             )
         except Exception:
             # Roll back vendor credit if client refund fails.
-            await self.account_repo.update_balance(
-                vendor_key, -cumulative_owed_amount
-            )
+            await self.account_repo.update_balance(vendor_key, -cumulative_owed_amount)
             raise
 
         try:

@@ -75,9 +75,7 @@ async def test_vendor_tries_to_close_already_closed_channel_vendor_handles_grace
     channel_id = channel_response.channel_id
 
     # Receive payment and close
-    payment = client.create_payment_envelope(
-        channel_id, 300
-    )
+    payment = client.create_payment_envelope(channel_id, 300)
     await vendor_client.receive_payment(channel_id, payment)
     await vendor_client.request_channel_settlement(channel_id)
 

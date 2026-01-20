@@ -35,9 +35,7 @@ async def test_client_makes_subsequent_payments_vendor_accepts(
     channel_id = channel_response.channel_id
 
     # First payment
-    first_payment = client.create_payment_envelope(
-        channel_id, 100
-    )
+    first_payment = client.create_payment_envelope(channel_id, 100)
     await vendor_client.receive_payment(channel_id, first_payment)
 
     # When: Client sends subsequent payments with increasing amounts
@@ -54,7 +52,9 @@ async def test_client_makes_subsequent_payments_vendor_accepts(
 
         # Then: Each payment is accepted and has correct amount
         assert payment_response.cumulative_owed_amount == cumulative_owed_amount
-        assert cumulative_owed_amount > last_owed, "Owed amount must be strictly increasing"
+        assert cumulative_owed_amount > last_owed, (
+            "Owed amount must be strictly increasing"
+        )
         last_owed = cumulative_owed_amount
 
 

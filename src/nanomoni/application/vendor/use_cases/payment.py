@@ -168,7 +168,9 @@ class PaymentService:
             is_first_payment = True
 
         latest_tx = payment_channel.latest_tx
-        prev_cumulative_owed_amount = latest_tx.cumulative_owed_amount if latest_tx else 0
+        prev_cumulative_owed_amount = (
+            latest_tx.cumulative_owed_amount if latest_tx else 0
+        )
 
         # 2.2) Ensure the channel remains bound to this vendor
         if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:

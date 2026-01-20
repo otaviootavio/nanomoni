@@ -74,9 +74,7 @@ async def test_complete_payment_flow_all_actors_succeed(
     last_cumulative_owed_amount = first_payment_owed
 
     for payment_owed in subsequent_payments:
-        payment_envelope = client.create_payment_envelope(
-            channel_id, payment_owed
-        )
+        payment_envelope = client.create_payment_envelope(channel_id, payment_owed)
         payment_response = await vendor_client.receive_payment(
             channel_id, payment_envelope
         )

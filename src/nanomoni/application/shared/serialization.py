@@ -13,4 +13,3 @@ def payload_to_bytes(payload: BaseModel) -> bytes:
     """
 
     return json_to_bytes(payload.model_dump())
-
