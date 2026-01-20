@@ -149,7 +149,10 @@ class PaytreePaymentService:
         self, channel_id: str, dto: ReceivePaytreePaymentDTO
     ) -> PaytreePaymentResponseDTO:
         """Receive and validate a PayTree (Merkle proof) payment from a client."""
-        payment_channel = await self.payment_channel_repository.get_by_channel_id(
+        (
+            payment_channel,
+            latest_state,
+        ) = await self.payment_channel_repository.get_paytree_channel_and_latest_state(
             channel_id
         )
 
@@ -157,8 +160,7 @@ class PaytreePaymentService:
         if not payment_channel:
             payment_channel = await self._verify_paytree_channel(channel_id)
             is_first_payment = True
-        elif not isinstance(payment_channel, PaytreePaymentChannel):
-            raise TypeError("Payment channel is not PayTree-enabled")
+            latest_state = None
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
@@ -167,9 +169,6 @@ class PaytreePaymentService:
         if paytree_hash_alg != "sha256":
             raise ValueError("Unsupported PayTree hash algorithm")
 
-        latest_state = await self.payment_channel_repository.get_paytree_state(
-            channel_id
-        )
         prev_i = latest_state.i if latest_state else -1
 
         # Idempotency + replay protection:

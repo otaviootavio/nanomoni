@@ -108,6 +108,20 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return None
         return PaywordState.model_validate_json(raw)
 
+    async def get_payword_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaywordPaymentChannel], Optional[PaywordState]]:
+        channel_key = f"payment_channel:{channel_id}"
+        state_key = f"payword_state:latest:{channel_id}"
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
+        if not channel_json:
+            return None, None
+        channel = self._deserialize_channel(channel_json)
+        if not isinstance(channel, PaywordPaymentChannel):
+            raise TypeError("Payment channel is not PayWord-enabled")
+        state = PaywordState.model_validate_json(state_json) if state_json else None
+        return channel, state
+
     async def save_payment(
         self, channel: SignaturePaymentChannel, new_state: SignatureState
     ) -> tuple[int, Optional[SignatureState]]:
@@ -462,6 +476,20 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if not raw:
             return None
         return PaytreeState.model_validate_json(raw)
+
+    async def get_paytree_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaytreePaymentChannel], Optional[PaytreeState]]:
+        channel_key = f"payment_channel:{channel_id}"
+        state_key = f"paytree_state:latest:{channel_id}"
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
+        if not channel_json:
+            return None, None
+        channel = self._deserialize_channel(channel_json)
+        if not isinstance(channel, PaytreePaymentChannel):
+            raise TypeError("Payment channel is not PayTree-enabled")
+        state = PaytreeState.model_validate_json(state_json) if state_json else None
+        return channel, state
 
     async def save_paytree_payment(
         self, channel: PaytreePaymentChannel, new_state: PaytreeState

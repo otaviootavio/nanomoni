@@ -150,7 +150,10 @@ class PaywordPaymentService:
         self, channel_id: str, dto: ReceivePaywordPaymentDTO
     ) -> PaywordPaymentResponseDTO:
         """Receive and validate a PayWord (hash-chain) payment from a client."""
-        payment_channel = await self.payment_channel_repository.get_by_channel_id(
+        (
+            payment_channel,
+            latest_state,
+        ) = await self.payment_channel_repository.get_payword_channel_and_latest_state(
             channel_id
         )
 
@@ -158,8 +161,7 @@ class PaywordPaymentService:
         if not payment_channel:
             payment_channel = await self._verify_payword_channel(channel_id)
             is_first_payment = True
-        elif not isinstance(payment_channel, PaywordPaymentChannel):
-            raise TypeError("Payment channel is not PayWord-enabled")
+            latest_state = None
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
@@ -168,9 +170,6 @@ class PaywordPaymentService:
         if payword_hash_alg != "sha256":
             raise ValueError("Unsupported PayWord hash algorithm")
 
-        latest_state = await self.payment_channel_repository.get_payword_state(
-            channel_id
-        )
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
 
