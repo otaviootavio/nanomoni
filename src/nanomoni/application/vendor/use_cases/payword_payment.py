@@ -18,7 +18,7 @@ from ....crypto.payword import (
     verify_token_against_root,
     verify_token_incremental,
 )
-from ....domain.vendor.entities import PaymentChannel, PaywordState
+from ....domain.vendor.entities import PaywordPaymentChannel, PaywordState
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
@@ -42,7 +42,7 @@ class PaywordPaymentService:
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
-    async def _verify_payword_channel(self, channel_id: str) -> PaymentChannel:
+    async def _verify_payword_channel(self, channel_id: str) -> PaywordPaymentChannel:
         """
         Verify that the PayWord channel exists on the issuer side and return it.
 
@@ -55,7 +55,7 @@ class PaywordPaymentService:
                 issuer_channel = await issuer_client.get_payword_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
 
-                payment_channel = PaymentChannel.model_validate(channel_data)
+                payment_channel = PaywordPaymentChannel.model_validate(channel_data)
 
                 if payment_channel.is_closed:
                     raise ValueError("Payment channel is closed")
@@ -81,10 +81,10 @@ class PaywordPaymentService:
         self,
         *,
         channel_id: str,
-        payment_channel: PaymentChannel,
+        payment_channel: PaywordPaymentChannel,
         new_state: PaywordState,
         is_first_payment: bool,
-    ) -> tuple[int, Optional[PaywordState], PaymentChannel]:
+    ) -> tuple[int, Optional[PaywordState], PaywordPaymentChannel]:
         """
         Save a PayWord payment state, reconciling vendor cache races.
 
@@ -121,6 +121,8 @@ class PaywordPaymentService:
                     raise RuntimeError(
                         "Race condition handling failed: channel missing after collision"
                     )
+                if not isinstance(cached, PaywordPaymentChannel):
+                    raise TypeError("Cached channel is not PayWord-enabled")
                 payment_channel = cached
 
             (
@@ -156,16 +158,11 @@ class PaywordPaymentService:
         if not payment_channel:
             payment_channel = await self._verify_payword_channel(channel_id)
             is_first_payment = True
+        elif not isinstance(payment_channel, PaywordPaymentChannel):
+            raise TypeError("Payment channel is not PayWord-enabled")
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
-
-        if payment_channel.payword_root_b64 is None:
-            raise ValueError("Payment channel is not PayWord-enabled")
-        if payment_channel.payword_unit_value is None:
-            raise ValueError("Payment channel is missing payword_unit_value")
-        if payment_channel.payword_max_k is None:
-            raise ValueError("Payment channel is missing payword_max_k")
 
         payword_hash_alg = payment_channel.payword_hash_alg or "sha256"
         if payword_hash_alg != "sha256":
@@ -282,15 +279,10 @@ class PaywordPaymentService:
         channel = await self.payment_channel_repository.get_by_channel_id(channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
+        if not isinstance(channel, PaywordPaymentChannel):
+            raise TypeError("Payment channel is not PayWord-enabled")
         if channel.is_closed:
             return None
-
-        if (
-            channel.payword_root_b64 is None
-            or channel.payword_unit_value is None
-            or channel.payword_max_k is None
-        ):
-            raise ValueError("Payment channel is not PayWord-enabled")
 
         latest_state = await self.payment_channel_repository.get_payword_state(
             channel_id
@@ -328,8 +320,6 @@ class PaywordPaymentService:
 
         await self.payment_channel_repository.mark_closed(
             channel_id=channel_id,
-            close_payload_b64="",
-            client_close_signature_b64="",
             amount=channel.amount,
             balance=cumulative_owed_amount,
             vendor_close_signature_b64=vendor_signature_b64,

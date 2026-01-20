@@ -17,18 +17,18 @@ from ...application.issuer.use_cases.payword_channel import PaywordChannelServic
 from ...application.issuer.use_cases.paytree_channel import PaytreeChannelService
 
 
-@lru_cache()
+@lru_cache
 def get_settings_dependency() -> Settings:
     return get_settings()
 
 
-@lru_cache()
+@lru_cache
 def get_database_client_dependency() -> DatabaseClient:
     settings = get_settings_dependency()
     return get_database_client(settings)
 
 
-@lru_cache()
+@lru_cache
 def get_store_dependency() -> RedisKeyValueStore:
     db_client = get_database_client_dependency()
     return RedisKeyValueStore(db_client)

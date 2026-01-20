@@ -16,7 +16,7 @@ from ....crypto.paytree import (
     compute_cumulative_owed_amount,
     verify_paytree_proof,
 )
-from ....domain.vendor.entities import PaymentChannel, PaytreeState
+from ....domain.vendor.entities import PaytreePaymentChannel, PaytreeState
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
@@ -40,7 +40,7 @@ class PaytreePaymentService:
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
-    async def _verify_paytree_channel(self, channel_id: str) -> PaymentChannel:
+    async def _verify_paytree_channel(self, channel_id: str) -> PaytreePaymentChannel:
         """
         Verify that the PayTree channel exists on the issuer side and return it.
 
@@ -53,7 +53,7 @@ class PaytreePaymentService:
                 issuer_channel = await issuer_client.get_paytree_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
 
-                payment_channel = PaymentChannel.model_validate(channel_data)
+                payment_channel = PaytreePaymentChannel.model_validate(channel_data)
 
                 if payment_channel.is_closed:
                     raise ValueError("Payment channel is closed")
@@ -79,10 +79,10 @@ class PaytreePaymentService:
         self,
         *,
         channel_id: str,
-        payment_channel: PaymentChannel,
+        payment_channel: PaytreePaymentChannel,
         new_state: PaytreeState,
         is_first_payment: bool,
-    ) -> tuple[int, Optional[PaytreeState], PaymentChannel]:
+    ) -> tuple[int, Optional[PaytreeState], PaytreePaymentChannel]:
         """
         Save a PayTree payment state, reconciling vendor cache races.
 
@@ -120,6 +120,8 @@ class PaytreePaymentService:
                     raise RuntimeError(
                         "Race condition handling failed: channel missing after collision"
                     )
+                if not isinstance(cached, PaytreePaymentChannel):
+                    raise TypeError("Cached channel is not PayTree-enabled")
                 payment_channel = cached
 
             (
@@ -155,16 +157,11 @@ class PaytreePaymentService:
         if not payment_channel:
             payment_channel = await self._verify_paytree_channel(channel_id)
             is_first_payment = True
+        elif not isinstance(payment_channel, PaytreePaymentChannel):
+            raise TypeError("Payment channel is not PayTree-enabled")
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
-
-        if payment_channel.paytree_root_b64 is None:
-            raise ValueError("Payment channel is not PayTree-enabled")
-        if payment_channel.paytree_unit_value is None:
-            raise ValueError("Payment channel is missing paytree_unit_value")
-        if payment_channel.paytree_max_i is None:
-            raise ValueError("Payment channel is missing paytree_max_i")
 
         paytree_hash_alg = payment_channel.paytree_hash_alg or "sha256"
         if paytree_hash_alg != "sha256":
@@ -270,15 +267,10 @@ class PaytreePaymentService:
         )
         if not channel:
             raise ValueError("Payment channel not found")
+        if not isinstance(channel, PaytreePaymentChannel):
+            raise TypeError("Payment channel is not PayTree-enabled")
         if channel.is_closed:
             return None
-
-        if (
-            channel.paytree_root_b64 is None
-            or channel.paytree_unit_value is None
-            or channel.paytree_max_i is None
-        ):
-            raise ValueError("Payment channel is not PayTree-enabled")
 
         latest_state = await self.payment_channel_repository.get_paytree_state(
             dto.channel_id
@@ -320,8 +312,6 @@ class PaytreePaymentService:
 
         await self.payment_channel_repository.mark_closed(
             channel_id=dto.channel_id,
-            close_payload_b64="",
-            client_close_signature_b64="",
             amount=channel.amount,
             balance=cumulative_owed_amount,
             vendor_close_signature_b64=vendor_signature_b64,

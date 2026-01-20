@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 
 from pydantic import BaseModel, field_validator, ConfigDict
 from nanomoni.crypto.certificates import load_private_key_from_pem
@@ -38,6 +39,7 @@ class Settings(BaseModel):
         return v
 
 
+@lru_cache
 def get_settings() -> Settings:
     database_echo_str = os.environ.get("ISSUER_DATABASE_ECHO")
     api_debug_str = os.environ.get("ISSUER_API_DEBUG")

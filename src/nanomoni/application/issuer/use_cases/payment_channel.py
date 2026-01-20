@@ -6,7 +6,7 @@ import os
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
 
-from ....domain.issuer.entities import PaymentChannel, Account
+from ....domain.issuer.entities import Account, SignaturePaymentChannel
 from ....domain.issuer.repositories import (
     PaymentChannelRepository,
     AccountRepository,
@@ -119,17 +119,13 @@ class PaymentChannelService:
             raise ValueError("Payment channel already open")
 
         # Create the channel and lock the funds into the channel
-        channel = PaymentChannel(
+        channel = SignaturePaymentChannel(
             channel_id=channel_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
             salt_b64=salt_b64,
             amount=open_req_payload.amount,
             balance=0,
-            payword_root_b64=None,
-            payword_unit_value=None,
-            payword_max_k=None,
-            payword_hash_alg=None,
         )
         created = await self.channel_repo.create(channel)
 
@@ -175,6 +171,8 @@ class PaymentChannelService:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
             raise ValueError("Payment channel already closed")
+        if not isinstance(channel, SignaturePaymentChannel):
+            raise TypeError("Payment channel is not signature-mode")
 
         if cumulative_owed_amount < 0 or cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
@@ -282,13 +280,7 @@ class PaymentChannelService:
         channel = await self.channel_repo.get_by_channel_id(dto.channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
-        # Signature flow response should not expose PayWord fields.
-        data = channel.model_dump(
-            exclude={
-                "payword_root_b64",
-                "payword_unit_value",
-                "payword_max_k",
-                "payword_hash_alg",
-            }
-        )
+        if not isinstance(channel, SignaturePaymentChannel):
+            raise TypeError("Payment channel is not signature-mode")
+        data = channel.model_dump()
         return PaymentChannelResponseDTO(**data)

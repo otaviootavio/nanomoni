@@ -38,7 +38,7 @@ from ....crypto.paytree import (
     compute_cumulative_owed_amount,
     verify_paytree_proof,
 )
-from ....domain.issuer.entities import Account, PaymentChannel
+from ....domain.issuer.entities import Account, PaytreePaymentChannel
 from ....domain.issuer.repositories import AccountRepository, PaymentChannelRepository
 
 
@@ -139,7 +139,7 @@ class PaytreeChannelService:
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
-        channel = PaymentChannel(
+        channel = PaytreePaymentChannel(
             channel_id=channel_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
@@ -152,6 +152,8 @@ class PaytreeChannelService:
             paytree_hash_alg=paytree_hash_alg,
         )
         created = await self.channel_repo.create(channel)
+        if not isinstance(created, PaytreePaymentChannel):
+            raise RuntimeError("Unexpected: persisted channel is not PayTree-enabled")
 
         # Deduct funds only after the channel is persisted. If the balance update
         # fails for any reason, attempt to roll back by deleting the channel.
@@ -191,16 +193,11 @@ class PaytreeChannelService:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
             raise ValueError("Payment channel already closed")
+        if not isinstance(channel, PaytreePaymentChannel):
+            raise ValueError("Payment channel is not PayTree-enabled")
 
         if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
             raise ValueError("Mismatched vendor public key for channel")
-
-        if (
-            channel.paytree_root_b64 is None
-            or channel.paytree_unit_value is None
-            or channel.paytree_max_i is None
-        ):
-            raise ValueError("Payment channel is not PayTree-enabled")
 
         paytree_hash_alg = channel.paytree_hash_alg or "sha256"
         if paytree_hash_alg != "sha256":
@@ -277,8 +274,8 @@ class PaytreeChannelService:
         try:
             await self.channel_repo.mark_closed(
                 channel_id,
-                close_payload_b64="",
-                client_close_signature_b64="",
+                close_payload_b64=None,
+                client_close_signature_b64=None,
                 amount=channel.amount,
                 balance=cumulative_owed_amount,
                 vendor_close_signature_b64=dto.vendor_signature_b64,
@@ -318,11 +315,7 @@ class PaytreeChannelService:
         if not channel:
             raise ValueError("Payment channel not found")
 
-        if (
-            channel.paytree_root_b64 is None
-            or channel.paytree_unit_value is None
-            or channel.paytree_max_i is None
-        ):
+        if not isinstance(channel, PaytreePaymentChannel):
             raise ValueError("Payment channel is not PayTree-enabled")
 
         data = channel.model_dump()

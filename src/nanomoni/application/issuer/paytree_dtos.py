@@ -38,8 +38,6 @@ class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     amount: int
     balance: int
     is_closed: bool
-    close_payload_b64: Optional[str] = None
-    client_close_signature_b64: Optional[str] = None
     vendor_close_signature_b64: Optional[str] = None
 
     paytree_root_b64: str

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+import json
+from typing import Optional
 
 from ...domain.vendor.entities import (
-    PaymentChannel,
-    OffChainTx,
-    PaywordState,
+    PaymentChannelBase,
+    PaytreePaymentChannel,
     PaytreeState,
+    PaywordPaymentChannel,
+    PaywordState,
+    SignatureState,
+    SignaturePaymentChannel,
 )
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ..storage import KeyValueStore
@@ -20,7 +24,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     def __init__(self, store: KeyValueStore):
         self.store = store
 
-    async def save_channel(self, payment_channel: PaymentChannel) -> PaymentChannel:
+    async def save_channel(
+        self, payment_channel: PaymentChannelBase
+    ) -> PaymentChannelBase:
         """
         Store vendor-side cached channels keyed directly by channel_id to
         avoid extra lookups.
@@ -34,13 +40,16 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if existing is not None:
             raise ValueError("Payment channel with this channel_id already exists")
 
-        # Ensure latest_tx is None when caching for the first time
-        payment_channel.latest_tx = None
-        # Exclude latest_tx from storage to avoid leaking aggregate structure
-        # into the static metadata key
-        await self.store.set(
-            channel_key, payment_channel.model_dump_json(exclude={"latest_tx"})
-        )
+        if isinstance(payment_channel, SignaturePaymentChannel):
+            # Ensure signature_state is None when caching for the first time
+            payment_channel.signature_state = None
+            # Exclude signature_state from storage to avoid leaking aggregate structure
+            # into the static metadata key
+            channel_json = payment_channel.model_dump_json(exclude={"signature_state"})
+        else:
+            channel_json = payment_channel.model_dump_json()
+
+        await self.store.set(channel_key, channel_json)
 
         created_ts = payment_channel.created_at.timestamp()
         await self.store.zadd(
@@ -58,28 +67,37 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         return payment_channel
 
-    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+    def _deserialize_channel(self, raw: str) -> PaymentChannelBase:
+        data = json.loads(raw)
+        if data.get("payword_root_b64"):
+            return PaywordPaymentChannel.model_validate(data)
+        if data.get("paytree_root_b64"):
+            return PaytreePaymentChannel.model_validate(data)
+        return SignaturePaymentChannel.model_validate(data)
+
+    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannelBase]:
         """
-        Get the full channel aggregate (metadata + latest tx).
+        Get the full channel aggregate (metadata + latest state).
         Uses MGET to fetch both keys in a single round trip.
         """
         channel_key = f"payment_channel:{channel_id}"
-        tx_key = f"off_chain_tx:latest:{channel_id}"
+        state_key = f"signature_state:latest:{channel_id}"
 
-        results = await self.store.mget([channel_key, tx_key])
+        results = await self.store.mget([channel_key, state_key])
 
         channel_json = results[0]
-        tx_json = results[1]
+        state_json = results[1]
 
         if not channel_json:
             return None
 
-        channel = PaymentChannel.model_validate_json(channel_json)
+        channel = self._deserialize_channel(channel_json)
 
-        if tx_json:
-            channel.latest_tx = OffChainTx.model_validate_json(tx_json)
-        else:
-            channel.latest_tx = None
+        if isinstance(channel, SignaturePaymentChannel):
+            if state_json:
+                channel.signature_state = SignatureState.model_validate_json(state_json)
+            else:
+                channel.signature_state = None
 
         return channel
 
@@ -91,10 +109,10 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         return PaywordState.model_validate_json(raw)
 
     async def save_payment(
-        self, channel: PaymentChannel, new_tx: OffChainTx
-    ) -> tuple[int, Optional[OffChainTx]]:
+        self, channel: SignaturePaymentChannel, new_state: SignatureState
+    ) -> tuple[int, Optional[SignatureState]]:
         """
-        Atomically update the channel's latest transaction using Lua script.
+        Atomically update the channel's latest signature state using Lua script.
         """
         script = """
         local latest_key = KEYS[1]
@@ -133,16 +151,16 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         end
         """
 
-        latest_key = f"off_chain_tx:latest:{new_tx.channel_id}"
-        channel_key = f"payment_channel:{new_tx.channel_id}"
-        payload_json = new_tx.model_dump_json()
+        latest_key = f"signature_state:latest:{new_state.channel_id}"
+        channel_key = f"payment_channel:{new_state.channel_id}"
+        payload_json = new_state.model_dump_json()
 
         result = await self.store.eval(
             script,
             keys=[latest_key, channel_key],
             args=[
                 payload_json,
-                str(new_tx.cumulative_owed_amount),
+                str(new_state.cumulative_owed_amount),
                 str(channel.amount),
             ],
         )
@@ -161,14 +179,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
                 raise RuntimeError(
                     "Unexpected: save_payment returned success but no payload"
                 )
-            return 1, OffChainTx.model_validate_json(payload)
+            return 1, SignatureState.model_validate_json(payload)
         elif code == 0:
-            return 0, OffChainTx.model_validate_json(payload) if payload else None
+            return 0, SignatureState.model_validate_json(payload) if payload else None
         else:
             return 2, None
 
     async def save_payword_payment(
-        self, channel: PaymentChannel, new_state: PaywordState
+        self, channel: PaywordPaymentChannel, new_state: PaywordState
     ) -> tuple[int, Optional[PaywordState]]:
         """
         Atomically update the channel's latest PayWord state using Lua script.
@@ -248,16 +266,16 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return 2, None
 
     async def save_channel_and_initial_payment(
-        self, channel: PaymentChannel, initial_tx: OffChainTx
-    ) -> tuple[int, Optional[OffChainTx]]:
+        self, channel: SignaturePaymentChannel, initial_state: SignatureState
+    ) -> tuple[int, Optional[SignatureState]]:
         """
-        Atomically save channel metadata AND the first transaction.
+        Atomically save channel metadata AND the first signature state.
         """
         script = """
         local channel_key = KEYS[1]
         local latest_key = KEYS[2]
         local channel_json = ARGV[1]
-        local tx_json = ARGV[2]
+        local state_json = ARGV[2]
         local created_ts = tonumber(ARGV[3])
         local channel_id = ARGV[4]
         
@@ -274,42 +292,42 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         -- 1. Save Channel Metadata
         redis.call('SET', channel_key, channel_json)
         
-        -- 2. Save Initial Transaction
-        redis.call('SET', latest_key, tx_json)
+        -- 2. Save Initial State
+        redis.call('SET', latest_key, state_json)
         
         -- 3. Update Indices
         redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
         redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
         
-        return {1, tx_json}
+        return {1, state_json}
         """
 
         channel_key = f"payment_channel:{channel.channel_id}"
-        latest_key = f"off_chain_tx:latest:{channel.channel_id}"
+        latest_key = f"signature_state:latest:{channel.channel_id}"
 
         # Prepare channel JSON (excluding latest_tx as per our pattern)
-        channel.latest_tx = None
-        channel_json = channel.model_dump_json(exclude={"latest_tx"})
-        tx_json = initial_tx.model_dump_json()
+        channel.signature_state = None
+        channel_json = channel.model_dump_json(exclude={"signature_state"})
+        state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
 
         result = await self.store.eval(
             script,
             keys=[channel_key, latest_key],
-            args=[channel_json, tx_json, str(created_ts), channel.channel_id],
+            args=[channel_json, state_json, str(created_ts), channel.channel_id],
         )
 
         code = int(result[0])
         # payload = result[1]
 
         if code == 1:
-            return 1, initial_tx
+            return 1, initial_state
         else:
             # Race condition: channel or tx already exists
             return 0, None
 
     async def save_channel_and_initial_payword_state(
-        self, channel: PaymentChannel, initial_state: PaywordState
+        self, channel: PaywordPaymentChannel, initial_state: PaywordState
     ) -> tuple[int, Optional[PaywordState]]:
         """
         Atomically save channel metadata AND the first PayWord state.
@@ -342,8 +360,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         channel_key = f"payment_channel:{channel.channel_id}"
         latest_key = f"payword_state:latest:{channel.channel_id}"
 
-        channel.latest_tx = None
-        channel_json = channel.model_dump_json(exclude={"latest_tx"})
+        channel_json = channel.model_dump_json()
         state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
 
@@ -359,27 +376,41 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         else:
             return 0, None
 
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[PaymentChannel]:
+    async def get_all(
+        self, skip: int = 0, limit: int = 100
+    ) -> list[PaymentChannelBase]:
         ids: list[str] = await self.store.zrevrange(
             "payment_channels:all", skip, skip + limit - 1
         )
-        channels: List[PaymentChannel] = []
-        for channel_id in ids:
-            data = await self.store.get(f"payment_channel:{channel_id}")
+        if not ids:
+            return []
+
+        keys = [f"payment_channel:{channel_id}" for channel_id in ids]
+        results = await self.store.mget(keys)
+
+        channels: list[PaymentChannelBase] = []
+        for data in results:
             if data:
-                channels.append(PaymentChannel.model_validate_json(data))
+                channels.append(self._deserialize_channel(data))
         return channels
 
-    async def update(self, payment_channel: PaymentChannel) -> PaymentChannel:
+    async def update(self, payment_channel: PaymentChannelBase) -> PaymentChannelBase:
         channel_key = f"payment_channel:{payment_channel.channel_id}"
 
         existing_raw = await self.store.get(channel_key)
         old_is_closed: Optional[bool] = None
         if existing_raw:
-            existing_channel = PaymentChannel.model_validate_json(existing_raw)
+            existing_channel = self._deserialize_channel(existing_raw)
             old_is_closed = existing_channel.is_closed
 
-        await self.store.set(channel_key, payment_channel.model_dump_json())
+        # Keep dynamic latest state out of the static channel record to avoid duplication.
+        if isinstance(payment_channel, SignaturePaymentChannel):
+            await self.store.set(
+                channel_key,
+                payment_channel.model_dump_json(exclude={"signature_state"}),
+            )
+        else:
+            await self.store.set(channel_key, payment_channel.model_dump_json())
 
         if old_is_closed is not None and old_is_closed != payment_channel.is_closed:
             created_ts = payment_channel.created_at.timestamp()
@@ -404,13 +435,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     async def mark_closed(
         self,
         channel_id: str,
-        close_payload_b64: Optional[str],
-        client_close_signature_b64: Optional[str],
         vendor_close_signature_b64: str,
         *,
         amount: int,
         balance: int,
-    ) -> PaymentChannel:
+    ) -> PaymentChannelBase:
         channel = await self.get_by_channel_id(channel_id)
         if not channel:
             raise ValueError("Payment channel not found")
@@ -418,8 +447,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return channel
 
         channel.is_closed = True
-        channel.close_payload_b64 = close_payload_b64
-        channel.client_close_signature_b64 = client_close_signature_b64
         channel.vendor_close_signature_b64 = vendor_close_signature_b64
         channel.amount = amount
         channel.balance = balance
@@ -437,7 +464,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         return PaytreeState.model_validate_json(raw)
 
     async def save_paytree_payment(
-        self, channel: PaymentChannel, new_state: PaytreeState
+        self, channel: PaytreePaymentChannel, new_state: PaytreeState
     ) -> tuple[int, Optional[PaytreeState]]:
         """
         Atomically update the channel's latest PayTree state using Lua script.
@@ -517,7 +544,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return 2, None
 
     async def save_channel_and_initial_paytree_state(
-        self, channel: PaymentChannel, initial_state: PaytreeState
+        self, channel: PaytreePaymentChannel, initial_state: PaytreeState
     ) -> tuple[int, Optional[PaytreeState]]:
         """
         Atomically save channel metadata AND the first PayTree state.
@@ -550,8 +577,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         channel_key = f"payment_channel:{channel.channel_id}"
         latest_key = f"paytree_state:latest:{channel.channel_id}"
 
-        channel.latest_tx = None
-        channel_json = channel.model_dump_json(exclude={"latest_tx"})
+        channel_json = channel.model_dump_json()
         state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
 

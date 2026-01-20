@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from .entities import Account, PaymentChannel
+from .entities import Account, PaymentChannelBase
 
 
 class AccountRepository(ABC):
@@ -29,11 +29,11 @@ class PaymentChannelRepository(ABC):
     """Repository for payment channels."""
 
     @abstractmethod
-    async def create(self, channel: PaymentChannel) -> PaymentChannel:
+    async def create(self, channel: PaymentChannelBase) -> PaymentChannelBase:
         pass
 
     @abstractmethod
-    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannelBase]:
         pass
 
     @abstractmethod
@@ -51,5 +51,5 @@ class PaymentChannelRepository(ABC):
         amount: int,
         balance: int,
         vendor_close_signature_b64: str,
-    ) -> PaymentChannel:
+    ) -> PaymentChannelBase:
         pass
