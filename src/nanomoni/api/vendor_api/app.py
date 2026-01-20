@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import base64
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -83,17 +81,7 @@ def create_app() -> FastAPI:
     )
     async def get_vendor_public_key() -> VendorPublicKeyDTO:
         """Return the vendor public key configured via environment settings."""
-
-        public_key = serialization.load_pem_public_key(
-            settings.vendor_public_key_pem.encode()
-        )
-        der_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        public_key_der_b64 = base64.b64encode(der_bytes).decode()
-
-        return VendorPublicKeyDTO(public_key_der_b64=public_key_der_b64)
+        return VendorPublicKeyDTO(public_key_der_b64=settings.vendor_public_key_der_b64)
 
     @app.get("/metrics")
     async def metrics() -> Response:

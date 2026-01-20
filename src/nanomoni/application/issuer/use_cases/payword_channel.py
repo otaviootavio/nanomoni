@@ -36,7 +36,7 @@ from ....crypto.payword import (
     compute_cumulative_owed_amount,
     verify_token_against_root,
 )
-from ....domain.issuer.entities import Account, PaymentChannel
+from ....domain.issuer.entities import Account, PaywordPaymentChannel
 from ....domain.issuer.repositories import AccountRepository, PaymentChannelRepository
 
 
@@ -137,7 +137,7 @@ class PaywordChannelService:
         if existing and not existing.is_closed:
             raise ValueError("Payment channel already open")
 
-        channel = PaymentChannel(
+        channel = PaywordPaymentChannel(
             channel_id=channel_id,
             client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
             vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
@@ -150,6 +150,8 @@ class PaywordChannelService:
             payword_hash_alg=payword_hash_alg,
         )
         created = await self.channel_repo.create(channel)
+        if not isinstance(created, PaywordPaymentChannel):
+            raise RuntimeError("Unexpected: persisted channel is not PayWord-enabled")
 
         # Deduct funds only after the channel is persisted. If the balance update
         # fails for any reason, attempt to roll back by deleting the channel.
@@ -189,16 +191,11 @@ class PaywordChannelService:
             raise ValueError("Payment channel not found")
         if channel.is_closed:
             raise ValueError("Payment channel already closed")
+        if not isinstance(channel, PaywordPaymentChannel):
+            raise ValueError("Payment channel is not PayWord-enabled")
 
         if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
             raise ValueError("Mismatched vendor public key for channel")
-
-        if (
-            channel.payword_root_b64 is None
-            or channel.payword_unit_value is None
-            or channel.payword_max_k is None
-        ):
-            raise ValueError("Payment channel is not PayWord-enabled")
 
         payword_hash_alg = channel.payword_hash_alg or "sha256"
         if payword_hash_alg != "sha256":
@@ -269,8 +266,8 @@ class PaywordChannelService:
         try:
             await self.channel_repo.mark_closed(
                 channel_id,
-                close_payload_b64="",
-                client_close_signature_b64="",
+                close_payload_b64=None,
+                client_close_signature_b64=None,
                 amount=channel.amount,
                 balance=cumulative_owed_amount,
                 vendor_close_signature_b64=dto.vendor_signature_b64,
@@ -310,11 +307,7 @@ class PaywordChannelService:
         if not channel:
             raise ValueError("Payment channel not found")
 
-        if (
-            channel.payword_root_b64 is None
-            or channel.payword_unit_value is None
-            or channel.payword_max_k is None
-        ):
+        if not isinstance(channel, PaywordPaymentChannel):
             raise ValueError("Payment channel is not PayWord-enabled")
 
         data = channel.model_dump()

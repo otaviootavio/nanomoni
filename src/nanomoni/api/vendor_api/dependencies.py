@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import Depends
+from functools import lru_cache
 
 from ...application.vendor.use_cases.payment import PaymentService
 from ...application.vendor.use_cases.payword_payment import PaywordPaymentService
@@ -19,66 +19,57 @@ from ...infrastructure.vendor.payment_channel_repository_impl import (
 )
 from ...infrastructure.vendor.task_repository_impl import TaskRepositoryImpl
 from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
-from ...envs.vendor_env import Settings, get_settings
+from ...envs.vendor_env import Settings, get_settings as _get_settings
 
 
-def get_database_client_with_settings(
-    settings: Settings = Depends(get_settings),
-) -> DatabaseClient:
-    """Get database client with settings."""
+@lru_cache()
+def get_settings_dependency() -> Settings:
+    """Process-wide cached settings (safe because env vars are static at runtime)."""
+    return _get_settings()
+
+
+@lru_cache()
+def get_database_client_dependency() -> DatabaseClient:
+    """Process-wide cached DB client."""
+    settings = get_settings_dependency()
     return get_database_client(settings)
 
 
-def get_key_value_store(
-    db_client: DatabaseClient = Depends(get_database_client_with_settings),
-) -> KeyValueStore:
-    """Get key-value store."""
-    return RedisKeyValueStore(db_client)
+@lru_cache()
+def get_key_value_store_dependency() -> KeyValueStore:
+    """Process-wide cached store."""
+    return RedisKeyValueStore(get_database_client_dependency())
 
 
-def get_user_repository(
-    store: KeyValueStore = Depends(get_key_value_store),
-) -> UserRepository:
+def get_user_repository() -> UserRepository:
     """Get user repository."""
-    return UserRepositoryImpl(store)
+    return UserRepositoryImpl(get_key_value_store_dependency())
 
 
-def get_task_repository(
-    store: KeyValueStore = Depends(get_key_value_store),
-) -> TaskRepository:
+def get_task_repository() -> TaskRepository:
     """Get task repository."""
-    return TaskRepositoryImpl(store)
+    return TaskRepositoryImpl(get_key_value_store_dependency())
 
 
-def get_payment_channel_repository(
-    store: KeyValueStore = Depends(get_key_value_store),
-) -> PaymentChannelRepository:
+def get_payment_channel_repository() -> PaymentChannelRepository:
     """Get payment channel repository."""
-    return PaymentChannelRepositoryImpl(store)
+    return PaymentChannelRepositoryImpl(get_key_value_store_dependency())
 
 
-def get_user_service(
-    user_repository: UserRepository = Depends(get_user_repository),
-) -> UserService:
+def get_user_service() -> UserService:
     """Get user service."""
-    return UserService(user_repository)
+    return UserService(get_user_repository())
 
 
-def get_task_service(
-    task_repository: TaskRepository = Depends(get_task_repository),
-    user_repository: UserRepository = Depends(get_user_repository),
-) -> TaskService:
+def get_task_service() -> TaskService:
     """Get task service."""
-    return TaskService(task_repository, user_repository)
+    return TaskService(get_task_repository(), get_user_repository())
 
 
-def get_payment_service(
-    payment_channel_repository: PaymentChannelRepository = Depends(
-        get_payment_channel_repository
-    ),
-    settings: Settings = Depends(get_settings),
-) -> PaymentService:
+def get_payment_service() -> PaymentService:
     """Get payment service."""
+    payment_channel_repository = get_payment_channel_repository()
+    settings = get_settings_dependency()
     return PaymentService(
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,
@@ -87,13 +78,10 @@ def get_payment_service(
     )
 
 
-def get_payword_payment_service(
-    payment_channel_repository: PaymentChannelRepository = Depends(
-        get_payment_channel_repository
-    ),
-    settings: Settings = Depends(get_settings),
-) -> PaywordPaymentService:
+def get_payword_payment_service() -> PaywordPaymentService:
     """Get PayWord payment service."""
+    payment_channel_repository = get_payment_channel_repository()
+    settings = get_settings_dependency()
     return PaywordPaymentService(
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,
@@ -102,13 +90,10 @@ def get_payword_payment_service(
     )
 
 
-def get_paytree_payment_service(
-    payment_channel_repository: PaymentChannelRepository = Depends(
-        get_payment_channel_repository
-    ),
-    settings: Settings = Depends(get_settings),
-) -> PaytreePaymentService:
+def get_paytree_payment_service() -> PaytreePaymentService:
     """Get PayTree payment service."""
+    payment_channel_repository = get_payment_channel_repository()
+    settings = get_settings_dependency()
     return PaytreePaymentService(
         payment_channel_repository=payment_channel_repository,
         issuer_base_url=settings.issuer_base_url,

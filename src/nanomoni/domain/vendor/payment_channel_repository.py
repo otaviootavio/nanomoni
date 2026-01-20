@@ -5,47 +5,57 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .entities import PaymentChannel, OffChainTx, PaywordState, PaytreeState
+from .entities import (
+    PaymentChannelBase,
+    PaytreePaymentChannel,
+    PaytreeState,
+    PaywordPaymentChannel,
+    PaywordState,
+    SignatureState,
+    SignaturePaymentChannel,
+)
 
 
 class PaymentChannelRepository(ABC):
     """Abstract repository interface for PaymentChannel entities."""
 
     @abstractmethod
-    async def save_channel(self, payment_channel: PaymentChannel) -> PaymentChannel:
+    async def save_channel(
+        self, payment_channel: PaymentChannelBase
+    ) -> PaymentChannelBase:
         """Cache a new payment_channel (from issuer)."""
         pass
 
     @abstractmethod
-    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannel]:
+    async def get_by_channel_id(self, channel_id: str) -> Optional[PaymentChannelBase]:
         """Get the full channel aggregate (metadata + latest tx)."""
         pass
 
     @abstractmethod
     async def save_payment(
-        self, channel: PaymentChannel, new_tx: OffChainTx
-    ) -> tuple[int, Optional[OffChainTx]]:
+        self, channel: SignaturePaymentChannel, new_state: SignatureState
+    ) -> tuple[int, Optional[SignatureState]]:
         """
-        Atomically update the channel's latest transaction.
+        Atomically update the channel's latest signature state.
 
         Returns:
-          (1, tx) -> stored (success)
-          (0, tx) -> rejected (returns current tx)
+          (1, state) -> stored (success)
+          (0, state) -> rejected (returns current state)
           (2, None) -> payment channel missing
         """
         pass
 
     @abstractmethod
     async def save_channel_and_initial_payment(
-        self, channel: PaymentChannel, initial_tx: OffChainTx
-    ) -> tuple[int, Optional[OffChainTx]]:
+        self, channel: SignaturePaymentChannel, initial_state: SignatureState
+    ) -> tuple[int, Optional[SignatureState]]:
         """
-        Atomically save channel metadata AND the first transaction.
+        Atomically save channel metadata AND the first signature state.
         Used for the first payment flow.
 
         Returns:
-          (1, tx) -> stored (success)
-          (0, tx) -> rejected (race condition: channel/tx already exists)
+          (1, state) -> stored (success)
+          (0, state) -> rejected (race condition: channel/state already exists)
         """
         pass
 
@@ -56,7 +66,7 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def save_payword_payment(
-        self, channel: PaymentChannel, new_state: PaywordState
+        self, channel: PaywordPaymentChannel, new_state: PaywordState
     ) -> tuple[int, Optional[PaywordState]]:
         """
         Atomically update the channel's latest PayWord state.
@@ -70,7 +80,7 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def save_channel_and_initial_payword_state(
-        self, channel: PaymentChannel, initial_state: PaywordState
+        self, channel: PaywordPaymentChannel, initial_state: PaywordState
     ) -> tuple[int, Optional[PaywordState]]:
         """
         Atomically save channel metadata AND the first PayWord state.
@@ -88,7 +98,7 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def save_paytree_payment(
-        self, channel: PaymentChannel, new_state: PaytreeState
+        self, channel: PaytreePaymentChannel, new_state: PaytreeState
     ) -> tuple[int, Optional[PaytreeState]]:
         """
         Atomically update the channel's latest PayTree state.
@@ -102,7 +112,7 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def save_channel_and_initial_paytree_state(
-        self, channel: PaymentChannel, initial_state: PaytreeState
+        self, channel: PaytreePaymentChannel, initial_state: PaytreeState
     ) -> tuple[int, Optional[PaytreeState]]:
         """
         Atomically save channel metadata AND the first PayTree state.
@@ -114,12 +124,14 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[PaymentChannel]:
+    async def get_all(
+        self, skip: int = 0, limit: int = 100
+    ) -> List[PaymentChannelBase]:
         """Get all payment_channels with pagination."""
         pass
 
     @abstractmethod
-    async def update(self, payment_channel: PaymentChannel) -> PaymentChannel:
+    async def update(self, payment_channel: PaymentChannelBase) -> PaymentChannelBase:
         """Update an existing payment_channel."""
         pass
 
@@ -133,6 +145,6 @@ class PaymentChannelRepository(ABC):
         amount: int,
         balance: int,
         vendor_close_signature_b64: str,
-    ) -> PaymentChannel:
-        """Mark a payment channel as closed, persisting close payload and signatures."""
+    ) -> PaymentChannelBase:
+        """Mark a payment channel as closed."""
         pass

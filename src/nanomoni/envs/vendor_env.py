@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import base64
+from functools import lru_cache
 
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
@@ -81,6 +82,7 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
         print(f"An unexpected error occurred during vendor registration: {e}")
 
 
+@lru_cache()
 def get_settings() -> Settings:
     database_echo_str = os.environ.get("VENDOR_DATABASE_ECHO")
     api_debug_str = os.environ.get("VENDOR_API_DEBUG")

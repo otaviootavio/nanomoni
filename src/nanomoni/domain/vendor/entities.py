@@ -1,4 +1,4 @@
-"""Vendor domain entities: User, Task, OffChainTx, and PaymentChannel."""
+"""Vendor domain entities: User, Task, payment channel state, and PaymentChannel."""
 
 from __future__ import annotations
 
@@ -116,20 +116,18 @@ class Task(CommonSerializersMixin, BaseModel):
         self.updated_at = datetime.now(timezone.utc)
 
 
-class OffChainTx(DatetimeSerializerMixin, BaseModel):
-    """Off-chain transaction entity representing the latest payment channel state."""
+class SignatureState(DatetimeSerializerMixin, BaseModel):
+    """Latest signature-mode payment state (monotonic cumulative owed amount).
+
+    Note: we intentionally do NOT persist payload bytes. The payload can be
+    deterministically reconstructed from (channel_id, cumulative_owed_amount),
+    and the client signature is stored over that canonical payload.
+    """
 
     channel_id: str = Field(..., description="Payment channel identifier")
-    client_public_key_der_b64: str = Field(
-        ..., description="Client's public key in DER format (base64)"
-    )
-    vendor_public_key_der_b64: str = Field(
-        ..., description="Vendor's public key in DER format (base64)"
-    )
     cumulative_owed_amount: int = Field(
         ..., ge=0, description="Cumulative amount owed to vendor"
     )
-    payload_b64: str = Field(..., description="Base64-encoded payload")
     client_signature_b64: str = Field(
         ..., description="Base64-encoded client signature"
     )
@@ -157,8 +155,8 @@ class PaytreeState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class PaymentChannel(CommonSerializersMixin, BaseModel):
-    """Represents a unidirectional client→vendor payment channel."""
+class PaymentChannelBase(CommonSerializersMixin, BaseModel):
+    """Base entity for a unidirectional client→vendor payment channel."""
 
     id: UUID = Field(default_factory=uuid4)
     channel_id: str
@@ -168,28 +166,37 @@ class PaymentChannel(CommonSerializersMixin, BaseModel):
     amount: int
     balance: int = 0
     is_closed: bool = False
-    close_payload_b64: Optional[str] = None
-    client_close_signature_b64: Optional[str] = None
     vendor_close_signature_b64: Optional[str] = None
-
-    # Optional PayWord (hash-chain) commitment for PayWord-enabled channels.
-    payword_root_b64: Optional[str] = None
-    payword_unit_value: Optional[int] = None
-    payword_max_k: Optional[int] = None
-    payword_hash_alg: Optional[str] = None
-
-    # Optional PayTree (Merkle tree) commitment for PayTree-enabled channels.
-    paytree_root_b64: Optional[str] = None
-    paytree_unit_value: Optional[int] = None
-    paytree_max_i: Optional[int] = None
-    paytree_hash_alg: Optional[str] = None
-
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 
-    # Vendor context: latest transaction state part of the aggregate
-    latest_tx: Optional[OffChainTx] = None
+
+class SignaturePaymentChannel(PaymentChannelBase):
+    """Signature-mode payment channel (vendor-side cached metadata)."""
+
+    # Vendor context: latest signature state is loaded/stored separately.
+    signature_state: Optional[SignatureState] = None
 
     @property
     def current_balance(self) -> int:
-        return self.latest_tx.cumulative_owed_amount if self.latest_tx else 0
+        return (
+            self.signature_state.cumulative_owed_amount if self.signature_state else 0
+        )
+
+
+class PaywordPaymentChannel(PaymentChannelBase):
+    """PayWord-enabled payment channel with hash-chain commitment."""
+
+    payword_root_b64: str
+    payword_unit_value: int
+    payword_max_k: int
+    payword_hash_alg: str = "sha256"
+
+
+class PaytreePaymentChannel(PaymentChannelBase):
+    """PayTree-enabled payment channel with Merkle tree commitment."""
+
+    paytree_root_b64: str
+    paytree_unit_value: int
+    paytree_max_i: int
+    paytree_hash_alg: str = "sha256"

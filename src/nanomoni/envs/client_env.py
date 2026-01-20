@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import base64
 import os
+from functools import lru_cache
 from typing import Optional
 
-from pydantic import BaseModel, computed_field, field_validator
+from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 from urllib.parse import urlparse
 
 
 class Settings(BaseModel):
     client_private_key_pem: str
+    # Precomputed at settings load time to avoid re-parsing the private key on every access.
+    client_public_key_der_b64: str
     vendor_base_url: str
     issuer_base_url: str
     client_payment_count: int = 1
@@ -20,21 +23,6 @@ class Settings(BaseModel):
     client_payword_max_k: Optional[int] = None
     client_paytree_unit_value: int = 1
     client_paytree_max_i: Optional[int] = None
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def client_public_key_der_b64(self) -> str:
-        """DER-encoded base64 public key."""
-        private_key = serialization.load_pem_private_key(
-            self.client_private_key_pem.encode(),
-            password=None,
-        )
-        public_key = private_key.public_key()
-        public_key_der = public_key.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return base64.b64encode(public_key_der).decode("utf-8")
 
     @field_validator("client_private_key_pem")
     @classmethod
@@ -76,6 +64,20 @@ class Settings(BaseModel):
         return v
 
 
+def _compute_public_key_der_b64_from_private_pem(private_key_pem: str) -> str:
+    private_key = serialization.load_pem_private_key(
+        private_key_pem.encode(),
+        password=None,
+    )
+    public_key = private_key.public_key()
+    public_key_der = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    return base64.b64encode(public_key_der).decode("utf-8")
+
+
+@lru_cache()
 def get_settings() -> Settings:
     client_private_key_pem = os.environ.get("CLIENT_PRIVATE_KEY_PEM")
     vendor_base_url = os.environ.get("VENDOR_BASE_URL")
@@ -146,6 +148,9 @@ def get_settings() -> Settings:
 
     return Settings(
         client_private_key_pem=client_private_key_pem,
+        client_public_key_der_b64=_compute_public_key_der_b64_from_private_pem(
+            client_private_key_pem
+        ),
         vendor_base_url=vendor_base_url,
         issuer_base_url=issuer_base_url,
         client_payment_count=client_payment_count,
