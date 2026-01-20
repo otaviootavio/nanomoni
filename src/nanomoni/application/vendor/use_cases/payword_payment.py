@@ -275,10 +275,12 @@ class PaywordPaymentService:
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
-    async def settle_channel(self, dto: CloseChannelDTO) -> None:
+    async def settle_channel(self, channel_id: str, dto: CloseChannelDTO) -> None:
         """Settle a PayWord channel by settling the latest PayWord state on the issuer."""
+        if dto.channel_id != channel_id:
+            raise ValueError("Channel ID mismatch between path and payload")
         channel = await self.payment_channel_repository.get_by_channel_id(
-            dto.channel_id
+            channel_id
         )
         if not channel:
             raise ValueError("Payment channel not found")
@@ -293,7 +295,7 @@ class PaywordPaymentService:
             raise ValueError("Payment channel is not PayWord-enabled")
 
         latest_state = await self.payment_channel_repository.get_payword_state(
-            dto.channel_id
+            channel_id
         )
         if not latest_state:
             raise ValueError("No PayWord payments received for this channel")
@@ -305,7 +307,7 @@ class PaywordPaymentService:
             raise ValueError("Invalid owed amount")
 
         settlement_payload = PaywordSettlementPayload(
-            channel_id=dto.channel_id,
+            channel_id=channel_id,
             k=latest_state.k,
             token_b64=latest_state.token_b64,
         )
@@ -325,11 +327,11 @@ class PaywordPaymentService:
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
             await issuer_client.settle_payword_payment_channel(
-                dto.channel_id, request_dto
+                channel_id, request_dto
             )
 
         await self.payment_channel_repository.mark_closed(
-            channel_id=dto.channel_id,
+            channel_id=channel_id,
             close_payload_b64="",
             client_close_signature_b64="",
             amount=channel.amount,

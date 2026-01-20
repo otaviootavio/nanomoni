@@ -137,7 +137,7 @@ class IssuerTestClient:
         Get payment channel state by channel ID.
 
         Args:
-            channel_id: Channel ID
+            channel_id: Channel ID for the payment channel to fetch
 
         Returns:
             PaymentChannelResponseDTO with channel state
@@ -159,7 +159,7 @@ class IssuerTestClient:
         Close and settle a payment channel.
 
         Args:
-            channel_id: Channel ID
+            channel_id: Channel ID for the payment channel to close
             close_request: Close channel request with signatures
 
         Returns:

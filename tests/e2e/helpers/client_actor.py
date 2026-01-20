@@ -77,7 +77,7 @@ class ClientActor:
         Create a signed payment envelope for an off-chain transaction.
 
         Args:
-            channel_id: Payment channel identifier
+            channel_id: Payment channel identifier string provided by the API
             cumulative_owed_amount: Amount owed to vendor
 
         Returns:
