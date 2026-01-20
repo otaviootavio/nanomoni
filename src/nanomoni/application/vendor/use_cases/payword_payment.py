@@ -122,7 +122,7 @@ class PaywordPaymentService:
                         "Race condition handling failed: channel missing after collision"
                     )
                 if not isinstance(cached, PaywordPaymentChannel):
-                    raise RuntimeError("Cached channel is not PayWord-enabled")
+                    raise TypeError("Cached channel is not PayWord-enabled")
                 payment_channel = cached
 
             (

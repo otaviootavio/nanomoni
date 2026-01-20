@@ -121,7 +121,7 @@ class PaytreePaymentService:
                         "Race condition handling failed: channel missing after collision"
                     )
                 if not isinstance(cached, PaytreePaymentChannel):
-                    raise RuntimeError("Cached channel is not PayTree-enabled")
+                    raise TypeError("Cached channel is not PayTree-enabled")
                 payment_channel = cached
 
             (
