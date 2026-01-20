@@ -134,10 +134,10 @@ class IssuerTestClient:
 
     async def get_channel(self, channel_id: str) -> PaymentChannelResponseDTO:
         """
-        Get payment channel state by computed ID.
+        Get payment channel state by channel ID.
 
         Args:
-            channel_id: Channel's computed ID
+            channel_id: Channel ID
 
         Returns:
             PaymentChannelResponseDTO with channel state
@@ -159,7 +159,7 @@ class IssuerTestClient:
         Close and settle a payment channel.
 
         Args:
-            channel_id: Channel's computed ID
+            channel_id: Channel ID
             close_request: Close channel request with signatures
 
         Returns:

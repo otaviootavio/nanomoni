@@ -119,14 +119,16 @@ class Task(CommonSerializersMixin, BaseModel):
 class OffChainTx(DatetimeSerializerMixin, BaseModel):
     """Off-chain transaction entity representing the latest payment channel state."""
 
-    channel_id: str = Field(..., description="Payment channel computed ID")
+    channel_id: str = Field(..., description="Payment channel identifier")
     client_public_key_der_b64: str = Field(
         ..., description="Client's public key in DER format (base64)"
     )
     vendor_public_key_der_b64: str = Field(
         ..., description="Vendor's public key in DER format (base64)"
     )
-    cumulative_owed_amount: int = Field(..., ge=0, description="Amount owed to vendor")
+    cumulative_owed_amount: int = Field(
+        ..., ge=0, description="Cumulative amount owed to vendor"
+    )
     payload_b64: str = Field(..., description="Base64-encoded payload")
     client_signature_b64: str = Field(
         ..., description="Base64-encoded client signature"

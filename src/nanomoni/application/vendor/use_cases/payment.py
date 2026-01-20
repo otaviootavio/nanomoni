@@ -276,6 +276,7 @@ class PaymentService:
 
         # 5) Send close request to issuer
         request_dto = CloseChannelRequestDTO(
+            channel_id=dto.channel_id,
             close_payload_b64=latest_tx.payload_b64,
             client_close_signature_b64=latest_tx.client_signature_b64,
             vendor_close_signature_b64=vendor_close_signature_b64,
@@ -283,7 +284,7 @@ class PaymentService:
 
         async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
             await issuer_client.settle_payment_channel(
-                latest_tx.channel_id,
+                dto.channel_id,
                 request_dto,
             )
 

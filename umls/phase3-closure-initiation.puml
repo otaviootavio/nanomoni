@@ -15,7 +15,7 @@ VendorDB --> Vendor: PaymentChannel + latest payment
 
 Vendor -> Vendor: Validate latest payment and channel state
 
-Vendor -> Vendor: Prepare settlement request)
+Vendor -> Vendor: Prepare settlement request
 Vendor -> Vendor: Sign settlement request
 
 Vendor -> Issuer: Settle & Close Channel

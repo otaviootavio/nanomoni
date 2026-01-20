@@ -51,7 +51,7 @@ def prepare_payments(
     measures mostly network + server-side verification (fairer vs payword pre-hashing).
 
     Args:
-        channel_id: The channel computed ID
+        channel_id: The channel ID
         client_public_key_der_b64: Client's public key in DER base64 format
         vendor_public_key_der_b64: Vendor's public key in DER base64 format
         client_private_key: Client's private key for signing
@@ -82,7 +82,7 @@ async def send_payments(
 
     Args:
         vendor: The vendor client instance
-        channel_id: The channel computed ID
+        channel_id: The channel ID
         payment_dtos: List of pre-signed payment DTOs
     """
     for pay_dto in payment_dtos:

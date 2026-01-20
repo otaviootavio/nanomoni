@@ -125,6 +125,6 @@ class VendorPublicKeyDTO(BaseModel):
 
 
 class CloseChannelDTO(BaseModel):
-    """DTO for requesting a close of a payment channel by its computed ID."""
+    """DTO for requesting a close of a payment channel by its channel ID."""
 
     channel_id: str

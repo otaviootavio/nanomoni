@@ -27,6 +27,8 @@ class SignatureSettlementPayload(BaseModel):
     Public keys are inferred from the stored PaymentChannel by channel_id.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     channel_id: str
     cumulative_owed_amount: int
 
@@ -37,6 +39,8 @@ class SignaturePaymentPayload(BaseModel):
     This is a client-signed monotonic statement of cumulative_owed_amount for a channel.
     We optimize space by omitting public keys; vendor/issuer infer them from channel_id.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     channel_id: str
     cumulative_owed_amount: int

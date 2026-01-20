@@ -53,6 +53,7 @@ class OpenChannelResponseDTO(BaseModel):
 class CloseChannelRequestDTO(BaseModel):
     """Vendor presents client-signed close envelope plus vendor's consent signature (detached) for closing."""
 
+    channel_id: str
     close_payload_b64: str
     client_close_signature_b64: str
     vendor_close_signature_b64: str
@@ -67,7 +68,7 @@ class CloseChannelResponseDTO(BaseModel):
 
 
 class GetPaymentChannelRequestDTO(BaseModel):
-    """Request to get a payment channel by its computed ID."""
+    """Request to get a payment channel by its channel ID."""
 
     channel_id: str
 

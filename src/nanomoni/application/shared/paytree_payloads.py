@@ -31,6 +31,8 @@ class PaytreeOpenChannelRequestPayload(BaseModel):
 class PaytreeSettlementPayload(BaseModel):
     """Payload signed by the vendor when settling a PayTree channel on the issuer."""
 
+    model_config = ConfigDict(extra="forbid")
+
     channel_id: str
     i: int = Field(..., ge=0)
     leaf_b64: str

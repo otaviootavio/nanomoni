@@ -211,7 +211,7 @@ class PaytreePaymentService:
         )
         if cumulative_owed_amount > payment_channel.amount:
             raise ValueError(
-                f"Owed amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
+                f"cumulative_owed_amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
         # Verify Merkle proof against root

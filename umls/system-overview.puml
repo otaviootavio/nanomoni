@@ -38,7 +38,7 @@ end
 
 deactivate Vendor
 
-Vendor -> Issuer: **4. Channel Closure**\n(Settle and close channel)
+Vendor -> Issuer: **4. Channel Settlement**\n(Settle and close channel)
 activate Issuer
 Issuer -> Issuer: Validate settlement\n(mode-specific proof/signatures)
 Issuer -> Issuer: Transfer funds\n(Vendor: cumulative_owed_amount | Client: remainder)

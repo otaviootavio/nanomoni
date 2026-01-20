@@ -25,6 +25,10 @@ from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 
+PAYWORD_NOT_INITIALIZED = "PayWord object should be initialized"
+PAYTREE_NOT_INITIALIZED = "PayTree object should be initialized"
+
+
 async def run_client_flow() -> None:
     """
     Minimal client runner.
@@ -155,14 +159,14 @@ async def run_client_flow() -> None:
             await signature.send_payments(vendor, channel_id, payment_dtos)
         elif client_mode == "payword":
             if payword_obj is None:
-                raise RuntimeError("PayWord object should be initialized")
+                raise RuntimeError(PAYWORD_NOT_INITIALIZED)
             # Type narrowing: mypy now knows payword_obj is not None after the check
             payword_for_payments: Payword = payword_obj
             payword_payments = payword.prepare_payments(payword_for_payments, payments)
             await payword.send_payments(vendor, channel_id, payword_payments)
         else:  # paytree
             if paytree_obj is None:
-                raise RuntimeError("PayTree object should be initialized")
+                raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             # Type narrowing: mypy now knows paytree_obj is not None after the check
             paytree_for_payments: Paytree = paytree_obj
             await paytree.send_payments(

@@ -96,6 +96,11 @@ async def settle_payword_channel(
     channel_id: str = Path(..., description="Payment channel identifier"),
     payment_service: PaywordPaymentService = Depends(get_payword_payment_service),
 ) -> Response:
+    if payload.channel_id != channel_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Channel ID mismatch between path and payload",
+        )
     try:
         await payment_service.settle_channel(payload)
         return Response(status_code=status.HTTP_204_NO_CONTENT)

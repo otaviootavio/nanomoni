@@ -163,8 +163,8 @@ class PaymentChannelService:
             close_payload_unverified = SignatureSettlementPayload.model_validate_json(
                 close_payload_bytes.decode("utf-8")
             )
-        except Exception:
-            raise ValueError("Invalid close payload format")
+        except Exception as err:
+            raise ValueError("Invalid close payload format") from err
 
         # Ensure channel exists (authoritative binding for keys)
         channel_id = close_payload_unverified.channel_id
@@ -191,8 +191,8 @@ class PaymentChannelService:
             verified_client_bytes = verify_envelope_and_get_payload_bytes(
                 client_public_key, client_envelope
             )
-        except InvalidSignature:
-            raise ValueError("Invalid client signature for closing")
+        except InvalidSignature as err:
+            raise ValueError("Invalid client signature for closing") from err
 
         # Ensure what we verified is exactly what we parsed
         if verified_client_bytes != close_payload_bytes:

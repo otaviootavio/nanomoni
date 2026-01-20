@@ -115,7 +115,7 @@ async def send_payments(
 
     Args:
         vendor: The vendor client instance
-        channel_id: The channel computed ID
+        channel_id: The channel ID
         payment_dtos: List of precomputed PayWord payment DTOs
     """
     for payword_dto in payment_dtos:
