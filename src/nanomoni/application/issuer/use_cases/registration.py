@@ -6,6 +6,7 @@ import base64
 
 from cryptography.hazmat.primitives import serialization
 
+from ....domain.errors import AccountNotFoundError
 from ....domain.issuer.entities import Account
 from ....domain.issuer.repositories import (
     AccountRepository,
@@ -65,7 +66,7 @@ class RegistrationService:
         """
         account = await self.account_repo.get_by_public_key(public_key_der_b64)
         if not account:
-            raise ValueError("Account not found")
+            raise AccountNotFoundError("Account not found")
         return RegistrationResponseDTO(
             client_public_key_der_b64=account.public_key_der_b64,
             balance=account.balance,

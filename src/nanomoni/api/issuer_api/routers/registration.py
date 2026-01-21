@@ -9,6 +9,7 @@ from ....application.issuer.dtos import (
 )
 from ..dependencies import get_issuer_service
 from ....application.issuer.use_cases.registration import RegistrationService
+from ....domain.errors import AccountNotFoundError
 
 router = APIRouter(tags=["issuer"])
 
@@ -55,6 +56,9 @@ async def get_account(
     contains '/' and '+' which are awkward in URLs.
     """
     try:
-        return await service.get_account(public_key_der_b64)
+        normalized_public_key_der_b64 = public_key_der_b64.strip().replace(" ", "+")
+        return await service.get_account(normalized_public_key_der_b64)
+    except AccountNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
