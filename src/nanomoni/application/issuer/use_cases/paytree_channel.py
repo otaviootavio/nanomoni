@@ -108,10 +108,6 @@ class PaytreeChannelService:
         if client_acc.balance < open_req_payload.amount:
             raise ValueError("Insufficient client balance to lock funds")
 
-        paytree_hash_alg = open_req_payload.paytree_hash_alg or "sha256"
-        if paytree_hash_alg != "sha256":
-            raise ValueError("Unsupported PayTree hash algorithm")
-
         try:
             _ = b64_to_bytes(open_req_payload.paytree_root_b64)
         except Exception as e:
@@ -149,7 +145,6 @@ class PaytreeChannelService:
             paytree_root_b64=open_req_payload.paytree_root_b64,
             paytree_unit_value=open_req_payload.paytree_unit_value,
             paytree_max_i=open_req_payload.paytree_max_i,
-            paytree_hash_alg=paytree_hash_alg,
         )
         created = await self.channel_repo.create(channel)
         if not isinstance(created, PaytreePaymentChannel):
@@ -182,7 +177,6 @@ class PaytreeChannelService:
             paytree_root_b64=created.paytree_root_b64,
             paytree_unit_value=created.paytree_unit_value,
             paytree_max_i=created.paytree_max_i,
-            paytree_hash_alg=created.paytree_hash_alg or "sha256",
         )
 
     async def settle_channel(
@@ -198,10 +192,6 @@ class PaytreeChannelService:
 
         if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
             raise ValueError("Mismatched vendor public key for channel")
-
-        paytree_hash_alg = channel.paytree_hash_alg or "sha256"
-        if paytree_hash_alg != "sha256":
-            raise ValueError("Unsupported PayTree hash algorithm")
 
         if dto.i > channel.paytree_max_i:
             raise ValueError("i exceeds PayTree max_i for this channel")

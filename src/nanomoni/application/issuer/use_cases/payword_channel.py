@@ -106,10 +106,6 @@ class PaywordChannelService:
         if client_acc.balance < open_req_payload.amount:
             raise ValueError("Insufficient client balance to lock funds")
 
-        payword_hash_alg = open_req_payload.payword_hash_alg or "sha256"
-        if payword_hash_alg != "sha256":
-            raise ValueError("Unsupported PayWord hash algorithm")
-
         try:
             _ = b64_to_bytes(open_req_payload.payword_root_b64)
         except Exception as e:
@@ -147,7 +143,6 @@ class PaywordChannelService:
             payword_root_b64=open_req_payload.payword_root_b64,
             payword_unit_value=open_req_payload.payword_unit_value,
             payword_max_k=open_req_payload.payword_max_k,
-            payword_hash_alg=payword_hash_alg,
         )
         created = await self.channel_repo.create(channel)
         if not isinstance(created, PaywordPaymentChannel):
@@ -180,7 +175,6 @@ class PaywordChannelService:
             payword_root_b64=created.payword_root_b64,
             payword_unit_value=created.payword_unit_value,
             payword_max_k=created.payword_max_k,
-            payword_hash_alg=created.payword_hash_alg or "sha256",
         )
 
     async def settle_channel(
@@ -196,10 +190,6 @@ class PaywordChannelService:
 
         if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
             raise ValueError("Mismatched vendor public key for channel")
-
-        payword_hash_alg = channel.payword_hash_alg or "sha256"
-        if payword_hash_alg != "sha256":
-            raise ValueError("Unsupported PayWord hash algorithm")
 
         if dto.k > channel.payword_max_k:
             raise ValueError("k exceeds PayWord max_k for this channel")

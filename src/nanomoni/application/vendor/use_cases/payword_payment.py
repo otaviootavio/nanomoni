@@ -166,10 +166,6 @@ class PaywordPaymentService:
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
 
-        payword_hash_alg = payment_channel.payword_hash_alg or "sha256"
-        if payword_hash_alg != "sha256":
-            raise ValueError("Unsupported PayWord hash algorithm")
-
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
 
@@ -321,7 +317,6 @@ class PaywordPaymentService:
             channel_id=channel_id,
             amount=channel.amount,
             balance=cumulative_owed_amount,
-            vendor_close_signature_b64=vendor_signature_b64,
         )
 
         return None

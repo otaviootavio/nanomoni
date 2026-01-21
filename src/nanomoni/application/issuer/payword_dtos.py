@@ -24,7 +24,6 @@ class PaywordOpenChannelResponseDTO(BaseModel):
     payword_root_b64: str
     payword_unit_value: int
     payword_max_k: int
-    payword_hash_alg: str = Field("sha256")
 
 
 class PaywordPaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
@@ -43,7 +42,6 @@ class PaywordPaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     payword_root_b64: str
     payword_unit_value: int
     payword_max_k: int
-    payword_hash_alg: str = Field("sha256")
 
     created_at: datetime
     closed_at: Optional[datetime] = None

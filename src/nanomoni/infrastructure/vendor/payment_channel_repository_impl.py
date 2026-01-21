@@ -449,7 +449,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     async def mark_closed(
         self,
         channel_id: str,
-        vendor_close_signature_b64: str,
         *,
         amount: int,
         balance: int,
@@ -461,7 +460,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return channel
 
         channel.is_closed = True
-        channel.vendor_close_signature_b64 = vendor_close_signature_b64
         channel.amount = amount
         channel.balance = balance
         from datetime import datetime, timezone

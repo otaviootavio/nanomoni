@@ -122,7 +122,6 @@ class ClientActor:
             payword_root_b64=root_b64,
             payword_unit_value=unit_value,
             payword_max_k=max_k,
-            payword_hash_alg="sha256",
         )
         envelope = generate_envelope(self.private_key, payload.model_dump())
 
@@ -161,7 +160,6 @@ class ClientActor:
             payword_root_b64=payword_root_b64,
             payword_unit_value=unit_value,
             payword_max_k=max_k,
-            payword_hash_alg="sha256",
         )
         envelope = generate_envelope(self.private_key, payload.model_dump())
 
@@ -198,7 +196,6 @@ class ClientActor:
             paytree_root_b64=root_b64,
             paytree_unit_value=unit_value,
             paytree_max_i=max_i,
-            paytree_hash_alg="sha256",
         )
         envelope = generate_envelope(self.private_key, payload.model_dump())
 

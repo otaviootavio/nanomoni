@@ -158,7 +158,6 @@ class PaytreeState(DatetimeSerializerMixin, BaseModel):
 class PaymentChannelBase(CommonSerializersMixin, BaseModel):
     """Base entity for a unidirectional client→vendor payment channel."""
 
-    id: UUID = Field(default_factory=uuid4)
     channel_id: str
     client_public_key_der_b64: str
     vendor_public_key_der_b64: str
@@ -166,7 +165,6 @@ class PaymentChannelBase(CommonSerializersMixin, BaseModel):
     amount: int
     balance: int = 0
     is_closed: bool = False
-    vendor_close_signature_b64: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
 
@@ -190,7 +188,6 @@ class PaywordPaymentChannel(PaymentChannelBase):
     payword_root_b64: str
     payword_unit_value: int
     payword_max_k: int
-    payword_hash_alg: str = "sha256"
 
 
 class PaytreePaymentChannel(PaymentChannelBase):
@@ -199,4 +196,3 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
-    paytree_hash_alg: str = "sha256"
