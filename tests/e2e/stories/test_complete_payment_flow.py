@@ -38,13 +38,17 @@ async def test_complete_payment_flow_all_actors_succeed(
     )
     assert registration_response.client_public_key_der_b64 == client.public_key_der_b64
     assert registration_response.balance > 0
+    client_initial_balance = registration_response.balance
 
     # Get vendor public key
     vendor_pk_response = await vendor_client.get_public_key()
     vendor_public_key_der_b64 = vendor_pk_response.public_key_der_b64
 
     # Register vendor (required for channel opening)
-    await issuer_client.register_account(vendor_public_key_der_b64)
+    vendor_registration = await issuer_client.register_account(
+        vendor_public_key_der_b64
+    )
+    vendor_initial_balance = vendor_registration.balance
 
     # Phase1b: Open payment channel
     channel_amount = 1000
@@ -58,6 +62,12 @@ async def test_complete_payment_flow_all_actors_succeed(
     assert channel_response.balance == 0
     assert channel_response.client_public_key_der_b64 == client.public_key_der_b64
     assert channel_response.vendor_public_key_der_b64 == vendor_public_key_der_b64
+
+    # Assert funds are locked from the client's account when opening the channel.
+    client_after_open = await issuer_client.get_account(client.public_key_der_b64)
+    vendor_after_open = await issuer_client.get_account(vendor_public_key_der_b64)
+    assert client_after_open.balance == client_initial_balance - channel_amount
+    assert vendor_after_open.balance == vendor_initial_balance
 
     # Phase2a: First payment
     first_payment_owed = 50
@@ -86,6 +96,18 @@ async def test_complete_payment_flow_all_actors_succeed(
 
     # Phase3: Vendor initiates closure
     await vendor_client.request_channel_settlement(channel_id)
+
+    # Assert balances after settlement:
+    # - vendor is credited the cumulative owed amount
+    # - client gets refund of remainder, so net client spend is the owed amount
+    client_after_settlement = await issuer_client.get_account(client.public_key_der_b64)
+    vendor_after_settlement = await issuer_client.get_account(vendor_public_key_der_b64)
+    assert client_after_settlement.balance == (
+        client_initial_balance - final_cumulative_owed_amount
+    )
+    assert vendor_after_settlement.balance == (
+        vendor_initial_balance + final_cumulative_owed_amount
+    )
 
     # Verify final state on issuer (authoritative source)
     channel_state = await issuer_client.get_channel(channel_id)
