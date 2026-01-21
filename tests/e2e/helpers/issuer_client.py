@@ -55,6 +55,7 @@ class IssuerTestClient:
         url: str,
         *,
         json: dict | None = None,
+        params: dict | None = None,
     ) -> AiohttpResponse:
         if self._http_client is not None:
             session = self._http_client
@@ -66,7 +67,7 @@ class IssuerTestClient:
             close_session = True
 
         try:
-            async with session.request(method, url, json=json) as resp:
+            async with session.request(method, url, json=json, params=params) as resp:
                 content = await resp.read()
                 return AiohttpResponse(status_code=resp.status, content=content)
         finally:
@@ -92,6 +93,16 @@ class IssuerTestClient:
             json=dto.model_dump(),
         )
 
+        response.raise_for_status()
+        return RegistrationResponseDTO.model_validate(response.json())
+
+    async def get_account(self, public_key_der_b64: str) -> RegistrationResponseDTO:
+        """Fetch an existing issuer account (client or vendor) by public key."""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/accounts",
+            params={"public_key_der_b64": public_key_der_b64},
+        )
         response.raise_for_status()
         return RegistrationResponseDTO.model_validate(response.json())
 

@@ -37,3 +37,24 @@ async def get_public_key(
     service: RegistrationService = Depends(get_issuer_service),
 ) -> IssuerPublicKeyDTO:
     return service.get_issuer_public_key()
+
+
+@router.get(
+    "/accounts",
+    response_model=RegistrationResponseDTO,
+    status_code=status.HTTP_200_OK,
+)
+async def get_account(
+    public_key_der_b64: str,
+    service: RegistrationService = Depends(get_issuer_service),
+) -> RegistrationResponseDTO:
+    """
+    Fetch account state (balance) by public key.
+
+    Uses a query parameter instead of a path parameter because DER base64 often
+    contains '/' and '+' which are awkward in URLs.
+    """
+    try:
+        return await service.get_account(public_key_der_b64)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

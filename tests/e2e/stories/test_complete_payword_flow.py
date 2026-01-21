@@ -33,10 +33,14 @@ async def test_complete_payword_flow_all_actors_succeed(
         client.public_key_der_b64
     )
     assert registration_response.balance > 0
+    client_initial_balance = registration_response.balance
 
     vendor_pk_response = await vendor_client.get_public_key()
     vendor_public_key_der_b64 = vendor_pk_response.public_key_der_b64
-    await issuer_client.register_account(vendor_public_key_der_b64)
+    vendor_registration = await issuer_client.register_account(
+        vendor_public_key_der_b64
+    )
+    vendor_initial_balance = vendor_registration.balance
 
     # Open PayWord-enabled channel
     channel_amount = 100
@@ -56,6 +60,12 @@ async def test_complete_payword_flow_all_actors_succeed(
     assert channel_response.payword_unit_value == unit_value
     assert channel_response.payword_max_k == max_k
 
+    # Assert funds are locked from the client's account when opening the channel.
+    client_after_open = await issuer_client.get_account(client.public_key_der_b64)
+    vendor_after_open = await issuer_client.get_account(vendor_public_key_der_b64)
+    assert client_after_open.balance == client_initial_balance - channel_amount
+    assert vendor_after_open.balance == vendor_initial_balance
+
     # PayWord payments (monotonic k; may skip)
     ks = [10, 25, 70]
     for k in ks:
@@ -69,6 +79,19 @@ async def test_complete_payword_flow_all_actors_succeed(
 
     # Vendor settles and closes via PayWord
     await vendor_client.request_channel_settlement_payword(channel_id)
+
+    # Assert balances after settlement:
+    # - vendor is credited the cumulative owed amount
+    # - client gets refund of remainder, so net client spend is the owed amount
+    final_cumulative_owed_amount = ks[-1] * unit_value
+    client_after_settlement = await issuer_client.get_account(client.public_key_der_b64)
+    vendor_after_settlement = await issuer_client.get_account(vendor_public_key_der_b64)
+    assert client_after_settlement.balance == (
+        client_initial_balance - final_cumulative_owed_amount
+    )
+    assert vendor_after_settlement.balance == (
+        vendor_initial_balance + final_cumulative_owed_amount
+    )
 
     channel_state = await issuer_client.get_payword_channel(channel_id)
     assert channel_state.is_closed is True

@@ -47,10 +47,25 @@ class RegistrationService:
         )
         if not account:
             account = Account(
-                public_key_der_b64=dto.client_public_key_der_b64, balance=10000000
+                public_key_der_b64=dto.client_public_key_der_b64, balance=10_000_000
             )
             await self.account_repo.upsert(account)
 
+        return RegistrationResponseDTO(
+            client_public_key_der_b64=account.public_key_der_b64,
+            balance=account.balance,
+        )
+
+    async def get_account(self, public_key_der_b64: str) -> RegistrationResponseDTO:
+        """
+        Fetch an existing account by public key.
+
+        Note: The RegistrationResponseDTO field name is historical; it is used for both
+        client and vendor accounts in this codebase.
+        """
+        account = await self.account_repo.get_by_public_key(public_key_der_b64)
+        if not account:
+            raise ValueError("Account not found")
         return RegistrationResponseDTO(
             client_public_key_der_b64=account.public_key_der_b64,
             balance=account.balance,
