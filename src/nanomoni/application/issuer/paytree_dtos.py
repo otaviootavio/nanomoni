@@ -24,7 +24,6 @@ class PaytreeOpenChannelResponseDTO(BaseModel):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
-    paytree_hash_alg: str = Field("sha256")
 
 
 class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
@@ -43,7 +42,6 @@ class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
-    paytree_hash_alg: str = Field("sha256")
 
     created_at: datetime
     closed_at: Optional[datetime] = None

@@ -19,9 +19,6 @@ class PaywordOpenChannelRequestPayload(BaseModel):
     payword_max_k: int = Field(
         ..., gt=0, description="Maximum allowed counter (inclusive)"
     )
-    payword_hash_alg: str = Field(
-        "sha256", description="Hash algorithm (currently only sha256)"
-    )
 
 
 class PaywordSettlementPayload(BaseModel):

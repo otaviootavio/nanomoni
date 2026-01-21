@@ -156,7 +156,6 @@ class PaymentChannelRepository(ABC):
         *,
         amount: int,
         balance: int,
-        vendor_close_signature_b64: str,
     ) -> PaymentChannelBase:
         """Mark a payment channel as closed."""
         pass

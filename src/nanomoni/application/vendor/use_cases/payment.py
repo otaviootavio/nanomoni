@@ -319,7 +319,6 @@ class PaymentService:
             channel_id=dto.channel_id,
             amount=channel.amount,
             balance=latest_state.cumulative_owed_amount,
-            vendor_close_signature_b64=vendor_close_signature_b64,
         )
 
         return None

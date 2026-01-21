@@ -78,7 +78,6 @@ def build_open_payload(
         payword_root_b64=payword_root_b64,
         payword_unit_value=payword_unit_value,
         payword_max_k=payword_max_k,
-        payword_hash_alg="sha256",
     )
 
 

@@ -165,10 +165,6 @@ class PaytreePaymentService:
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
 
-        paytree_hash_alg = payment_channel.paytree_hash_alg or "sha256"
-        if paytree_hash_alg != "sha256":
-            raise ValueError("Unsupported PayTree hash algorithm")
-
         prev_i = latest_state.i if latest_state else -1
 
         # Idempotency + replay protection:
@@ -313,7 +309,6 @@ class PaytreePaymentService:
             channel_id=dto.channel_id,
             amount=channel.amount,
             balance=cumulative_owed_amount,
-            vendor_close_signature_b64=vendor_signature_b64,
         )
 
         return None

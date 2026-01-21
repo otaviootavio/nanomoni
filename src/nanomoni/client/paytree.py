@@ -80,7 +80,6 @@ def build_open_payload(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
-        paytree_hash_alg="sha256",
     )
 
 

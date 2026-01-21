@@ -23,9 +23,6 @@ class PaytreeOpenChannelRequestPayload(BaseModel):
         ge=0,
         description="Maximum allowed index (inclusive, tree has max_i+1 leaves)",
     )
-    paytree_hash_alg: str = Field(
-        "sha256", description="Hash algorithm (currently only sha256)"
-    )
 
 
 class PaytreeSettlementPayload(BaseModel):
