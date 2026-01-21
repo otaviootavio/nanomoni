@@ -112,14 +112,14 @@ class TestPaytreeZeroIndexFix:
         )
 
         error_detail = response.json().get("detail", "")
-        assert "must be increasing" in error_detail.lower() or "i" in error_detail.lower(), (
-            f"Expected error about i needing to be increasing, got: {error_detail}"
-        )
+        assert (
+            "must be increasing" in error_detail.lower() or "i" in error_detail.lower()
+        ), f"Expected error about i needing to be increasing, got: {error_detail}"
 
         print("\n" + "=" * 70)
         print("FIX CONFIRMED: Paytree rejects i=0 as first payment")
         print(f"  - Channel ID: {channel_id}")
-        print(f"  - Attempted i: 0")
+        print("  - Attempted i: 0")
         print(f"  - Response status: {response.status_code}")
         print(f"  - Error: {error_detail}")
         print("=" * 70)
@@ -188,14 +188,14 @@ class TestPaywordFirstPaymentMinimum:
         )
 
         error_detail = response.json().get("detail", "")
-        assert "must be increasing" in error_detail.lower() or "k" in error_detail.lower(), (
-            f"Expected error about k needing to be increasing, got: {error_detail}"
-        )
+        assert (
+            "must be increasing" in error_detail.lower() or "k" in error_detail.lower()
+        ), f"Expected error about k needing to be increasing, got: {error_detail}"
 
         print("\n" + "=" * 70)
         print("CORRECT BEHAVIOR: Payword rejects k=0 as first payment")
         print(f"  - Channel ID: {channel_id}")
-        print(f"  - Attempted k: 0")
+        print("  - Attempted k: 0")
         print(f"  - Response status: {response.status_code}")
         print(f"  - Error: {error_detail}")
         print("=" * 70)
@@ -386,7 +386,7 @@ class TestSkipPaymentsBug:
 
         print("\n" + "=" * 70)
         print("OBSERVATION: Payword allows skipping indices")
-        print(f"  - First payment k: 5 (skipped 1,2,3,4)")
+        print("  - First payment k: 5 (skipped 1,2,3,4)")
         print(f"  - cumulative_owed_amount: {response.cumulative_owed_amount}")
         print("=" * 70)
 
@@ -431,7 +431,7 @@ class TestSkipPaymentsBug:
 
         print("\n" + "=" * 70)
         print("OBSERVATION: Paytree allows skipping indices")
-        print(f"  - First payment i: 5 (skipped 1,2,3,4)")
+        print("  - First payment i: 5 (skipped 1,2,3,4)")
         print(f"  - cumulative_owed_amount: {response.cumulative_owed_amount}")
         print("=" * 70)
 
@@ -456,7 +456,9 @@ class TestSettlementWithZeroPaymentFix:
 
         # Get initial balances
         client_initial = await issuer_client.register_account(client.public_key_der_b64)
-        vendor_initial = await issuer_client.register_account(vendor_pk.public_key_der_b64)
+        vendor_initial = await issuer_client.register_account(
+            vendor_pk.public_key_der_b64
+        )
 
         channel_amount = 1000
         unit_value = 10
@@ -502,6 +504,7 @@ class TestSettlementWithZeroPaymentFix:
 
         # Wait for settlement to complete
         import asyncio
+
         for _ in range(10):
             channel_state = await issuer_client.get_paytree_channel(channel.channel_id)
             if channel_state.is_closed:
