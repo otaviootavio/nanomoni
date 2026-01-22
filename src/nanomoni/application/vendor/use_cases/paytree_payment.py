@@ -165,7 +165,7 @@ class PaytreePaymentService:
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
 
-        prev_i = latest_state.i if latest_state else -1
+        prev_i = latest_state.i if latest_state else 0
 
         # Idempotency + replay protection:
         # - If the client retries the *exact same* payment (same i + same proof),
