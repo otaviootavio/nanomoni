@@ -3,28 +3,28 @@
 !theme plain
 autonumber
 
+hide footbox
+
 actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
 
 loop for each subsequent payment
 
-    Client -> Client: Build payment payload\n    (mode-specific proof/signature)\n    (must advance channel state)
-    Client -> Client: Sign payload
+    Client -> Client: Build payment
 
     Client -> Vendor: Submit Payment
     activate Vendor
 
-    Vendor -> Vendor: Verify envelope and parse payload
+    Vendor -> VendorDB: Fetch channel and payment
+    VendorDB --> Vendor: 
 
-    Vendor -> VendorDB: Load channel state
-    VendorDB --> Vendor: channel + latest payment
+    Vendor -> Vendor: Verify incomming payment
 
-    Vendor -> Vendor: Validate payment against channel state
-
-    Vendor -> VendorDB: Update channel state\n(store latest payment)
+    Vendor -> VendorDB: Update payment
+    VendorDB --> Vendor: 
     
-    Vendor --> Client: 201 Created\n
+    Vendor --> Client:
     deactivate Vendor
 
 end

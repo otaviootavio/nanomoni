@@ -3,6 +3,8 @@
 !theme plain
 autonumber
 
+hide footbox
+
 actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
@@ -10,33 +12,30 @@ database "Vendor DB\n(Redis)" as VendorDB
 Client -> Vendor: Request Channel Closure
 activate Vendor
 
-Vendor -> VendorDB: Load channel state
-VendorDB --> Vendor: PaymentChannel + latest payment
-
-Vendor -> Vendor: Validate latest payment and channel state
+Vendor -> VendorDB: Fetch channel and payment
+VendorDB --> Vendor
 
 Vendor -> Vendor: Prepare settlement request
-Vendor -> Vendor: Sign settlement request
 
-Vendor -> Issuer: Settle & Close Channel
+Vendor -> Issuer: Send Settlement Request
 activate Issuer
 
-Issuer -> Issuer: Receive & validate envelope
+Issuer -> IssuerDB: Get channel
+IssuerDB --> Issuer: 
 
-Issuer -> IssuerDB: Get PaymentChannel (by channel_id)
-IssuerDB --> Issuer: PaymentChannel
+Issuer -> Issuer: Verify request
 
-Issuer -> Issuer: Validate settlement
+Issuer -> IssuerDB: Update Accounts
+IssuerDB --> Issuer: 
+Issuer -> IssuerDB: Update channel as closed
+IssuerDB --> Issuer: 
 
-Issuer -> IssuerDB: Update Vendor Account
-Issuer -> IssuerDB: Update Client Account
-Issuer -> IssuerDB: Update PaymentChannel\nMark as closed
-
-Issuer --> Vendor: 200 OK\nCloseChannelResponse
+Issuer --> Vendor:
 deactivate Issuer
 
-Vendor -> VendorDB: UPDATE PaymentChannel\nMark as closed
-Vendor --> Client: 204 No Content
+Vendor -> VendorDB: Update channel as closed
+VendorDB --> Vendor: 
+Vendor --> Client
 deactivate Vendor
 
 @enduml
