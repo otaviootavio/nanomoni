@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -25,13 +26,23 @@ from .routers import payments, payword_payments, paytree_payments, tasks, users
 
 settings = get_settings()
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Register Lua scripts for EVALSHA optimization
     store = get_key_value_store_dependency()
     for name, script in VENDOR_SCRIPTS.items():
-        await store.register_script(name, script)
+        try:
+            await store.register_script(name, script)
+        except Exception as e:
+            logger.error(
+                f"Failed to register Redis Lua script '{name}': {e}",
+                exc_info=True,
+            )
+            # Re-raise to prevent startup with unregistered scripts
+            raise
     await register_vendor_with_issuer(settings)
     yield
 

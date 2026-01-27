@@ -113,85 +113,49 @@ VENDOR_SCRIPTS = {
             return {0, current_raw}
         end
     """,
-    "save_channel_and_initial_payment": """
-        local channel_key = KEYS[1]
-        local latest_key = KEYS[2]
-        local channel_json = ARGV[1]
-        local state_json = ARGV[2]
-        local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
-        
-        -- Check if channel already exists
-        if redis.call('EXISTS', channel_key) == 1 then
-            return {0, ''}
-        end
-        
-        -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
-        if redis.call('EXISTS', latest_key) == 1 then
-            return {0, ''}
-        end
-        
-        -- 1. Save Channel Metadata
-        redis.call('SET', channel_key, channel_json)
-        
-        -- 2. Save Initial State
-        redis.call('SET', latest_key, state_json)
-        
-        -- 3. Update Indices
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
-        
-        return {1, state_json}
-    """,
-    "save_channel_and_initial_payword_state": """
-        local channel_key = KEYS[1]
-        local latest_key = KEYS[2]
-        local channel_json = ARGV[1]
-        local state_json = ARGV[2]
-        local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
-
-        if redis.call('EXISTS', channel_key) == 1 then
-            return {0, ''}
-        end
-
-        if redis.call('EXISTS', latest_key) == 1 then
-            return {0, ''}
-        end
-
-        redis.call('SET', channel_key, channel_json)
-        redis.call('SET', latest_key, state_json)
-
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
-
-        return {1, state_json}
-    """,
-    "save_channel_and_initial_paytree_state": """
-        local channel_key = KEYS[1]
-        local latest_key = KEYS[2]
-        local channel_json = ARGV[1]
-        local state_json = ARGV[2]
-        local created_ts = tonumber(ARGV[3])
-        local channel_id = ARGV[4]
-
-        if redis.call('EXISTS', channel_key) == 1 then
-            return {0, ''}
-        end
-
-        if redis.call('EXISTS', latest_key) == 1 then
-            return {0, ''}
-        end
-
-        redis.call('SET', channel_key, channel_json)
-        redis.call('SET', latest_key, state_json)
-
-        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
-
-        return {1, state_json}
-    """,
 }
+
+# Consolidated script used for all three channel initialization scenarios
+# (save_channel_and_initial_payment, save_channel_and_initial_payword_state, save_channel_and_initial_paytree_state)
+_SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
+    local channel_key = KEYS[1]
+    local latest_key = KEYS[2]
+    local channel_json = ARGV[1]
+    local state_json = ARGV[2]
+    local created_ts = tonumber(ARGV[3])
+    local channel_id = ARGV[4]
+    
+    -- Check if channel already exists
+    if redis.call('EXISTS', channel_key) == 1 then
+        return {0, ''}
+    end
+    
+    -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
+    if redis.call('EXISTS', latest_key) == 1 then
+        return {0, ''}
+    end
+    
+    -- 1. Save Channel Metadata
+    redis.call('SET', channel_key, channel_json)
+    
+    -- 2. Save Initial State
+    redis.call('SET', latest_key, state_json)
+    
+    -- 3. Update Indices
+    redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
+    redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+    
+    return {1, state_json}
+"""
+
+# Register the consolidated script under the original three keys for backward compatibility
+VENDOR_SCRIPTS.update(
+    {
+        "save_channel_and_initial_payment": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+    }
+)
 
 ISSUER_SCRIPTS = {
     "create_channel": (

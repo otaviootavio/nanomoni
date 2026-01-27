@@ -5,7 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, List, Mapping, Optional, cast
 
-import redis.asyncio as redis
+import redis
+import redis.asyncio as redis_async
 
 from .database import DatabaseClient
 
