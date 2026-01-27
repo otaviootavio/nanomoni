@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -11,10 +14,21 @@ from prometheus_client import (
 )
 
 from ...envs.issuer_env import get_settings
+from ...infrastructure.scripts import ISSUER_SCRIPTS
+from .dependencies import get_store_dependency
 from .routers import registration, payment_channel, payword_channels, paytree_channels
 
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Register Lua scripts for EVALSHA optimization
+    store = get_store_dependency()
+    for name, script in ISSUER_SCRIPTS.items():
+        await store.register_script(name, script)
+    yield
 
 
 def create_issuer_app() -> FastAPI:
@@ -25,6 +39,7 @@ def create_issuer_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
 
     app.add_middleware(

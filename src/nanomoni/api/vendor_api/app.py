@@ -19,6 +19,8 @@ from prometheus_client import (
 
 from ...application.vendor.dtos import VendorPublicKeyDTO
 from ...envs.vendor_env import get_settings, register_vendor_with_issuer
+from ...infrastructure.scripts import VENDOR_SCRIPTS
+from .dependencies import get_key_value_store_dependency
 from .routers import payments, payword_payments, paytree_payments, tasks, users
 
 settings = get_settings()
@@ -26,6 +28,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Register Lua scripts for EVALSHA optimization
+    store = get_key_value_store_dependency()
+    for name, script in VENDOR_SCRIPTS.items():
+        await store.register_script(name, script)
     await register_vendor_with_issuer(settings)
     yield
 

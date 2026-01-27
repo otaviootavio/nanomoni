@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, List, Mapping, Optional, cast
 
+import redis.asyncio as redis
+
 from .database import DatabaseClient
 
 
@@ -45,12 +47,24 @@ class KeyValueStore(ABC):
         """Execute a Lua script atomically."""
         pass
 
+    @abstractmethod
+    async def register_script(self, name: str, script: str) -> str:
+        """Load script into Redis and return SHA1 hash."""
+        pass
+
+    @abstractmethod
+    async def run_script(self, name: str, keys: List[str], args: List[str]) -> Any:
+        """Execute script by name using cached SHA1."""
+        pass
+
 
 class RedisKeyValueStore(KeyValueStore):
     """Redis-backed implementation of KeyValueStore."""
 
     def __init__(self, db_client: DatabaseClient):
         self._db_client = db_client
+        self._script_cache: dict[str, str] = {}  # name -> SHA1
+        self._script_sources: dict[str, str] = {}  # name -> script text
 
     async def get(self, key: str) -> Optional[str]:
         async with self._db_client.get_connection() as conn:
@@ -88,3 +102,29 @@ class RedisKeyValueStore(KeyValueStore):
             # Cast to ensure mypy recognizes it as awaitable
             eval_result = conn.eval(script, len(keys), *keys, *args)
             return await cast(Awaitable[Any], eval_result)
+
+    async def register_script(self, name: str, script: str) -> str:
+        """Load script into Redis and return SHA1 hash."""
+        async with self._db_client.get_connection() as conn:
+            sha = await conn.script_load(script)
+            self._script_cache[name] = sha
+            self._script_sources[name] = script
+            return sha
+
+    async def run_script(self, name: str, keys: List[str], args: List[str]) -> Any:
+        """Execute script by name using cached SHA1."""
+        if name not in self._script_cache:
+            raise ValueError(f"Script '{name}' not registered")
+
+        async with self._db_client.get_connection() as conn:
+            try:
+                evalsha_result = conn.evalsha(
+                    self._script_cache[name], len(keys), *keys, *args
+                )
+                return await cast(Awaitable[Any], evalsha_result)
+            except redis.exceptions.NoScriptError:
+                # Re-register on NOSCRIPT (Redis restart)
+                sha = await conn.script_load(self._script_sources[name])
+                self._script_cache[name] = sha
+                evalsha_result = conn.evalsha(sha, len(keys), *keys, *args)
+                return await cast(Awaitable[Any], evalsha_result)
