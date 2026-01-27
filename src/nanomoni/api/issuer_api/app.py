@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Register Lua scripts for EVALSHA optimization
     store = get_store_dependency()
     for name, script in ISSUER_SCRIPTS.items():
