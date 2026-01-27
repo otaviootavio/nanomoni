@@ -19,7 +19,7 @@ loop for each subsequent payment
     Vendor -> VendorDB: Fetch channel and payment
     VendorDB --> Vendor: 
 
-    Vendor -> Vendor: Verify incomming payment
+    Vendor -> Vendor: Verify incoming payment
 
     Vendor -> VendorDB: Update payment
     VendorDB --> Vendor: 

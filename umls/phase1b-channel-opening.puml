@@ -6,6 +6,7 @@ autonumber
 hide footbox
 
 actor "Client" as Client
+participant "Vendor" as Vendor
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 

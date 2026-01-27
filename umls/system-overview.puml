@@ -17,35 +17,43 @@ actor "**Client**" as Client #FFE6B3
 participant "**Vendor**" as Vendor #E6F3E6
 participant "**Issuer**" as Issuer #FFE6E6
 
+legend right
+  **Roles**
+  Client → Consumer
+  Vendor → Service Provider
+  Issuer → Trusted Authority
+endlegend
 
 note over Client, Issuer: **1. Registration**
-Client -> Issuer
+Client -> Issuer: RegistrationRequest
 activate Issuer
+Issuer -> Issuer: ValidateRequest
 Issuer --> Client: Account created
 deactivate Issuer
 
 note over Client, Issuer: **2. Channel Opening**
-Client -> Issuer
+Client -> Issuer: OpenChannelRequest
 activate Issuer
-Issuer -> Issuer: Validate request
-Issuer -> Issuer: Lock funds
+Issuer -> Issuer: ValidateRequest
+Issuer -> Issuer: LockFunds
 Issuer --> Client: Channel opened
 deactivate Issuer
 
 
 note over Client, Vendor: **3. Payment Streaming**
-Client -> Vendor
+Client -> Vendor: Start payment stream
+activate Vendor
 
 loop 9,999 times
-activate Vendor
   Client -> Vendor: Submit payment
   Vendor --> Client: Payment accepted
-deactivate Vendor
 end
+
+deactivate Vendor
 
 
 note over Vendor, Issuer: **4. Channel Settlement**
-Vendor -> Issuer
+Vendor -> Issuer: Initiate settlement
 activate Issuer
 Issuer -> Issuer: Validate settlement
 Issuer -> Issuer: Transfer funds
