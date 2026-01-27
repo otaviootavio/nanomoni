@@ -3,49 +3,63 @@
 !theme plain
 skinparam backgroundColor white
 skinparam componentStyle rectangle
-skinparam padding 10
-skinparam BoxPadding 10
-skinparam RectanglePadding 10
+skinparam padding 5
+skinparam BoxPadding 5
+skinparam RectanglePadding 5
+skinparam NotePadding 2
 skinparam RectangleBorderThickness 2
 skinparam Shadowing false
 skinparam ArrowThickness 2
 
-actor "**Client**\n(Consumer)" as Client #FFE6B3
-participant "**Vendor**\n(Service Provider)" as Vendor #E6F3E6
-participant "**Issuer**\n(Trusted Authority)" as Issuer #FFE6E6
+hide footbox
 
+actor "**Client**" as Client #FFE6B3
+participant "**Vendor**" as Vendor #E6F3E6
+participant "**Issuer**" as Issuer #FFE6E6
 
-Client -> Issuer: **1. Registration**\n(Create account with initial balance)
+legend right
+  **Roles**
+  Client → Consumer
+  Vendor → Service Provider
+  Issuer → Trusted Authority
+endlegend
+
+note over Client, Issuer: **1. Registration**
+Client -> Issuer: RegistrationRequest
 activate Issuer
+Issuer -> Issuer: ValidateRequest
 Issuer --> Client: Account created
 deactivate Issuer
 
-Client -> Issuer: **2. Channel Opening**\n(Open a payment channel and lock funds)
+note over Client, Issuer: **2. Channel Opening**
+Client -> Issuer: OpenChannelRequest
 activate Issuer
-Issuer -> Issuer: Validate request\n(mode-specific data, if any)
-Issuer -> Issuer: Lock funds (e.g., 1M)
-Issuer --> Client: Channel opened\n(Channel ID: abc123)
+Issuer -> Issuer: ValidateRequest
+Issuer -> Issuer: LockFunds
+Issuer --> Client: Channel opened
 deactivate Issuer
 
 
-Client -> Vendor: **3. Payment Streaming**\n(9,999 off-chain micropayments)
+note over Client, Vendor: **3. Payment Streaming**
+Client -> Vendor: Start payment stream
 activate Vendor
 
 loop 9,999 times
-  Client -> Vendor: Submit payment\n(mode-specific proof/signature)
+  Client -> Vendor: Submit payment
   Vendor --> Client: Payment accepted
 end
 
 deactivate Vendor
 
-Vendor -> Issuer: **4. Channel Settlement**\n(Settle and close channel)
+
+note over Vendor, Issuer: **4. Channel Settlement**
+Vendor -> Issuer: Initiate settlement
 activate Issuer
-Issuer -> Issuer: Validate settlement\n(mode-specific proof/signatures)
-Issuer -> Issuer: Transfer funds\n(Vendor: cumulative_owed_amount | Client: remainder)
+Issuer -> Issuer: Validate settlement
+Issuer -> Issuer: Transfer funds
 Issuer --> Vendor: Settlement complete
 deactivate Issuer
 
 Vendor --> Client: Channel closed
 
 @enduml
-

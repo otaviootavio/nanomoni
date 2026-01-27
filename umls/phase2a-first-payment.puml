@@ -3,35 +3,35 @@
 !theme plain
 autonumber
 
+hide footbox
+
 actor "Client" as Client
 participant "Vendor API" as Vendor
 database "Vendor DB\n(Redis)" as VendorDB
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Build payment payload\n(mode-specific proof/signature)
-Client -> Client: Sign payload
+Client -> Client: Build payment
 
 Client -> Vendor: Submit Payment
 activate Vendor
 
-Vendor -> Vendor: Verify envelope and parse payload
+Vendor -> VendorDB: Fetch channel
+VendorDB --> Vendor: none
 
-Vendor -> VendorDB: Load channel state
-VendorDB --> Vendor: none (cache miss)
-
-Vendor -> Issuer: Fetch channel details (first payment)
+Vendor -> Issuer: Fetch channel
 activate Issuer
-Issuer -> IssuerDB: Get PaymentChannel
-IssuerDB --> Issuer: PaymentChannel
-Issuer --> Vendor: PaymentChannel
+Issuer -> IssuerDB: Get channel
+IssuerDB --> Issuer: Channel
+Issuer --> Vendor: Channel
 deactivate Issuer
 
-Vendor -> Vendor: Validate payment against channel
+Vendor -> Vendor: Validate payment
 
-Vendor -> VendorDB: Cache channel state and latest payment
+Vendor -> VendorDB: Store channel and payment
+VendorDB --> Vendor: 
 
-Vendor --> Client: 201 Created
+Vendor --> Client: Created
 deactivate Vendor
 
 @enduml

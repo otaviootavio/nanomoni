@@ -1,0 +1,49 @@
+@startuml Phase2_Payments
+
+!theme plain
+autonumber
+
+hide footbox
+
+actor "Client" as Client
+participant "Vendor API" as Vendor
+database "Vendor DB\n(Redis)" as VendorDB
+participant "Issuer API" as Issuer
+database "Issuer DB\n(Redis)" as IssuerDB
+
+loop for each payment
+    Client -> Client: Build payment
+
+    Client -> Vendor: Submit Payment
+    activate Vendor
+
+    Vendor -> VendorDB: Fetch channel
+    
+    alt channel not found (First Payment)
+        VendorDB --> Vendor: none
+
+        Vendor -> Issuer: Fetch channel
+        activate Issuer
+        Issuer -> IssuerDB: Get channel
+        IssuerDB --> Issuer: Channel
+        Issuer --> Vendor: Channel
+        deactivate Issuer
+
+        Vendor -> Vendor: Validate payment
+
+        Vendor -> VendorDB: Store channel and payment
+        VendorDB --> Vendor: 
+    else channel found (Subsequent Payment)
+        VendorDB --> Vendor: Channel and last payment
+        
+        Vendor -> Vendor: Verify incoming payment
+        
+        Vendor -> VendorDB: Update payment
+        VendorDB --> Vendor: 
+    end
+
+    Vendor --> Client: Success / Created
+    deactivate Vendor
+end
+
+@enduml

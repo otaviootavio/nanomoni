@@ -3,22 +3,25 @@
 !theme plain
 autonumber
 
+hide footbox
+
 actor "Client" as Client
+participant "Vendor" as Vendor
 participant "Issuer API" as Issuer
 database "Issuer DB\n(Redis)" as IssuerDB
 
-Client -> Client: Choose vendor
-Client -> Client: Prepare channel opening request\n(mode-specific commitment, if any)
-Client -> Client: Sign request
+Client -> Vendor: Get vendor public key
+Vendor --> Client: Vendor public key
+Client -> Client: Prepare channel opening request
 
-Client -> Issuer: Open Payment Channel
+Client -> Issuer: OpenChannelRequest
 activate Issuer
 
-Issuer -> Issuer: Verify envelope and validate request
+Issuer -> Issuer: Verify request
 Issuer -> IssuerDB: Lock funds and create channel
-IssuerDB --> Issuer: PaymentChannel
+IssuerDB --> Issuer: OK
 
-Issuer --> Client: 201 Created\nChannel opened (channel_id)
+Issuer --> Client: Channel opened
 deactivate Issuer
 
 @enduml
