@@ -14,7 +14,7 @@ Client -> Vendor: Get vendor public key
 Vendor --> Client: Vendor public key
 Client -> Client: Prepare channel opening request
 
-Client -> Issuer: Send Open Request
+Client -> Issuer: OpenChannelRequest
 activate Issuer
 
 Issuer -> Issuer: Verify request

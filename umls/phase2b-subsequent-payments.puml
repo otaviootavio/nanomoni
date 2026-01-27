@@ -17,14 +17,14 @@ loop for each subsequent payment
     activate Vendor
 
     Vendor -> VendorDB: Fetch channel and payment
-    VendorDB --> Vendor: 
+    VendorDB --> Vendor: channel/payment data
 
     Vendor -> Vendor: Verify incoming payment
 
     Vendor -> VendorDB: Update payment
-    VendorDB --> Vendor: 
+    VendorDB --> Vendor: OK
     
-    Vendor --> Client:
+    Vendor --> Client: payment confirmation
     deactivate Vendor
 
 end
