@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -11,10 +15,28 @@ from prometheus_client import (
 )
 
 from ...envs.issuer_env import get_settings
+from ...infrastructure.scripts import ISSUER_SCRIPTS
+from .dependencies import get_store_dependency
 from .routers import registration, payment_channel, payword_channels, paytree_channels
 
 
 settings = get_settings()
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Register Lua scripts for EVALSHA optimization
+    store = get_store_dependency()
+    for name, script in ISSUER_SCRIPTS.items():
+        try:
+            await store.register_script(name, script)
+        except Exception:
+            logger.exception("Failed to register Redis Lua script '%s'", name)
+            # Re-raise to prevent startup with unregistered scripts
+            raise
+    yield
 
 
 def create_issuer_app() -> FastAPI:
@@ -25,6 +47,7 @@ def create_issuer_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
 
     app.add_middleware(

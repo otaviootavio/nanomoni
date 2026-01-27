@@ -31,17 +31,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         # Store channel JSON keyed directly by channel_id.
         # Use a Lua script to ensure we don't overwrite an existing channel.
         key = self._channel_id_key(channel.channel_id)
-        script = (
-            "if redis.call('EXISTS', KEYS[1]) == 1 then "
-            "  return 0 "
-            "end "
-            "redis.call('SET', KEYS[1], ARGV[1]) "
-            "return 1"
+        result = await self.store.run_script(
+            "create_channel", keys=[key], args=[channel.model_dump_json()]
         )
-        created = await self.store.eval(
-            script, keys=[key], args=[channel.model_dump_json()]
-        )
-        if int(created) != 1:
+        code, _ = result
+        if code != 1:
             raise ValueError("Payment channel already exists")
         return channel
 
