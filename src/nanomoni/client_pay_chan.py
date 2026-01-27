@@ -162,8 +162,9 @@ async def run_client_flow() -> None:
                 raise RuntimeError(PAYWORD_NOT_INITIALIZED)
             # Type narrowing: mypy now knows payword_obj is not None after the check
             payword_for_payments: Payword = payword_obj
-            payword_payments = payword.prepare_payments(payword_for_payments, payments)
-            await payword.send_payments(vendor, channel_id, payword_payments)
+            await payword.send_payments(
+                vendor, channel_id, payword_for_payments, payments
+            )
         else:  # paytree
             if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
