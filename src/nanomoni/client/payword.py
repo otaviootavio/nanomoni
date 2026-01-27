@@ -81,41 +81,27 @@ def build_open_payload(
     )
 
 
-def prepare_payments(
-    payword: Payword,
-    payments: list[int],
-) -> list[ReceivePaywordPaymentDTO]:
-    """Precompute PayWord payment proofs.
-
-    Precomputing payment proofs before sending requests ensures the runtime path
-    measures mostly network + server-side verification.
-
-    Args:
-        payword: The PayWord instance
-        payments: List of k counter values (monotonic sequence)
-
-    Returns:
-        List of ReceivePaywordPaymentDTO with precomputed payment proofs.
-    """
-    payword_payments: list[ReceivePaywordPaymentDTO] = []
-    for k in payments:
-        payword_payments.append(
-            ReceivePaywordPaymentDTO(k=k, token_b64=payword.payment_proof_b64(k=k))
-        )
-    return payword_payments
-
-
 async def send_payments(
     vendor: VendorClientAsync,
     channel_id: str,
-    payment_dtos: list[ReceivePaywordPaymentDTO],
+    payword: Payword,
+    payments: list[int],
 ) -> None:
-    """Send PayWord payments to the vendor.
+    """Send PayWord payments to the vendor, generating proofs on-demand.
+
+    Note: We generate proofs on-demand in the loop rather than precomputing them.
+    Since the Payword object already stores the complete hash chain, precomputing
+    all proofs is redundant and increases memory usage unnecessarily.
 
     Args:
         vendor: The vendor client instance
         channel_id: The channel ID
-        payment_dtos: List of precomputed PayWord payment DTOs
+        payword: The PayWord instance
+        payments: List of k counter values (monotonic sequence)
     """
-    for payword_dto in payment_dtos:
-        await vendor.send_payword_payment(channel_id, payword_dto)
+    for k in payments:
+        token_b64 = payword.payment_proof_b64(k=k)
+        await vendor.send_payword_payment(
+            channel_id,
+            ReceivePaywordPaymentDTO(k=k, token_b64=token_b64),
+        )
