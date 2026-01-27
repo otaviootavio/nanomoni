@@ -28,15 +28,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Register Lua scripts for EVALSHA optimization
-    try:
-        store = get_store_dependency()
-        for name, script in ISSUER_SCRIPTS.items():
+    store = get_store_dependency()
+    for name, script in ISSUER_SCRIPTS.items():
+        try:
             await store.register_script(name, script)
-    except Exception:
-        # Log with script name if available, otherwise log general error
-        logger.exception("Failed to register Redis Lua scripts during startup")
-        # Re-raise to prevent startup with unregistered scripts
-        raise
+        except Exception:
+            logger.exception("Failed to register Redis Lua script '%s'", name)
+            # Re-raise to prevent startup with unregistered scripts
+            raise
     yield
 
 

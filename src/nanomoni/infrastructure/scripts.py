@@ -10,8 +10,8 @@ Return Code Conventions:
     as the first element of a tuple/array. The meanings are:
 
     - 0: No update/stale - The operation did not update the state (e.g., the new
-         value is not greater than the current value, or channel capacity was
-         exceeded). The second element contains the current state for reference.
+         value is not greater than the current value). The second element
+         contains the current state for reference.
 
     - 1: Success saved - The operation successfully saved the new state. The
          second element contains the saved state JSON.
@@ -21,16 +21,17 @@ Return Code Conventions:
          (e.g., payword_max_k or paytree_max_i). The second element is an empty
          string.
 
-    - 3: Limit exceeded - The operation exceeded a configured limit (e.g., k
-         exceeds PayWord commitment window max_k, or i exceeds PayTree
-         commitment window max_i). The second element contains the current state
-         for reference.
+    - 3: Capacity/Limit exceeded - The operation exceeded a configured limit
+         (e.g., channel capacity exceeded in save_signature_payment, k exceeds
+         PayWord commitment window max_k, or i exceeds PayTree commitment
+         window max_i). The second element contains the current state for
+         reference.
 
     These codes are returned by the Lua script logic and should be interpreted by
     callers when processing script results. For example, "save_signature_payment"
     returns {0, current_raw} when the new amount doesn't exceed the current
     amount, {1, new_val} when successfully saved, {2, ''} when the channel
-    doesn't exist, and {0, current_raw or ''} when channel capacity is exceeded.
+    doesn't exist, and {3, current_raw or ''} when channel capacity is exceeded.
 """
 
 VENDOR_SCRIPTS = {
@@ -52,7 +53,7 @@ VENDOR_SCRIPTS = {
         if new_amount > channel_amount then
             -- Channel capacity exceeded - get current tx for error reporting
             local current_raw = redis.call('GET', latest_key)
-            return {0, current_raw or ''}
+            return {3, current_raw or ''}
         end
         
         local current_raw = redis.call('GET', latest_key)
