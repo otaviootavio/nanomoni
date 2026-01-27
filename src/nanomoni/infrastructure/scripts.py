@@ -1,4 +1,37 @@
-"""Central registry for Redis Lua scripts used across the application."""
+"""Central registry for Redis Lua scripts used across the application.
+
+This module contains Redis Lua scripts that are registered at application startup
+for EVALSHA optimization. The scripts return numeric status codes that indicate
+the result of the operation.
+
+Return Code Conventions:
+    The Lua scripts in this module (e.g., "save_signature_payment",
+    "save_payword_payment", "save_paytree_payment") return numeric status codes
+    as the first element of a tuple/array. The meanings are:
+
+    - 0: No update/stale - The operation did not update the state (e.g., the new
+         value is not greater than the current value, or channel capacity was
+         exceeded). The second element contains the current state for reference.
+
+    - 1: Success saved - The operation successfully saved the new state. The
+         second element contains the saved state JSON.
+
+    - 2: Channel not found/missing config - The channel key does not exist in
+         Redis, or the channel exists but is missing required configuration
+         (e.g., payword_max_k or paytree_max_i). The second element is an empty
+         string.
+
+    - 3: Limit exceeded - The operation exceeded a configured limit (e.g., k
+         exceeds PayWord commitment window max_k, or i exceeds PayTree
+         commitment window max_i). The second element contains the current state
+         for reference.
+
+    These codes are returned by the Lua script logic and should be interpreted by
+    callers when processing script results. For example, "save_signature_payment"
+    returns {0, current_raw} when the new amount doesn't exceed the current
+    amount, {1, new_val} when successfully saved, {2, ''} when the channel
+    doesn't exist, and {0, current_raw or ''} when channel capacity is exceeded.
+"""
 
 VENDOR_SCRIPTS = {
     "save_signature_payment": """

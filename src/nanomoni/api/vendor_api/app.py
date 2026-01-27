@@ -36,11 +36,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for name, script in VENDOR_SCRIPTS.items():
         try:
             await store.register_script(name, script)
-        except Exception as e:
-            logger.error(
-                f"Failed to register Redis Lua script '{name}': {e}",
-                exc_info=True,
-            )
+        except Exception:
+            logger.exception("Failed to register Redis Lua script '%s'", name)
             # Re-raise to prevent startup with unregistered scripts
             raise
     await register_vendor_with_issuer(settings)
