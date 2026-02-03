@@ -9,7 +9,6 @@ from typing import Optional
 from pydantic import ValidationError
 
 from ....application.shared.payment_channel_payloads import (
-    deserialize_signature_payment,
     SignatureChannelSettlementPayload,
 )
 from ....application.shared.serialization import payload_to_bytes
@@ -21,7 +20,8 @@ from ....crypto.certificates import (
     load_private_key_from_pem,
     load_public_key_from_der_b64,
     sign_bytes,
-    verify_envelope,
+    verify_signature_bytes,
+    dto_to_canonical_json_bytes,
     DERB64,
 )
 from ....domain.shared import IssuerClientFactory
@@ -158,21 +158,15 @@ class PaymentService:
 
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
-        # 1) Decode and validate payload (extract channel_id and key fields)
-        try:
-            payload = deserialize_signature_payment(dto.envelope)
-        except ValidationError as exc:
-            raise ValueError("invalid payment payload") from exc
-
-        # 2) Get full channel aggregate (lazy load)
+        # 1) Get full channel aggregate (lazy load)
         payment_channel = await self.payment_channel_repository.get_by_channel_id(
-            payload.channel_id
+            dto.channel_id
         )
 
-        # 2.1) If missing, verify with issuer and cache locally (First Payment flow)
+        # 1.1) If missing, verify with issuer and cache locally (First Payment flow)
         is_first_payment = False
         if not payment_channel:
-            payment_channel = await self._verify_payment_channel(payload.channel_id)
+            payment_channel = await self._verify_payment_channel(dto.channel_id)
             is_first_payment = True
         elif not isinstance(payment_channel, SignaturePaymentChannel):
             raise TypeError("Payment channel is not signature-mode")
@@ -182,26 +176,32 @@ class PaymentService:
             latest_state.cumulative_owed_amount if latest_state else 0
         )
 
-        # 2.2) Ensure the channel remains bound to this vendor
+        # 1.2) Ensure the channel remains bound to this vendor
         if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
             raise ValueError("Payment channel is not for this vendor")
 
-        # 4) Verify client's signature using the channel-bound public key
+        # 2) Reconstruct canonical JSON from DTO fields (excluding signature)
+        payload_bytes = dto_to_canonical_json_bytes(dto)
+
+        # 3) Verify client's signature using the channel-bound public key
         client_public_key = load_public_key_from_der_b64(
             DERB64(payment_channel.client_public_key_der_b64)
         )
-        verify_envelope(client_public_key, dto.envelope)
+        try:
+            verify_signature_bytes(client_public_key, payload_bytes, dto.signature_b64)
+        except Exception as e:
+            raise ValueError("Invalid client signature for payment") from e
 
-        # 5) Idempotency + double spending protection.
+        # 4) Idempotency + double spending protection.
         #
         # If the client retries the *exact same* payment (e.g., due to a transient
         # disconnect after the vendor stored the tx but before the client read the
         # response), accept the duplicate and return the stored tx.
         if (
             latest_state
-            and payload.cumulative_owed_amount == prev_cumulative_owed_amount
+            and dto.cumulative_owed_amount == prev_cumulative_owed_amount
         ):
-            if dto.envelope.signature_b64 != latest_state.client_signature_b64:
+            if dto.signature_b64 != latest_state.client_signature_b64:
                 raise ValueError(
                     "Duplicate owed amount with mismatched signature (possible replay attack)"
                 )
@@ -212,23 +212,23 @@ class PaymentService:
             )
 
         # Otherwise, enforce strictly increasing owed amount.
-        if payload.cumulative_owed_amount < prev_cumulative_owed_amount:
+        if dto.cumulative_owed_amount < prev_cumulative_owed_amount:
             raise ValueError(
-                f"Owed amount must be increasing. Got {payload.cumulative_owed_amount}, expected > {prev_cumulative_owed_amount}"
+                f"Owed amount must be increasing. Got {dto.cumulative_owed_amount}, expected > {prev_cumulative_owed_amount}"
             )
 
-        # 6) Check if the payment channel amount is bigger than the cumulative_owed_amount
+        # 5) Check if the payment channel amount is bigger than the cumulative_owed_amount
         # (Optimistic check for fast failure; authoritative check happens atomically in save_if_valid)
-        if payload.cumulative_owed_amount > payment_channel.amount:
+        if dto.cumulative_owed_amount > payment_channel.amount:
             raise ValueError(
-                f"Owed amount {payload.cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
+                f"Owed amount {dto.cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
             )
 
-        # 7) Create the latest signature state object (no payload persistence)
+        # 6) Create the latest signature state object (no payload persistence)
         signature_state = SignatureState(
-            channel_id=payload.channel_id,
-            cumulative_owed_amount=payload.cumulative_owed_amount,
-            client_signature_b64=dto.envelope.signature_b64,
+            channel_id=dto.channel_id,
+            cumulative_owed_amount=dto.cumulative_owed_amount,
+            client_signature_b64=dto.signature_b64,
             created_at=datetime.now(timezone.utc),
         )
 
@@ -237,7 +237,7 @@ class PaymentService:
             stored_tx,
             _payment_channel,
         ) = await self._save_payment_with_retry(
-            channel_id=payload.channel_id,
+            channel_id=dto.channel_id,
             payment_channel=payment_channel,
             new_state=signature_state,
             is_first_payment=is_first_payment,
@@ -258,7 +258,7 @@ class PaymentService:
             # Rejected: amount was not greater than current or exceeded channel capacity
             current_amt = stored_tx.cumulative_owed_amount if stored_tx else "unknown"
             raise ValueError(
-                f"Owed amount must be increasing (race detected). Got {payload.cumulative_owed_amount}, DB has {current_amt}"
+                f"Owed amount must be increasing (race detected). Got {dto.cumulative_owed_amount}, DB has {current_amt}"
             )
         else:
             raise RuntimeError(f"Unexpected result from atomic save: status={status}")
@@ -288,7 +288,6 @@ class PaymentService:
             cumulative_owed_amount=latest_state.cumulative_owed_amount,
         )
         payload_bytes = payload_to_bytes(settlement_payload)
-        close_payload_b64 = base64.b64encode(payload_bytes).decode("utf-8")
 
         # 4) Vendor signs the same payload bytes (detached signature)
         if not self.vendor_private_key_pem:
@@ -296,10 +295,10 @@ class PaymentService:
         vendor_private_key = load_private_key_from_pem(self.vendor_private_key_pem)
         vendor_close_signature_b64 = sign_bytes(vendor_private_key, payload_bytes)
 
-        # 5) Send close request to issuer
+        # 5) Send close request to issuer with flat DTO structure
         request_dto = CloseChannelRequestDTO(
             channel_id=dto.channel_id,
-            close_payload_b64=close_payload_b64,
+            cumulative_owed_amount=latest_state.cumulative_owed_amount,
             client_close_signature_b64=latest_state.client_signature_b64,
             vendor_close_signature_b64=vendor_close_signature_b64,
         )

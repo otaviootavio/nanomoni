@@ -16,7 +16,7 @@ from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
 )
 from nanomoni.client import common, paytree, payword, signature
-from nanomoni.crypto.certificates import generate_envelope, load_private_key_from_pem
+from nanomoni.crypto.certificates import load_private_key_from_pem
 from nanomoni.crypto.paytree import Paytree
 from nanomoni.crypto.payword import Payword
 from nanomoni.envs.client_env import get_settings
@@ -131,12 +131,33 @@ async def run_client_flow() -> None:
             )
 
         # Sign and send open channel request
-        open_env = generate_envelope(client_private_key, open_payload_base.model_dump())
-        open_dto = OpenChannelRequestDTO(
-            client_public_key_der_b64=settings.client_public_key_der_b64,
-            open_payload_b64=open_env.payload_b64,
-            open_signature_b64=open_env.signature_b64,
-        )
+        if client_mode == "payword":
+            open_dto = payword.build_open_channel_request(
+                client_private_key,
+                settings.client_public_key_der_b64,
+                vendor_pk.public_key_der_b64,
+                channel_amount,
+                payword_root_b64,
+                payword_unit_value,
+                payword_max_k,
+            )
+        elif client_mode == "paytree":
+            open_dto = paytree.build_open_channel_request(
+                client_private_key,
+                settings.client_public_key_der_b64,
+                vendor_pk.public_key_der_b64,
+                channel_amount,
+                paytree_root_b64,
+                paytree_unit_value,
+                paytree_max_i,
+            )
+        else:
+            open_dto = signature.build_open_channel_request(
+                client_private_key,
+                settings.client_public_key_der_b64,
+                vendor_pk.public_key_der_b64,
+                channel_amount,
+            )
         channel_id = await common.open_channel_for_mode(issuer, client_mode, open_dto)
 
         # Read balance after lock (issuer register is idempotent; using it as a "get balance").

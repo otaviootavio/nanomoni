@@ -94,3 +94,31 @@ def verify_envelope_and_get_payload_bytes(
 def envelope_payload_bytes(envelope: Envelope) -> bytes:
     """Return the raw decoded payload bytes inside an envelope."""
     return base64.b64decode(envelope.payload_b64, validate=True)
+
+
+def dto_to_canonical_json_bytes(
+    dto: BaseModel, exclude_fields: set[str] | None = None
+) -> bytes:
+    """Convert DTO to canonical JSON bytes for signature verification.
+    
+    Excludes signature fields (ending with '_signature_b64') and any fields
+    specified in exclude_fields. None values are also excluded to match
+    the original payload structure.
+    
+    Args:
+        dto: Pydantic model instance to convert
+        exclude_fields: Optional set of field names to exclude (in addition to signature fields)
+    
+    Returns:
+        Canonical JSON bytes ready for signature verification
+    """
+    exclude = exclude_fields or set()
+    # Get all fields, excluding None values and signature fields
+    data = dto.model_dump(exclude_none=True)
+    # Filter out signature fields and explicitly excluded fields
+    filtered_data = {
+        k: v
+        for k, v in data.items()
+        if not k.endswith("_signature_b64") and k not in exclude
+    }
+    return json_to_bytes(filtered_data)
