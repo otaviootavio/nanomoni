@@ -1,20 +1,20 @@
-"""Story: Vendor tries to close empty channel, vendor rejects it."""
+"""Story: Vendor tries to close empty channel, vendor rejects it (use case-based test)."""
 
 from __future__ import annotations
+
+import json
 
 import pytest
 
 from tests.e2e.helpers.client_actor import ClientActor
-from tests.e2e.helpers.issuer_client import IssuerTestClient
-from tests.e2e.helpers.vendor_client import VendorTestClient
+from tests.use_cases.helpers.issuer_client_adapter import UseCaseIssuerClient
+from tests.use_cases.helpers.vendor_client_adapter import UseCaseVendorClient
 
 
 @pytest.mark.asyncio
-@pytest.mark.e2e
 async def test_vendor_tries_to_close_empty_channel_vendor_rejects(
-    require_services: None,  # pytest fixture - ensures services are available
-    vendor_client: VendorTestClient,
-    issuer_client: IssuerTestClient,
+    vendor_client: UseCaseVendorClient,
+    issuer_client: UseCaseIssuerClient,
 ) -> None:
     """
     Story: Vendor tries to close empty channel, vendor rejects it.
@@ -36,9 +36,7 @@ async def test_vendor_tries_to_close_empty_channel_vendor_rejects(
     # When: Vendor tries to close channel without any payments
     # Then: Closure is rejected
     response = await vendor_client.request_channel_settlement_raw(channel_id)
-    assert response.status_code in [400, 500], "Should reject closure without payments"
+    assert response.status_code == 400, "Should reject closure without payments"
     # Error message should indicate no payments received
-    error_detail = response.json()["detail"]
-    assert "payment" in error_detail.lower(), (
-        "Error should mention payment-related issue"
-    )
+    error_detail = json.loads(response.text).get("detail", "").lower()
+    assert "payment" in error_detail, "Error should mention payment-related issue"
