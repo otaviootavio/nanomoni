@@ -11,11 +11,11 @@ from .in_memory_repositories import (
 from .test_issuer_client import TestIssuerClient
 
 __all__ = [
-    "InMemoryKeyValueStore",
-    "InMemoryPaymentChannelRepository",
-    "InMemoryUserRepository",
-    "InMemoryTaskRepository",
     "InMemoryAccountRepository",
     "InMemoryIssuerPaymentChannelRepository",
+    "InMemoryKeyValueStore",
+    "InMemoryPaymentChannelRepository",
+    "InMemoryTaskRepository",
+    "InMemoryUserRepository",
     "TestIssuerClient",
 ]

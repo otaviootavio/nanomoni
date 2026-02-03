@@ -34,6 +34,6 @@ async def test_vendor_tries_to_close_empty_channel_vendor_rejects(
     # When: Vendor tries to close channel without any payments
     # Then: Closure is rejected
     response = await vendor_client.request_channel_settlement_raw(channel_id)
-    assert response.status_code in [400, 500], "Should reject closure without payments"
+    assert response.status_code == 400, "Should reject closure without payments"
     # Error message should indicate no payments received
     assert "payment" in response.text.lower() or "no" in response.text.lower()

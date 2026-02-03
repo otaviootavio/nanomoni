@@ -39,13 +39,17 @@ class InMemoryKeyValueStore(KeyValueStore):
 
         added = 0
         for member, score in mapping.items():
+            # Check if member already exists
+            member_exists = any(m == member for m, _ in self._sorted_sets[key])
             # Remove existing member if present
             self._sorted_sets[key] = [
                 (m, s) for m, s in self._sorted_sets[key] if m != member
             ]
             # Add new member
             self._sorted_sets[key].append((member, score))
-            added += 1
+            # Only count as added if it was a new member
+            if not member_exists:
+                added += 1
             # Keep sorted by score (descending)
             self._sorted_sets[key].sort(key=lambda x: x[1], reverse=True)
 
@@ -57,7 +61,12 @@ class InMemoryKeyValueStore(KeyValueStore):
             return []
         members = [m for m, _ in self._sorted_sets[key]]
         # Redis zrevrange is inclusive on both ends
-        return members[start : end + 1]
+        # Handle end=-1 as end of list (include all remaining members)
+        if end == -1:
+            slice_end = None
+        else:
+            slice_end = end + 1
+        return members[start:slice_end]
 
     async def zrem(self, key: str, member: str) -> int:
         """Remove member from sorted set."""
