@@ -91,9 +91,9 @@ Issuer and vendor will start their Redis dependencies via `depends_on`.
 ```sh
 docker compose build
 
-source ./envs/issuer.env.sh && docker compose up issuer --build
-source ./envs/vendor.env.sh && docker compose up vendor --build
-source ./envs/client.env.sh && docker compose up client --build
+source ./envs/issuer.env.sh && docker compose up issuer
+source ./envs/vendor.env.sh && docker compose up vendor
+source ./envs/client.env.sh && docker compose up client
 ```
 
 ## Publishing Docker images
@@ -127,6 +127,32 @@ poetry install
 ```
 
 ### Running Tests
+
+#### Use Case Tests (Fast, No Dependencies)
+
+Use case tests are fast unit tests that test business logic directly through use cases, without requiring Docker, HTTP servers, or external services. They run in milliseconds and are ideal for rapid development feedback.
+
+**No prerequisites required** - these tests use in-memory implementations.
+
+```sh
+# Run all use case tests
+poetry run pytest tests/use_cases
+
+# Run specific test file
+poetry run pytest tests/use_cases/stories/test_client_registers_issuer_accepts.py
+```
+
+**Use Case Test Features:**
+- **Fast execution**: Tests run in < 0.1 seconds
+- **No external dependencies**: No Docker, Redis, or HTTP servers needed
+- **Complete business flows**: Tests verify end-to-end business logic through use cases
+- **Isolated state**: Each test gets fresh in-memory storage
+
+**Test Coverage:**
+- Registration flows
+- Payment channel opening
+- Payment processing
+- (More tests being migrated from E2E suite)
 
 #### E2E Tests
 
@@ -162,3 +188,7 @@ The security tests verify that the system correctly rejects:
 - Tampered payment signatures
 - Mismatched public key claims (issuer and vendor)
 - Invalid PayWord tokens (tampered, non-monotonic k, wrong root)
+
+**Test Suite Strategy:**
+- **Use case tests** (`tests/use_cases/`): Fast, focused on business logic, no dependencies
+- **E2E tests** (`tests/e2e/`): Slower, but verify full system integration through HTTP
