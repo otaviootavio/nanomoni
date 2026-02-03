@@ -1,0 +1,44 @@
+"""Story: Client makes first payment, vendor accepts it (use case-based test)."""
+
+from __future__ import annotations
+
+import pytest
+
+from tests.e2e.helpers.client_actor import ClientActor
+from tests.use_cases.helpers.issuer_client_adapter import UseCaseIssuerClient
+from tests.use_cases.helpers.vendor_client_adapter import UseCaseVendorClient
+
+
+@pytest.mark.asyncio
+async def test_client_makes_first_payment_vendor_accepts(
+    issuer_client: UseCaseIssuerClient,
+    vendor_client: UseCaseVendorClient,
+) -> None:
+    """
+    Story: Client makes first payment, vendor accepts it.
+
+    Phase2a: First payment triggers vendor to verify channel with issuer
+    and cache the channel locally before accepting the payment.
+    """
+    # Given: A client and vendor are registered, and a payment channel is open
+    client = ClientActor()
+    vendor_pk_response = await vendor_client.get_public_key()
+    vendor_public_key_der_b64 = vendor_pk_response.public_key_der_b64
+
+    await issuer_client.register_account(client.public_key_der_b64)
+    await issuer_client.register_account(vendor_public_key_der_b64)
+
+    open_request = client.create_open_channel_request(vendor_public_key_der_b64, 1000)
+    channel_response = await issuer_client.open_channel(open_request)
+    channel_id = channel_response.channel_id
+
+    # When: Client sends first payment
+    first_payment_owed = 50
+    payment_envelope = client.create_payment_envelope(channel_id, first_payment_owed)
+    payment_response = await vendor_client.receive_payment(channel_id, payment_envelope)
+
+    # Then: Payment is accepted
+    assert payment_response.cumulative_owed_amount == first_payment_owed
+    assert payment_response.channel_id == channel_id
+    assert payment_response.client_public_key_der_b64 == client.public_key_der_b64
+    assert payment_response.vendor_public_key_der_b64 == vendor_public_key_der_b64

@@ -9,10 +9,12 @@ from ...application.vendor.use_cases.payword_payment import PaywordPaymentServic
 from ...application.vendor.use_cases.paytree_payment import PaytreePaymentService
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
+from ...domain.shared import IssuerClientFactory
 from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ...domain.vendor.task_repository import TaskRepository
 from ...domain.vendor.user_repository import UserRepository
 from ...infrastructure.database import DatabaseClient, get_database_client
+from ...infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
 from ...infrastructure.vendor.payment_channel_repository_impl import (
     PaymentChannelRepositoryImpl,
@@ -66,13 +68,25 @@ def get_task_service() -> TaskService:
     return TaskService(get_task_repository(), get_user_repository())
 
 
+def _create_issuer_client_factory(
+    issuer_base_url: str,
+) -> IssuerClientFactory:
+    """Create a factory function that returns AsyncIssuerClient instances."""
+
+    def factory() -> AsyncIssuerClient:
+        return AsyncIssuerClient(issuer_base_url)
+
+    return factory
+
+
 def get_payment_service() -> PaymentService:
     """Get payment service."""
     payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
+    issuer_client_factory = _create_issuer_client_factory(settings.issuer_base_url)
     return PaymentService(
         payment_channel_repository=payment_channel_repository,
-        issuer_base_url=settings.issuer_base_url,
+        issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )
@@ -82,9 +96,10 @@ def get_payword_payment_service() -> PaywordPaymentService:
     """Get PayWord payment service."""
     payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
+    issuer_client_factory = _create_issuer_client_factory(settings.issuer_base_url)
     return PaywordPaymentService(
         payment_channel_repository=payment_channel_repository,
-        issuer_base_url=settings.issuer_base_url,
+        issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )
@@ -94,9 +109,10 @@ def get_paytree_payment_service() -> PaytreePaymentService:
     """Get PayTree payment service."""
     payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
+    issuer_client_factory = _create_issuer_client_factory(settings.issuer_base_url)
     return PaytreePaymentService(
         payment_channel_repository=payment_channel_repository,
-        issuer_base_url=settings.issuer_base_url,
+        issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )

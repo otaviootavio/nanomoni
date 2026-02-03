@@ -16,10 +16,10 @@ from ....crypto.paytree import (
     compute_cumulative_owed_amount,
     verify_paytree_proof,
 )
+from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import PaytreePaymentChannel, PaytreeState
 from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
-from ....infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ..dtos import CloseChannelDTO
 from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
 
@@ -30,13 +30,13 @@ class PaytreePaymentService:
     def __init__(
         self,
         payment_channel_repository: PaymentChannelRepository,
-        issuer_base_url: str,
+        issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,
         vendor_private_key_pem: Optional[str] = None,
     ):
         self.payment_channel_repository = payment_channel_repository
-        self.issuer_base_url = issuer_base_url
+        self.issuer_client_factory = issuer_client_factory
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.vendor_private_key_pem = vendor_private_key_pem
 
@@ -48,7 +48,7 @@ class PaytreePaymentService:
         fields are present and validated.
         """
         try:
-            async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
+            async with self.issuer_client_factory() as issuer_client:
                 dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
                 issuer_channel = await issuer_client.get_paytree_payment_channel(dto)
                 channel_data = issuer_channel.model_dump()
@@ -300,7 +300,7 @@ class PaytreePaymentService:
             vendor_signature_b64=vendor_signature_b64,
         )
 
-        async with AsyncIssuerClient(self.issuer_base_url) as issuer_client:
+        async with self.issuer_client_factory() as issuer_client:
             await issuer_client.settle_paytree_payment_channel(
                 dto.channel_id, request_dto
             )
