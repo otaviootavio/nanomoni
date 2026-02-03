@@ -25,7 +25,6 @@ from cryptography.exceptions import InvalidSignature
 from nanomoni.application.vendor.use_cases.payment import PaymentService
 from nanomoni.application.vendor.use_cases.payword_payment import PaywordPaymentService
 from nanomoni.application.vendor.use_cases.paytree_payment import PaytreePaymentService
-from nanomoni.crypto.certificates import Envelope
 
 
 @dataclass(frozen=True)
@@ -69,11 +68,10 @@ class UseCaseVendorClient:
         return VendorPublicKeyDTO(public_key_der_b64=self.vendor_public_key_der_b64)
 
     async def receive_payment(
-        self, channel_id: str, payment_envelope: Envelope
+        self, channel_id: str, payment_dto: ReceivePaymentDTO
     ) -> OffChainTxResponseDTO:
         """Submit a payment to the vendor."""
-        dto = ReceivePaymentDTO(envelope=payment_envelope)
-        return await self.payment_service.receive_payment(dto)
+        return await self.payment_service.receive_payment(payment_dto)
 
     async def request_channel_settlement(self, channel_id: str) -> None:
         """Request closure of a payment channel."""
@@ -111,7 +109,7 @@ class UseCaseVendorClient:
         await self.paytree_payment_service.settle_channel(dto)
 
     async def receive_payment_raw(
-        self, channel_id: str, payment_envelope: Envelope
+        self, channel_id: str, payment_dto: ReceivePaymentDTO
     ) -> UseCaseResponse:
         """
         Submit a payment to the vendor without raising on error.
@@ -119,8 +117,7 @@ class UseCaseVendorClient:
         Returns a response object for error case testing.
         """
         try:
-            dto = ReceivePaymentDTO(envelope=payment_envelope)
-            result = await self.payment_service.receive_payment(dto)
+            result = await self.payment_service.receive_payment(payment_dto)
             return UseCaseResponse(
                 status_code=200, content=json.dumps(result.model_dump()).encode("utf-8")
             )

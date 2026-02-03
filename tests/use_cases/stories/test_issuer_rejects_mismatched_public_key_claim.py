@@ -36,26 +36,36 @@ async def test_issuer_rejects_mismatched_client_public_key_claim(
     await issuer_client.register_account(clientB.public_key_der_b64)
     await issuer_client.register_account(vendor_public_key_der_b64)
 
-    # When: ClientA creates a payload claiming clientB's public key, but signs with clientA's key
-    # The DTO declares clientA's key (so signature verification passes), but payload claims clientB
+    # When: ClientA creates a request but puts clientB's public key in the DTO
+    # The signature is computed over the DTO fields, so if we put clientB's key in the DTO
+    # but sign with clientA's key, the signature won't match (because the signed payload
+    # would have clientB's key, but we're verifying with clientA's public key)
+    from nanomoni.crypto.certificates import json_to_bytes, sign_bytes
+    
+    # Create DTO with clientB's key but sign with clientA's key
+    # This creates a signature mismatch because the signature is over fields including clientB's key
+    # but we verify with clientA's public key
     payload = OpenChannelRequestPayload(
-        client_public_key_der_b64=clientB.public_key_der_b64,  # Claim clientB
+        client_public_key_der_b64=clientB.public_key_der_b64,  # Claim clientB in payload
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         amount=1000,
     )
-    envelope = generate_envelope(
-        clientA.private_key, payload.model_dump()
-    )  # Sign with clientA
+    payload_bytes = json_to_bytes(payload.model_dump())
+    signature_b64 = sign_bytes(clientA.private_key, payload_bytes)  # Sign with clientA
 
+    # Create DTO with clientB's key (mismatch - signature was computed with clientB's key in payload)
+    # but we'll verify with clientA's public key (from the DTO field)
     mismatched_request = OpenChannelRequestDTO(
-        client_public_key_der_b64=clientA.public_key_der_b64,  # Declare clientA (matches signature)
-        open_payload_b64=envelope.payload_b64,
-        open_signature_b64=envelope.signature_b64,
+        client_public_key_der_b64=clientB.public_key_der_b64,  # Declare clientB (but signed with clientA's key)
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=1000,
+        open_signature_b64=signature_b64,
     )
 
-    # Then: Issuer rejects due to mismatch between declared key and payload key
+    # Then: Issuer rejects due to signature verification failure
+    # (The signature was computed with clientA's key over payload with clientB's key,
+    # but we verify with clientA's public key, causing a mismatch)
     response = await issuer_client.open_channel_raw(mismatched_request)
-    assert response.status_code == 400, "Should reject mismatched public key claim"
+    assert response.status_code == 400, "Should reject mismatched signature"
     response_data = response.json()
-    assert "mismatched" in response_data.get("detail", "").lower()
-    assert "public key" in response_data.get("detail", "").lower()
+    assert "signature" in response_data.get("detail", "").lower()

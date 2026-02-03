@@ -18,7 +18,6 @@ from nanomoni.application.vendor.paytree_dtos import (
     ReceivePaytreePaymentDTO,
     PaytreePaymentResponseDTO,
 )
-from nanomoni.crypto.certificates import Envelope
 
 from tests.e2e.helpers.http import AiohttpResponse
 
@@ -84,19 +83,19 @@ class VendorTestClient:
         return VendorPublicKeyDTO.model_validate(response.json())
 
     async def receive_payment(
-        self, channel_id: str, payment_envelope: Envelope
+        self, channel_id: str, payment_dto: ReceivePaymentDTO
     ) -> OffChainTxResponseDTO:
         """
         Submit a payment to the vendor.
 
         Args:
             channel_id: Payment channel identifier
-            payment_envelope: Signed payment envelope from client
+            payment_dto: Payment DTO with flat fields and signature
 
         Returns:
             OffChainTxResponseDTO with payment details
         """
-        dto = ReceivePaymentDTO(envelope=payment_envelope)
+        dto = payment_dto
         response = await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
@@ -210,14 +209,14 @@ class VendorTestClient:
         assert response.status_code == 204
 
     async def receive_payment_raw(
-        self, channel_id: str, payment_envelope: Envelope
+        self, channel_id: str, payment_dto: ReceivePaymentDTO
     ) -> AiohttpResponse:
         """
         Submit a payment to the vendor without raising on error status.
 
         Returns the raw HTTP response for error case testing.
         """
-        dto = ReceivePaymentDTO(envelope=payment_envelope)
+        dto = payment_dto
         return await self._request(
             "POST",
             f"{self.base_url}/vendor/channels/signature/{channel_id}/payments",
