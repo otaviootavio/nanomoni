@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tests.e2e.helpers.client_actor import ClientActor
@@ -36,7 +38,5 @@ async def test_vendor_tries_to_close_empty_channel_vendor_rejects(
     response = await vendor_client.request_channel_settlement_raw(channel_id)
     assert response.status_code == 400, "Should reject closure without payments"
     # Error message should indicate no payments received
-    error_detail = response.json()["detail"]
-    assert "payment" in error_detail.lower(), (
-        "Error should mention payment-related issue"
-    )
+    error_detail = json.loads(response.text).get("detail", "").lower()
+    assert "payment" in error_detail, "Error should mention payment-related issue"
