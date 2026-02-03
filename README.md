@@ -1,4 +1,59 @@
-### NanoMoni (docker compose)
+# NanoMoni
+
+## Quickstart (pyenv + Poetry)
+
+### Prerequisites
+
+- [pyenv](https://github.com/pyenv/pyenv) installed
+- [Poetry](https://python-poetry.org/docs/#installation) installed
+
+### Setup Steps
+
+1. **Install Python 3.9 using pyenv:**
+
+   ```sh
+   pyenv install 3.9
+   pyenv local 3.9
+   ```
+
+2. **Verify Python version:**
+
+   ```sh
+   python --version  # Should output Python 3.9.x
+   ```
+
+3. **Install project dependencies with Poetry:**
+
+   ```sh
+   poetry install
+   ```
+
+4. **Activate the Poetry virtual environment (optional):**
+
+   ```sh
+   poetry env activate
+   ```
+
+   Or run commands with `poetry run`:
+
+   ```sh
+   poetry run python -m nanomoni.main
+   ```
+
+5. **Add the Python interpreter to VSCode**
+
+
+
+Copy the path from Poetry environment for this project.
+
+```sh
+poetry env info --path
+```
+
+Open the command palette with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, type `Python: Select Interpreter` and add it.
+---
+
+## Docker Compose Setup
 
 Prereqs:
 - Docker + Docker Compose v2 (`docker compose`)
@@ -40,6 +95,17 @@ source ./envs/issuer.env.sh && docker compose up issuer --build
 source ./envs/vendor.env.sh && docker compose up vendor --build
 source ./envs/client.env.sh && docker compose up client --build
 ```
+
+## Publishing Docker images
+
+### Dead-simple (Docker Hub, single-arch, no buildx)
+
+```sh
+docker login
+USERNAME=otaviootaviootavio ./scripts/publish-images.sh
+```
+
+This script always builds + pushes `:latest` for issuer/vendor/client.
 
 ### 5) Stop everything
 
