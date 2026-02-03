@@ -23,7 +23,7 @@ rectangle "Shared Kernel" #EEEEEE {
 
     rectangle "Shared Protocol Models" as proto #E0E0E0 {
         rectangle "application/shared" {
-            file "**payment_channel_payloads.py**\nOpenChannelRequestPayload\nSignatureSettlementPayload\nSignaturePaymentPayload"
+            file "**payment_channel_payloads.py**\nOpenChannelRequestPayload\nSignatureChannelSettlementPayload\nSignatureChannelPaymentPayload"
             file "**payword_payloads.py**\nPaywordOpenChannelRequestPayload"
             file "**paytree_payloads.py**\nPaytreeOpenChannelRequestPayload"
         }

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from ....application.shared.payment_channel_payloads import (
     deserialize_signature_payment,
-    SignatureSettlementPayload,
+    SignatureChannelSettlementPayload,
 )
 from ....application.shared.serialization import payload_to_bytes
 from ....application.issuer.dtos import (
@@ -207,8 +207,6 @@ class PaymentService:
                 )
             return OffChainTxResponseDTO(
                 channel_id=latest_state.channel_id,
-                client_public_key_der_b64=payment_channel.client_public_key_der_b64,
-                vendor_public_key_der_b64=payment_channel.vendor_public_key_der_b64,
                 cumulative_owed_amount=latest_state.cumulative_owed_amount,
                 created_at=latest_state.created_at,
             )
@@ -253,8 +251,6 @@ class PaymentService:
                 )
             return OffChainTxResponseDTO(
                 channel_id=stored_tx.channel_id,
-                client_public_key_der_b64=payment_channel.client_public_key_der_b64,
-                vendor_public_key_der_b64=payment_channel.vendor_public_key_der_b64,
                 cumulative_owed_amount=stored_tx.cumulative_owed_amount,
                 created_at=stored_tx.created_at,
             )
@@ -287,7 +283,7 @@ class PaymentService:
             raise ValueError("No off-chain payments received for this channel")
 
         # 3) Reconstruct the canonical settlement payload bytes (same bytes the client signed).
-        settlement_payload = SignatureSettlementPayload(
+        settlement_payload = SignatureChannelSettlementPayload(
             channel_id=dto.channel_id,
             cumulative_owed_amount=latest_state.cumulative_owed_amount,
         )

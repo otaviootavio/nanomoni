@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nanomoni.application.shared.payment_channel_payloads import (
-    SignaturePaymentPayload,
+    SignatureChannelPaymentPayload,
     OpenChannelRequestPayload,
 )
 from nanomoni.application.vendor.dtos import ReceivePaymentDTO
@@ -62,7 +62,7 @@ def prepare_payments(
     """
     signed_payment_envs: list[Envelope] = []
     for cumulative_owed_amount in payments:
-        tx_payload = SignaturePaymentPayload(
+        tx_payload = SignatureChannelPaymentPayload(
             channel_id=channel_id,
             cumulative_owed_amount=cumulative_owed_amount,
         )
