@@ -20,7 +20,7 @@ class OpenChannelRequestPayload(BaseModel):
     amount: int
 
 
-class SignatureSettlementPayload(BaseModel):
+class SignatureChannelSettlementPayload(BaseModel):
     """Signed close-channel statement.
 
     This is the payload that BOTH client and vendor sign during settlement/closure.
@@ -33,7 +33,7 @@ class SignatureSettlementPayload(BaseModel):
     cumulative_owed_amount: int
 
 
-class SignaturePaymentPayload(BaseModel):
+class SignatureChannelPaymentPayload(BaseModel):
     """Payload for a signature-mode off-chain payment from client to vendor.
 
     This is a client-signed monotonic statement of cumulative_owed_amount for a channel.
@@ -53,17 +53,17 @@ def deserialize_open_channel_request(envelope: Envelope) -> OpenChannelRequestPa
     return OpenChannelRequestPayload.model_validate_json(payload_str)
 
 
-def deserialize_signature_payment(envelope: Envelope) -> SignaturePaymentPayload:
+def deserialize_signature_payment(envelope: Envelope) -> SignatureChannelPaymentPayload:
     """Decode and validate a signature-mode payment envelope payload."""
     payload_bytes = envelope_payload_bytes(envelope)
     payload_str = payload_bytes.decode("utf-8")
-    return SignaturePaymentPayload.model_validate_json(payload_str)
+    return SignatureChannelPaymentPayload.model_validate_json(payload_str)
 
 
 def verify_and_deserialize_signature_payment(
     public_key: ec.EllipticCurvePublicKey, envelope: Envelope
-) -> SignaturePaymentPayload:
+) -> SignatureChannelPaymentPayload:
     """Verify a payment envelope and deserialize its signature-mode payload in one step."""
     payload_bytes = verify_envelope_and_get_payload_bytes(public_key, envelope)
     payload_str = payload_bytes.decode("utf-8")
-    return SignaturePaymentPayload.model_validate_json(payload_str)
+    return SignatureChannelPaymentPayload.model_validate_json(payload_str)

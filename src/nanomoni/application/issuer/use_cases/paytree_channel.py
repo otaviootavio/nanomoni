@@ -65,7 +65,7 @@ class PaytreeChannelService:
         hasher.update(base64.b64decode(client_public_key_der_b64))
         hasher.update(base64.b64decode(vendor_public_key_der_b64))
         hasher.update(base64.b64decode(salt_b64))
-        return hasher.hexdigest()
+        return base64.urlsafe_b64encode(hasher.digest()).decode("utf-8").rstrip("=")
 
     async def open_channel(
         self, dto: OpenChannelRequestDTO

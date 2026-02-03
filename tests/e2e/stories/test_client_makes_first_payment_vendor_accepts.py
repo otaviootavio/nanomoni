@@ -42,5 +42,3 @@ async def test_client_makes_first_payment_vendor_accepts(
     # Then: Payment is accepted
     assert payment_response.cumulative_owed_amount == first_payment_owed
     assert payment_response.channel_id == channel_id
-    assert payment_response.client_public_key_der_b64 == client.public_key_der_b64
-    assert payment_response.vendor_public_key_der_b64 == vendor_public_key_der_b64

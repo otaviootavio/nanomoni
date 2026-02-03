@@ -12,7 +12,7 @@ from nanomoni.application.issuer.dtos import (
 )
 from nanomoni.application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
-    SignaturePaymentPayload,
+    SignatureChannelPaymentPayload,
 )
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
@@ -83,7 +83,7 @@ class ClientActor:
         Returns:
             Signed Envelope containing the payment payload
         """
-        payload = SignaturePaymentPayload(
+        payload = SignatureChannelPaymentPayload(
             channel_id=channel_id,
             cumulative_owed_amount=cumulative_owed_amount,
         )

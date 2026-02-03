@@ -30,7 +30,7 @@ from ....crypto.certificates import (
 )
 from ....application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
-    SignatureSettlementPayload,
+    SignatureChannelSettlementPayload,
 )
 
 
@@ -57,7 +57,7 @@ class PaymentChannelService:
         hasher.update(base64.b64decode(client_public_key_der_b64))
         hasher.update(base64.b64decode(vendor_public_key_der_b64))
         hasher.update(base64.b64decode(salt_b64))
-        return hasher.hexdigest()
+        return base64.urlsafe_b64encode(hasher.digest()).decode("utf-8").rstrip("=")
 
     async def open_channel(self, dto: OpenChannelRequestDTO) -> OpenChannelResponseDTO:
         # Deserialize and verify client-provided open-channel envelope
@@ -156,8 +156,10 @@ class PaymentChannelService:
         # The Issuer infers client/vendor keys from the PaymentChannel stored by channel_id.
         try:
             close_payload_bytes = base64.b64decode(dto.close_payload_b64)
-            close_payload_unverified = SignatureSettlementPayload.model_validate_json(
-                close_payload_bytes.decode("utf-8")
+            close_payload_unverified = (
+                SignatureChannelSettlementPayload.model_validate_json(
+                    close_payload_bytes.decode("utf-8")
+                )
             )
         except Exception as err:
             raise ValueError("Invalid close payload format") from err

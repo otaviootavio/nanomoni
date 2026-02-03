@@ -101,8 +101,6 @@ class OffChainTxResponseDTO(DatetimeSerializerMixin, BaseModel):
     """DTO for returning off-chain transaction data."""
 
     channel_id: str
-    client_public_key_der_b64: str
-    vendor_public_key_der_b64: str
     cumulative_owed_amount: int
     created_at: datetime
 
