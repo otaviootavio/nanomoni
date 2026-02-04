@@ -32,11 +32,22 @@ class IssuerPublicKeyDTO(BaseModel):
 
 # Payment channel DTOs
 class OpenChannelRequestDTO(BaseModel):
-    """Request to open a payment channel using a client-signed envelope."""
+    """Request to open a payment channel using a client-signed payload."""
 
     client_public_key_der_b64: str
-    open_payload_b64: str
+    vendor_public_key_der_b64: str
+    amount: int
     open_signature_b64: str
+
+    # PayWord-specific fields (optional)
+    payword_root_b64: Optional[str] = None
+    payword_unit_value: Optional[int] = None
+    payword_max_k: Optional[int] = None
+
+    # PayTree-specific fields (optional)
+    paytree_root_b64: Optional[str] = None
+    paytree_unit_value: Optional[int] = None
+    paytree_max_i: Optional[int] = None
 
 
 class OpenChannelResponseDTO(BaseModel):
@@ -51,10 +62,10 @@ class OpenChannelResponseDTO(BaseModel):
 
 
 class CloseChannelRequestDTO(BaseModel):
-    """Vendor presents client-signed close envelope plus vendor's consent signature (detached) for closing."""
+    """Vendor presents client-signed close payload plus vendor's consent signature (detached) for closing."""
 
     channel_id: str
-    close_payload_b64: str
+    cumulative_owed_amount: int
     client_close_signature_b64: str
     vendor_close_signature_b64: str
 

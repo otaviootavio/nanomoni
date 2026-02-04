@@ -8,8 +8,12 @@ from nanomoni.application.shared.payment_channel_payloads import (
     SignatureChannelPaymentPayload,
     OpenChannelRequestPayload,
 )
+from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.vendor.dtos import ReceivePaymentDTO
-from nanomoni.crypto.certificates import Envelope, generate_envelope
+from nanomoni.crypto.certificates import (
+    json_to_bytes,
+    sign_bytes,
+)
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 if TYPE_CHECKING:
@@ -38,6 +42,39 @@ def build_open_payload(
     )
 
 
+def build_open_channel_request(
+    client_private_key: EllipticCurvePrivateKey,
+    client_public_key_der_b64: str,
+    vendor_public_key_der_b64: str,
+    amount: int,
+) -> OpenChannelRequestDTO:
+    """Build and sign open channel request DTO for signature mode.
+
+    Args:
+        client_private_key: Client's private key for signing
+        client_public_key_der_b64: Client's public key in DER base64 format
+        vendor_public_key_der_b64: Vendor's public key in DER base64 format
+        amount: Amount to lock in the channel
+
+    Returns:
+        Signed OpenChannelRequestDTO with flat fields.
+    """
+    payload = OpenChannelRequestPayload(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+    )
+    payload_bytes = json_to_bytes(payload.model_dump())
+    signature_b64 = sign_bytes(client_private_key, payload_bytes)
+
+    return OpenChannelRequestDTO(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+        open_signature_b64=signature_b64,
+    )
+
+
 def prepare_payments(
     channel_id: str,
     client_public_key_der_b64: str,
@@ -45,9 +82,9 @@ def prepare_payments(
     client_private_key: EllipticCurvePrivateKey,
     payments: list[int],
 ) -> list[ReceivePaymentDTO]:
-    """Precompute signed payment envelopes for signature mode.
+    """Precompute signed payment DTOs for signature mode.
 
-    Precomputing signed envelopes before sending requests ensures the runtime path
+    Precomputing signed DTOs before sending requests ensures the runtime path
     measures mostly network + server-side verification (fairer vs payword pre-hashing).
 
     Args:
@@ -58,19 +95,26 @@ def prepare_payments(
         payments: List of cumulative_owed_amount values (monotonic sequence)
 
     Returns:
-        List of ReceivePaymentDTO with pre-signed envelopes.
+        List of ReceivePaymentDTO with pre-signed flat DTOs.
     """
-    signed_payment_envs: list[Envelope] = []
+    payment_dtos: list[ReceivePaymentDTO] = []
     for cumulative_owed_amount in payments:
         tx_payload = SignatureChannelPaymentPayload(
             channel_id=channel_id,
             cumulative_owed_amount=cumulative_owed_amount,
         )
-        signed_payment_envs.append(
-            generate_envelope(client_private_key, tx_payload.model_dump())
+        payload_bytes = json_to_bytes(tx_payload.model_dump())
+        signature_b64 = sign_bytes(client_private_key, payload_bytes)
+
+        payment_dtos.append(
+            ReceivePaymentDTO(
+                channel_id=channel_id,
+                cumulative_owed_amount=cumulative_owed_amount,
+                signature_b64=signature_b64,
+            )
         )
 
-    return [ReceivePaymentDTO(envelope=pay_env) for pay_env in signed_payment_envs]
+    return payment_dtos
 
 
 async def send_payments(

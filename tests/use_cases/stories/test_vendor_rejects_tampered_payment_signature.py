@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from tests.e2e.helpers.client_actor import ClientActor
-from tests.e2e.helpers.tamper import tamper_envelope_signature
+from tests.e2e.helpers.tamper import tamper_payment_dto_signature
 from tests.use_cases.helpers.issuer_client_adapter import UseCaseIssuerClient
 from tests.use_cases.helpers.vendor_client_adapter import UseCaseVendorClient
 
@@ -34,10 +34,13 @@ async def test_vendor_rejects_tampered_payment_signature(
 
     # When: Client sends a payment with tampered signature
     valid_payment = client.create_payment_envelope(channel_id, 100)
-    tampered_payment = tamper_envelope_signature(valid_payment)
+    tampered_payment = tamper_payment_dto_signature(valid_payment)
 
     # Then: Vendor rejects the payment
     response = await vendor_client.receive_payment_raw(channel_id, tampered_payment)
     assert response.status_code == 400, "Should reject tampered payment signature"
     response_data = response.json()
-    assert "invalid signature" in response_data.get("detail", "").lower()
+    assert (
+        "invalid" in response_data.get("detail", "").lower()
+        and "signature" in response_data.get("detail", "").lower()
+    )

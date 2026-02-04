@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import os
 
@@ -20,18 +21,14 @@ from ....application.issuer.paytree_dtos import (
     PaytreeSettlementRequestDTO,
 )
 from ....application.shared.paytree_payloads import (
-    PaytreeOpenChannelRequestPayload,
     PaytreeSettlementPayload,
 )
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import (
     DERB64,
-    Envelope,
-    PayloadB64,
-    SignatureB64,
     load_public_key_from_der_b64,
-    verify_envelope_and_get_payload_bytes,
     verify_signature_bytes,
+    dto_to_canonical_json_bytes,
 )
 from ....crypto.paytree import (
     b64_to_bytes,
@@ -70,64 +67,65 @@ class PaytreeChannelService:
     async def open_channel(
         self, dto: OpenChannelRequestDTO
     ) -> PaytreeOpenChannelResponseDTO:
-        client_public_key = load_public_key_from_der_b64(
-            DERB64(dto.client_public_key_der_b64)
-        )
-        client_envelope: Envelope = Envelope(
-            payload_b64=PayloadB64(dto.open_payload_b64),
-            signature_b64=SignatureB64(dto.open_signature_b64),
-        )
+        # Verify PayTree fields are present
+        if (
+            dto.paytree_root_b64 is None
+            or dto.paytree_unit_value is None
+            or dto.paytree_max_i is None
+        ):
+            raise ValueError("PayTree fields are required for PayTree channel opening")
+
+        # Verify client signature over the flat DTO fields
+        # Reconstruct canonical JSON from DTO fields (excluding signature)
+        payload_bytes = dto_to_canonical_json_bytes(dto)
+
         try:
-            payload_bytes = verify_envelope_and_get_payload_bytes(
-                client_public_key, client_envelope
+            client_public_key = load_public_key_from_der_b64(
+                DERB64(dto.client_public_key_der_b64)
             )
-        except InvalidSignature:
+            verify_signature_bytes(
+                client_public_key, payload_bytes, dto.open_signature_b64
+            )
+        except (InvalidSignature, binascii.Error):
             raise ValueError("Invalid client signature for open channel request")
 
-        open_req_payload = PaytreeOpenChannelRequestPayload.model_validate_json(
-            payload_bytes.decode("utf-8")
-        )
-
-        if open_req_payload.client_public_key_der_b64 != dto.client_public_key_der_b64:
-            raise ValueError("Mismatched client public key between field and payload")
-
         client_acc = await self.account_repo.get_by_public_key(
-            open_req_payload.client_public_key_der_b64
+            dto.client_public_key_der_b64
         )
         if not client_acc:
             raise ValueError("Client account not registered")
 
         vendor_acc = await self.account_repo.get_by_public_key(
-            open_req_payload.vendor_public_key_der_b64
+            dto.vendor_public_key_der_b64
         )
         if not vendor_acc:
             raise ValueError("Vendor account not registered")
 
-        if open_req_payload.amount <= 0:
+        if dto.amount <= 0:
             raise ValueError("Amount must be positive")
-        if client_acc.balance < open_req_payload.amount:
+        if client_acc.balance < dto.amount:
             raise ValueError("Insufficient client balance to lock funds")
 
         try:
-            _ = b64_to_bytes(open_req_payload.paytree_root_b64)
+            _ = b64_to_bytes(dto.paytree_root_b64)
         except Exception as e:
             raise ValueError(f"Invalid paytree_root_b64: {e}") from e
 
         max_owed = compute_cumulative_owed_amount(
-            i=open_req_payload.paytree_max_i,
-            unit_value=open_req_payload.paytree_unit_value,
+            i=dto.paytree_max_i,
+            unit_value=dto.paytree_unit_value,
         )
-        if max_owed > open_req_payload.amount:
+        if max_owed > dto.amount:
             raise ValueError(
                 "PayTree max owed exceeds channel amount "
-                f"(max_owed={max_owed}, amount={open_req_payload.amount})"
+                f"(max_owed={max_owed}, amount={dto.amount})"
             )
 
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")
         channel_id = self._compute_channel_id(
-            open_req_payload.client_public_key_der_b64,
-            open_req_payload.vendor_public_key_der_b64,
+            dto.client_public_key_der_b64,
+            dto.vendor_public_key_der_b64,
             salt_b64,
         )
 
@@ -137,14 +135,14 @@ class PaytreeChannelService:
 
         channel = PaytreePaymentChannel(
             channel_id=channel_id,
-            client_public_key_der_b64=open_req_payload.client_public_key_der_b64,
-            vendor_public_key_der_b64=open_req_payload.vendor_public_key_der_b64,
+            client_public_key_der_b64=dto.client_public_key_der_b64,
+            vendor_public_key_der_b64=dto.vendor_public_key_der_b64,
             salt_b64=salt_b64,
-            amount=open_req_payload.amount,
+            amount=dto.amount,
             balance=0,
-            paytree_root_b64=open_req_payload.paytree_root_b64,
-            paytree_unit_value=open_req_payload.paytree_unit_value,
-            paytree_max_i=open_req_payload.paytree_max_i,
+            paytree_root_b64=dto.paytree_root_b64,
+            paytree_unit_value=dto.paytree_unit_value,
+            paytree_max_i=dto.paytree_max_i,
         )
         created = await self.channel_repo.create(channel)
         if not isinstance(created, PaytreePaymentChannel):
@@ -154,7 +152,7 @@ class PaytreeChannelService:
         # fails for any reason, attempt to roll back by deleting the channel.
         try:
             await self.account_repo.update_balance(
-                open_req_payload.client_public_key_der_b64, -open_req_payload.amount
+                dto.client_public_key_der_b64, -dto.amount
             )
         except Exception:
             await self.channel_repo.delete_by_channel_id(channel_id)

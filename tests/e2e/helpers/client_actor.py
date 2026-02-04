@@ -20,7 +20,11 @@ from nanomoni.application.shared.payword_payloads import (
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
 )
-from nanomoni.crypto.certificates import Envelope, generate_envelope
+from nanomoni.application.vendor.dtos import ReceivePaymentDTO
+from nanomoni.crypto.certificates import (
+    json_to_bytes,
+    sign_bytes,
+)
 from nanomoni.crypto.payword import Payword
 from nanomoni.crypto.paytree import Paytree
 
@@ -53,41 +57,50 @@ class ClientActor:
             amount: Amount to lock in the channel
 
         Returns:
-            OpenChannelRequestDTO with signed envelope
+            OpenChannelRequestDTO with flat fields and signature
         """
         payload = OpenChannelRequestPayload(
             client_public_key_der_b64=self.public_key_der_b64,
             vendor_public_key_der_b64=vendor_public_key_der_b64,
             amount=amount,
         )
-        envelope = generate_envelope(self.private_key, payload.model_dump())
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
 
         return OpenChannelRequestDTO(
             client_public_key_der_b64=self.public_key_der_b64,
-            open_payload_b64=envelope.payload_b64,
-            open_signature_b64=envelope.signature_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            open_signature_b64=signature_b64,
         )
 
     def create_payment_envelope(
         self,
         channel_id: str,
         cumulative_owed_amount: int,
-    ) -> Envelope:
+    ) -> ReceivePaymentDTO:
         """
-        Create a signed payment envelope for an off-chain transaction.
+        Create a signed payment DTO for an off-chain transaction.
 
         Args:
             channel_id: Payment channel identifier string provided by the API
             cumulative_owed_amount: Amount owed to vendor
 
         Returns:
-            Signed Envelope containing the payment payload
+            ReceivePaymentDTO with flat fields and signature
         """
         payload = SignatureChannelPaymentPayload(
             channel_id=channel_id,
             cumulative_owed_amount=cumulative_owed_amount,
         )
-        return generate_envelope(self.private_key, payload.model_dump())
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
+
+        return ReceivePaymentDTO(
+            channel_id=channel_id,
+            cumulative_owed_amount=cumulative_owed_amount,
+            signature_b64=signature_b64,
+        )
 
     def create_open_channel_request_payword(
         self,
@@ -123,13 +136,18 @@ class ClientActor:
             payword_unit_value=unit_value,
             payword_max_k=max_k,
         )
-        envelope = generate_envelope(self.private_key, payload.model_dump())
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
 
         return (
             OpenChannelRequestDTO(
                 client_public_key_der_b64=self.public_key_der_b64,
-                open_payload_b64=envelope.payload_b64,
-                open_signature_b64=envelope.signature_b64,
+                vendor_public_key_der_b64=vendor_public_key_der_b64,
+                amount=amount,
+                open_signature_b64=signature_b64,
+                payword_root_b64=root_b64,
+                payword_unit_value=unit_value,
+                payword_max_k=max_k,
             ),
             payword,
         )
@@ -161,12 +179,17 @@ class ClientActor:
             payword_unit_value=unit_value,
             payword_max_k=max_k,
         )
-        envelope = generate_envelope(self.private_key, payload.model_dump())
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
 
         return OpenChannelRequestDTO(
             client_public_key_der_b64=self.public_key_der_b64,
-            open_payload_b64=envelope.payload_b64,
-            open_signature_b64=envelope.signature_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            open_signature_b64=signature_b64,
+            payword_root_b64=payword_root_b64,
+            payword_unit_value=unit_value,
+            payword_max_k=max_k,
         )
 
     def create_open_channel_request_paytree(
@@ -197,13 +220,18 @@ class ClientActor:
             paytree_unit_value=unit_value,
             paytree_max_i=max_i,
         )
-        envelope = generate_envelope(self.private_key, payload.model_dump())
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
 
         return (
             OpenChannelRequestDTO(
                 client_public_key_der_b64=self.public_key_der_b64,
-                open_payload_b64=envelope.payload_b64,
-                open_signature_b64=envelope.signature_b64,
+                vendor_public_key_der_b64=vendor_public_key_der_b64,
+                amount=amount,
+                open_signature_b64=signature_b64,
+                paytree_root_b64=root_b64,
+                paytree_unit_value=unit_value,
+                paytree_max_i=max_i,
             ),
             paytree,
         )

@@ -7,12 +7,18 @@ from typing import TYPE_CHECKING
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
 )
+from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.vendor.paytree_dtos import ReceivePaytreePaymentDTO
 from nanomoni.crypto.paytree import Paytree
+from nanomoni.crypto.certificates import (
+    json_to_bytes,
+    sign_bytes,
+)
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 if TYPE_CHECKING:
     from nanomoni.envs.client_env import Settings
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 
 def init_commitment(
@@ -77,6 +83,51 @@ def build_open_payload(
         client_public_key_der_b64=client_public_key_der_b64,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         amount=channel_amount,
+        paytree_root_b64=paytree_root_b64,
+        paytree_unit_value=paytree_unit_value,
+        paytree_max_i=paytree_max_i,
+    )
+
+
+def build_open_channel_request(
+    client_private_key: EllipticCurvePrivateKey,
+    client_public_key_der_b64: str,
+    vendor_public_key_der_b64: str,
+    amount: int,
+    paytree_root_b64: str,
+    paytree_unit_value: int,
+    paytree_max_i: int,
+) -> OpenChannelRequestDTO:
+    """Build and sign open channel request DTO for PayTree mode.
+
+    Args:
+        client_private_key: Client's private key for signing
+        client_public_key_der_b64: Client's public key in DER base64 format
+        vendor_public_key_der_b64: Vendor's public key in DER base64 format
+        amount: Amount to lock in the channel
+        paytree_root_b64: PayTree commitment root in base64
+        paytree_unit_value: Unit value for each payment step
+        paytree_max_i: Maximum i value (channel capacity in steps)
+
+    Returns:
+        Signed OpenChannelRequestDTO with flat fields.
+    """
+    payload = PaytreeOpenChannelRequestPayload(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+        paytree_root_b64=paytree_root_b64,
+        paytree_unit_value=paytree_unit_value,
+        paytree_max_i=paytree_max_i,
+    )
+    payload_bytes = json_to_bytes(payload.model_dump())
+    signature_b64 = sign_bytes(client_private_key, payload_bytes)
+
+    return OpenChannelRequestDTO(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+        open_signature_b64=signature_b64,
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,

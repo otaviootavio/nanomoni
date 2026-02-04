@@ -63,13 +63,11 @@ async def test_issuer_rejects_tampered_open_channel_payload(
     await issuer_client.register_account(client.public_key_der_b64)
     await issuer_client.register_account(vendor_public_key_der_b64)
 
-    # When: Client creates a valid open-channel request but tamper the payload
+    # When: Client creates a valid open-channel request but tamper the amount field
     open_request = client.create_open_channel_request(vendor_public_key_der_b64, 1000)
     tampered_request = open_request.model_copy(
         update={
-            "open_payload_b64": tamper_b64_preserve_validity(
-                open_request.open_payload_b64
-            )
+            "amount": open_request.amount + 1  # Tamper with amount field
         }
     )
 

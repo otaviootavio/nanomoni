@@ -7,12 +7,18 @@ from typing import TYPE_CHECKING
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
 )
+from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.vendor.payword_dtos import ReceivePaywordPaymentDTO
 from nanomoni.crypto.payword import Payword
+from nanomoni.crypto.certificates import (
+    json_to_bytes,
+    sign_bytes,
+)
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 if TYPE_CHECKING:
     from nanomoni.envs.client_env import Settings
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 
 def init_commitment(
@@ -75,6 +81,51 @@ def build_open_payload(
         client_public_key_der_b64=client_public_key_der_b64,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         amount=channel_amount,
+        payword_root_b64=payword_root_b64,
+        payword_unit_value=payword_unit_value,
+        payword_max_k=payword_max_k,
+    )
+
+
+def build_open_channel_request(
+    client_private_key: EllipticCurvePrivateKey,
+    client_public_key_der_b64: str,
+    vendor_public_key_der_b64: str,
+    amount: int,
+    payword_root_b64: str,
+    payword_unit_value: int,
+    payword_max_k: int,
+) -> OpenChannelRequestDTO:
+    """Build and sign open channel request DTO for PayWord mode.
+
+    Args:
+        client_private_key: Client's private key for signing
+        client_public_key_der_b64: Client's public key in DER base64 format
+        vendor_public_key_der_b64: Vendor's public key in DER base64 format
+        amount: Amount to lock in the channel
+        payword_root_b64: PayWord commitment root in base64
+        payword_unit_value: Unit value for each payment step
+        payword_max_k: Maximum k value (channel capacity in steps)
+
+    Returns:
+        Signed OpenChannelRequestDTO with flat fields.
+    """
+    payload = PaywordOpenChannelRequestPayload(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+        payword_root_b64=payword_root_b64,
+        payword_unit_value=payword_unit_value,
+        payword_max_k=payword_max_k,
+    )
+    payload_bytes = json_to_bytes(payload.model_dump())
+    signature_b64 = sign_bytes(client_private_key, payload_bytes)
+
+    return OpenChannelRequestDTO(
+        client_public_key_der_b64=client_public_key_der_b64,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        amount=amount,
+        open_signature_b64=signature_b64,
         payword_root_b64=payword_root_b64,
         payword_unit_value=payword_unit_value,
         payword_max_k=payword_max_k,

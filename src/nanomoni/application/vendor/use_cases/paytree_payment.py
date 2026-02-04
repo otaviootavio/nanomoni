@@ -22,6 +22,11 @@ from ....domain.vendor.payment_channel_repository import PaymentChannelRepositor
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
+from .paytree_validators import (
+    validate_paytree_i,
+    validate_paytree_amount,
+    check_duplicate_paytree_payment,
+)
 
 
 class PaytreePaymentService:
@@ -167,44 +172,49 @@ class PaytreePaymentService:
 
         prev_i = latest_state.i if latest_state else 0
 
-        # Idempotency + replay protection:
+        # Idempotency + replay protection (pure function)
         # - If the client retries the *exact same* payment (same i + same proof),
         #   accept it and return the stored state (handles transient disconnects).
         # - If i is the same but proof differs, reject as a replay/double-spend attempt.
         # - Otherwise, enforce strictly increasing i.
-        if dto.i <= prev_i:
-            if latest_state is not None and dto.i == prev_i:
-                if (
-                    dto.leaf_b64 != latest_state.leaf_b64
-                    or dto.siblings_b64 != latest_state.siblings_b64
-                ):
-                    raise ValueError(
-                        "Duplicate PayTree i with mismatched proof (possible replay attack)"
-                    )
-                cumulative_owed_amount = compute_cumulative_owed_amount(
-                    i=latest_state.i, unit_value=payment_channel.paytree_unit_value
-                )
-                return PaytreePaymentResponseDTO(
-                    channel_id=latest_state.channel_id,
-                    i=latest_state.i,
-                    cumulative_owed_amount=cumulative_owed_amount,
-                    created_at=latest_state.created_at,
-                )
-
-            raise ValueError(
-                f"PayTree i must be increasing. Got {dto.i}, expected > {prev_i}"
+        prev_leaf = latest_state.leaf_b64 if latest_state else None
+        prev_siblings = latest_state.siblings_b64 if latest_state else None
+        is_duplicate = check_duplicate_paytree_payment(
+            i=dto.i,
+            leaf=dto.leaf_b64,
+            siblings=dto.siblings_b64,
+            prev_i=prev_i,
+            prev_leaf=prev_leaf,
+            prev_siblings=prev_siblings,
+        )
+        if is_duplicate:
+            # If duplicate check returns True, latest_state must not be None
+            assert latest_state is not None
+            cumulative_owed_amount = compute_cumulative_owed_amount(
+                i=latest_state.i, unit_value=payment_channel.paytree_unit_value
+            )
+            return PaytreePaymentResponseDTO(
+                channel_id=latest_state.channel_id,
+                i=latest_state.i,
+                cumulative_owed_amount=cumulative_owed_amount,
+                created_at=latest_state.created_at,
             )
 
-        if dto.i > payment_channel.paytree_max_i:
-            raise ValueError("PayTree i exceeds channel max_i")
+        # Validate i (pure function)
+        validate_paytree_i(
+            i=dto.i,
+            prev_i=prev_i,
+            max_i=payment_channel.paytree_max_i,
+        )
 
         cumulative_owed_amount = compute_cumulative_owed_amount(
             i=dto.i, unit_value=payment_channel.paytree_unit_value
         )
-        if cumulative_owed_amount > payment_channel.amount:
-            raise ValueError(
-                f"cumulative_owed_amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
-            )
+        # Validate amount (pure function)
+        validate_paytree_amount(
+            cumulative_owed=cumulative_owed_amount,
+            channel_amount=payment_channel.amount,
+        )
 
         # Verify Merkle proof against root
         if not verify_paytree_proof(
