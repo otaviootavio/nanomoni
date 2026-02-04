@@ -3,17 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from nanomoni.application.issuer.dtos import (
-    OpenChannelRequestDTO,
     RegistrationRequestDTO,
-)
-from nanomoni.application.shared.payment_channel_payloads import (
-    OpenChannelRequestPayload,
-)
-from nanomoni.application.shared.payword_payloads import (
-    PaywordOpenChannelRequestPayload,
-)
-from nanomoni.application.shared.paytree_payloads import (
-    PaytreeOpenChannelRequestPayload,
 )
 from nanomoni.client import common, paytree, payword, signature
 from nanomoni.crypto.certificates import load_private_key_from_pem
@@ -82,25 +72,12 @@ async def run_client_flow() -> None:
         # 4) Open channel (client-signed envelope)
         # Initialize mode-specific commitments and compute final owed amount
         final_cumulative_owed_amount: int
-        open_payload_base: (
-            OpenChannelRequestPayload
-            | PaywordOpenChannelRequestPayload
-            | PaytreeOpenChannelRequestPayload
-        )
         payword_obj: Payword | None = None
         paytree_obj: Paytree | None = None
 
         if client_mode == "payword":
             payword_obj, payword_root_b64, payword_unit_value, payword_max_k = (
                 payword.init_commitment(settings, payment_count)
-            )
-            open_payload_base = payword.build_open_payload(
-                settings.client_public_key_der_b64,
-                vendor_pk.public_key_der_b64,
-                channel_amount,
-                payword_root_b64,
-                payword_unit_value,
-                payword_max_k,
             )
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, payword_unit_value
@@ -109,23 +86,10 @@ async def run_client_flow() -> None:
             paytree_obj, paytree_root_b64, paytree_unit_value, paytree_max_i = (
                 paytree.init_commitment(settings, payment_count)
             )
-            open_payload_base = paytree.build_open_payload(
-                settings.client_public_key_der_b64,
-                vendor_pk.public_key_der_b64,
-                channel_amount,
-                paytree_root_b64,
-                paytree_unit_value,
-                paytree_max_i,
-            )
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, paytree_unit_value
             )
         else:
-            open_payload_base = signature.build_open_payload(
-                settings.client_public_key_der_b64,
-                vendor_pk.public_key_der_b64,
-                channel_amount,
-            )
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments
             )

@@ -76,12 +76,14 @@ class PaywordChannelService:
         client_public_key = load_public_key_from_der_b64(
             DERB64(dto.client_public_key_der_b64)
         )
-        
+
         # Reconstruct canonical JSON from DTO fields (excluding signature)
         payload_bytes = dto_to_canonical_json_bytes(dto)
-        
+
         try:
-            verify_signature_bytes(client_public_key, payload_bytes, dto.open_signature_b64)
+            verify_signature_bytes(
+                client_public_key, payload_bytes, dto.open_signature_b64
+            )
         except InvalidSignature:
             raise ValueError("Invalid client signature for open channel request")
 

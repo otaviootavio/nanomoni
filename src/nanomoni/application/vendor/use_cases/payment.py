@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -197,10 +196,7 @@ class PaymentService:
         # If the client retries the *exact same* payment (e.g., due to a transient
         # disconnect after the vendor stored the tx but before the client read the
         # response), accept the duplicate and return the stored tx.
-        if (
-            latest_state
-            and dto.cumulative_owed_amount == prev_cumulative_owed_amount
-        ):
+        if latest_state and dto.cumulative_owed_amount == prev_cumulative_owed_amount:
             if dto.signature_b64 != latest_state.client_signature_b64:
                 raise ValueError(
                     "Duplicate owed amount with mismatched signature (possible replay attack)"

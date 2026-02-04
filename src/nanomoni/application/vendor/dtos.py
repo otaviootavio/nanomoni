@@ -8,7 +8,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
-from ...crypto.certificates import Envelope
 from nanomoni.domain.shared.serializers import (
     CommonSerializersMixin,
     DatetimeSerializerMixin,
@@ -95,8 +94,12 @@ class ReceivePaymentDTO(BaseModel):
     """DTO for receiving an off-chain payment."""
 
     channel_id: str = Field(..., description="Payment channel identifier")
-    cumulative_owed_amount: int = Field(..., description="Cumulative amount owed to vendor")
-    signature_b64: str = Field(..., description="Client signature over the payment payload")
+    cumulative_owed_amount: int = Field(
+        ..., description="Cumulative amount owed to vendor"
+    )
+    signature_b64: str = Field(
+        ..., description="Client signature over the payment payload"
+    )
 
 
 class OffChainTxResponseDTO(DatetimeSerializerMixin, BaseModel):

@@ -38,12 +38,12 @@ class OpenChannelRequestDTO(BaseModel):
     vendor_public_key_der_b64: str
     amount: int
     open_signature_b64: str
-    
+
     # PayWord-specific fields (optional)
     payword_root_b64: Optional[str] = None
     payword_unit_value: Optional[int] = None
     payword_max_k: Optional[int] = None
-    
+
     # PayTree-specific fields (optional)
     paytree_root_b64: Optional[str] = None
     paytree_unit_value: Optional[int] = None

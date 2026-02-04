@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from nanomoni.application.vendor.dtos import ReceivePaymentDTO
 from nanomoni.application.vendor.use_cases.payment import PaymentService
 from tests.e2e.helpers.client_actor import ClientActor
 from tests.fixtures import InMemoryPaymentChannelRepository
@@ -44,8 +43,7 @@ async def test_payment_service_receives_first_payment(
 
     # Create payment DTO using ClientActor's create_payment_envelope method
     first_payment_owed = 100
-    payment_envelope = client.create_payment_envelope(channel_id, first_payment_owed)
-    payment_dto = ReceivePaymentDTO(envelope=payment_envelope)
+    payment_dto = client.create_payment_envelope(channel_id, first_payment_owed)
 
     # When: Service receives payment
     result = await service.receive_payment(payment_dto)

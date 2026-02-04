@@ -8,7 +8,6 @@ from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.shared.payment_channel_payloads import (
     OpenChannelRequestPayload,
 )
-from nanomoni.crypto.certificates import generate_envelope
 
 from tests.e2e.helpers.client_actor import ClientActor
 from tests.e2e.helpers.issuer_client import IssuerTestClient
@@ -43,7 +42,7 @@ async def test_issuer_rejects_mismatched_client_public_key_claim(
     # but sign with clientA's key, the signature won't match (because the signed payload
     # would have clientB's key, but we're verifying with clientA's public key)
     from nanomoni.crypto.certificates import json_to_bytes, sign_bytes
-    
+
     # Create DTO with clientB's key but sign with clientA's key
     # This creates a signature mismatch because the signature is over fields including clientB's key
     # but we verify with clientA's public key
