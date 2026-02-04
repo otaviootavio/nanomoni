@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import base64
 
-from nanomoni.crypto.certificates import Envelope
-from nanomoni.crypto.certificates import PayloadB64, SignatureB64
 from nanomoni.application.vendor.dtos import ReceivePaymentDTO
 
 
@@ -34,40 +32,6 @@ def tamper_b64_preserve_validity(b64: str) -> str:
     except Exception:
         # If decoding fails, return original (shouldn't happen in tests)
         return b64
-
-
-def tamper_envelope_signature(envelope: Envelope) -> Envelope:
-    """
-    Create a tampered version of an envelope with corrupted signature.
-
-    Args:
-        envelope: Original envelope
-
-    Returns:
-        New envelope with tampered signature_b64
-    """
-    return Envelope(
-        payload_b64=envelope.payload_b64,
-        signature_b64=SignatureB64(
-            tamper_b64_preserve_validity(envelope.signature_b64)
-        ),
-    )
-
-
-def tamper_envelope_payload(envelope: Envelope) -> Envelope:
-    """
-    Create a tampered version of an envelope with corrupted payload.
-
-    Args:
-        envelope: Original envelope
-
-    Returns:
-        New envelope with tampered payload_b64
-    """
-    return Envelope(
-        payload_b64=PayloadB64(tamper_b64_preserve_validity(envelope.payload_b64)),
-        signature_b64=envelope.signature_b64,
-    )
 
 
 def tamper_payment_dto_signature(payment_dto: ReceivePaymentDTO) -> ReceivePaymentDTO:

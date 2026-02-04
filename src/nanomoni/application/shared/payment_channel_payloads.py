@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from cryptography.hazmat.primitives.asymmetric import ec
 from pydantic import BaseModel, ConfigDict
-
-from ...crypto.certificates import (
-    Envelope,
-    envelope_payload_bytes,
-    verify_envelope_and_get_payload_bytes,
-)
 
 
 class OpenChannelRequestPayload(BaseModel):
@@ -44,26 +37,3 @@ class SignatureChannelPaymentPayload(BaseModel):
 
     channel_id: str
     cumulative_owed_amount: int
-
-
-def deserialize_open_channel_request(envelope: Envelope) -> OpenChannelRequestPayload:
-    """Decode and validate an open-channel request envelope payload."""
-    payload_bytes = envelope_payload_bytes(envelope)
-    payload_str = payload_bytes.decode("utf-8")
-    return OpenChannelRequestPayload.model_validate_json(payload_str)
-
-
-def deserialize_signature_payment(envelope: Envelope) -> SignatureChannelPaymentPayload:
-    """Decode and validate a signature-mode payment envelope payload."""
-    payload_bytes = envelope_payload_bytes(envelope)
-    payload_str = payload_bytes.decode("utf-8")
-    return SignatureChannelPaymentPayload.model_validate_json(payload_str)
-
-
-def verify_and_deserialize_signature_payment(
-    public_key: ec.EllipticCurvePublicKey, envelope: Envelope
-) -> SignatureChannelPaymentPayload:
-    """Verify a payment envelope and deserialize its signature-mode payload in one step."""
-    payload_bytes = verify_envelope_and_get_payload_bytes(public_key, envelope)
-    payload_str = payload_bytes.decode("utf-8")
-    return SignatureChannelPaymentPayload.model_validate_json(payload_str)
