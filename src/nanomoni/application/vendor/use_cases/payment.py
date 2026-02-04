@@ -32,6 +32,11 @@ from ..dtos import (
     OffChainTxResponseDTO,
     ReceivePaymentDTO,
 )
+from .payment_validators import (
+    validate_payment_amount,
+    check_duplicate_payment,
+    validate_vendor_ownership,
+)
 
 
 class PaymentService:
@@ -175,9 +180,11 @@ class PaymentService:
             latest_state.cumulative_owed_amount if latest_state else 0
         )
 
-        # 1.2) Ensure the channel remains bound to this vendor
-        if payment_channel.vendor_public_key_der_b64 != self.vendor_public_key_der_b64:
-            raise ValueError("Payment channel is not for this vendor")
+        # 1.2) Ensure the channel remains bound to this vendor (pure function)
+        validate_vendor_ownership(
+            channel_vendor_key=payment_channel.vendor_public_key_der_b64,
+            vendor_key=self.vendor_public_key_der_b64,
+        )
 
         # 2) Reconstruct canonical JSON from DTO fields (excluding signature)
         payload_bytes = dto_to_canonical_json_bytes(dto)
@@ -191,34 +198,34 @@ class PaymentService:
         except Exception as e:
             raise ValueError("Invalid client signature for payment") from e
 
-        # 4) Idempotency + double spending protection.
+        # 4) Idempotency + double spending protection (pure function)
         #
         # If the client retries the *exact same* payment (e.g., due to a transient
         # disconnect after the vendor stored the tx but before the client read the
         # response), accept the duplicate and return the stored tx.
-        if latest_state and dto.cumulative_owed_amount == prev_cumulative_owed_amount:
-            if dto.signature_b64 != latest_state.client_signature_b64:
-                raise ValueError(
-                    "Duplicate owed amount with mismatched signature (possible replay attack)"
-                )
+        prev_signature = latest_state.client_signature_b64 if latest_state else None
+        is_duplicate = check_duplicate_payment(
+            new_amount=dto.cumulative_owed_amount,
+            new_signature=dto.signature_b64,
+            prev_amount=prev_cumulative_owed_amount,
+            prev_signature=prev_signature,
+        )
+        if is_duplicate:
+            # If duplicate check returns True, latest_state must not be None
+            assert latest_state is not None
             return OffChainTxResponseDTO(
                 channel_id=latest_state.channel_id,
                 cumulative_owed_amount=latest_state.cumulative_owed_amount,
                 created_at=latest_state.created_at,
             )
 
-        # Otherwise, enforce strictly increasing owed amount.
-        if dto.cumulative_owed_amount < prev_cumulative_owed_amount:
-            raise ValueError(
-                f"Owed amount must be increasing. Got {dto.cumulative_owed_amount}, expected > {prev_cumulative_owed_amount}"
-            )
-
-        # 5) Check if the payment channel amount is bigger than the cumulative_owed_amount
+        # 5) Validate payment amount (pure function)
         # (Optimistic check for fast failure; authoritative check happens atomically in save_if_valid)
-        if dto.cumulative_owed_amount > payment_channel.amount:
-            raise ValueError(
-                f"Owed amount {dto.cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
-            )
+        validate_payment_amount(
+            new_amount=dto.cumulative_owed_amount,
+            prev_amount=prev_cumulative_owed_amount,
+            channel_amount=payment_channel.amount,
+        )
 
         # 6) Create the latest signature state object (no payload persistence)
         signature_state = SignatureState(

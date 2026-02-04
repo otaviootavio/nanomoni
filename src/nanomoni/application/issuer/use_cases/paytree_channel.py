@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import os
 
@@ -75,18 +76,17 @@ class PaytreeChannelService:
             raise ValueError("PayTree fields are required for PayTree channel opening")
 
         # Verify client signature over the flat DTO fields
-        client_public_key = load_public_key_from_der_b64(
-            DERB64(dto.client_public_key_der_b64)
-        )
-
         # Reconstruct canonical JSON from DTO fields (excluding signature)
         payload_bytes = dto_to_canonical_json_bytes(dto)
 
         try:
+            client_public_key = load_public_key_from_der_b64(
+                DERB64(dto.client_public_key_der_b64)
+            )
             verify_signature_bytes(
                 client_public_key, payload_bytes, dto.open_signature_b64
             )
-        except InvalidSignature:
+        except (InvalidSignature, binascii.Error):
             raise ValueError("Invalid client signature for open channel request")
 
         client_acc = await self.account_repo.get_by_public_key(

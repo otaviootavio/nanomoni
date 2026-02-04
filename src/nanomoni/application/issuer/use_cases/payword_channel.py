@@ -34,6 +34,11 @@ from ....crypto.payword import (
 )
 from ....domain.issuer.entities import Account, PaywordPaymentChannel
 from ....domain.issuer.repositories import AccountRepository, PaymentChannelRepository
+from .payword_channel_validators import (
+    validate_payword_channel_fields,
+    validate_payword_field_values,
+    validate_payword_max_owed,
+)
 
 
 class PaywordChannelService:
@@ -64,13 +69,22 @@ class PaywordChannelService:
     async def open_channel(
         self, dto: OpenChannelRequestDTO
     ) -> PaywordOpenChannelResponseDTO:
-        # Verify PayWord fields are present
-        if (
-            dto.payword_root_b64 is None
-            or dto.payword_unit_value is None
-            or dto.payword_max_k is None
-        ):
-            raise ValueError("PayWord fields are required for PayWord channel opening")
+        # Validate PayWord fields presence (pure function)
+        validate_payword_channel_fields(
+            payword_root_b64=dto.payword_root_b64,
+            payword_unit_value=dto.payword_unit_value,
+            payword_max_k=dto.payword_max_k,
+        )
+
+        # Validate PayWord field values (pure function)
+        # After validation, we know these are not None
+        assert dto.payword_unit_value is not None
+        assert dto.payword_max_k is not None
+        assert dto.payword_root_b64 is not None
+        validate_payword_field_values(
+            payword_unit_value=dto.payword_unit_value,
+            payword_max_k=dto.payword_max_k,
+        )
 
         # Verify client signature over the flat DTO fields
         client_public_key = load_public_key_from_der_b64(
@@ -109,15 +123,13 @@ class PaywordChannelService:
         except Exception as e:
             raise ValueError(f"Invalid payword_root_b64: {e}") from e
 
+        # Compute max_owed only after validations to prevent incorrect calculations
         max_owed = compute_cumulative_owed_amount(
             k=dto.payword_max_k,
             unit_value=dto.payword_unit_value,
         )
-        if max_owed > dto.amount:
-            raise ValueError(
-                "PayWord max owed exceeds channel amount "
-                f"(max_owed={max_owed}, amount={dto.amount})"
-            )
+        # Validate max_owed doesn't exceed channel amount (pure function)
+        validate_payword_max_owed(max_owed=max_owed, channel_amount=dto.amount)
 
         salt_bytes = os.urandom(32)
         salt_b64 = base64.b64encode(salt_bytes).decode("utf-8")

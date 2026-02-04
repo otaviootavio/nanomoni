@@ -24,6 +24,11 @@ from ....domain.vendor.payment_channel_repository import PaymentChannelRepositor
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..payword_dtos import PaywordPaymentResponseDTO, ReceivePaywordPaymentDTO
+from .payword_validators import (
+    validate_payword_k,
+    validate_payword_amount,
+    check_duplicate_payword_payment,
+)
 
 
 class PaywordPaymentService:
@@ -169,41 +174,45 @@ class PaywordPaymentService:
         prev_k = latest_state.k if latest_state else 0
         prev_token_b64 = latest_state.token_b64 if latest_state else None
 
-        # Idempotency + replay protection:
+        # Idempotency + replay protection (pure function)
         # - If the client retries the *exact same* payment (same k + same token),
         #   accept it and return the stored state (handles transient disconnects).
         # - If k is the same but token differs, reject as a replay/double-spend attempt.
         # - Otherwise, enforce strictly increasing k.
-        if dto.k <= prev_k:
-            if latest_state is not None and dto.k == prev_k:
-                if dto.token_b64 != latest_state.token_b64:
-                    raise ValueError(
-                        "Duplicate PayWord k with mismatched token (possible replay attack)"
-                    )
-                cumulative_owed_amount = compute_cumulative_owed_amount(
-                    k=latest_state.k, unit_value=payment_channel.payword_unit_value
-                )
-                return PaywordPaymentResponseDTO(
-                    channel_id=latest_state.channel_id,
-                    k=latest_state.k,
-                    cumulative_owed_amount=cumulative_owed_amount,
-                    created_at=latest_state.created_at,
-                )
-
-            raise ValueError(
-                f"PayWord k must be increasing. Got {dto.k}, expected > {prev_k}"
+        is_duplicate = check_duplicate_payword_payment(
+            k=dto.k,
+            token=dto.token_b64,
+            prev_k=prev_k,
+            prev_token=prev_token_b64,
+        )
+        if is_duplicate:
+            # If duplicate check returns True, latest_state must not be None
+            assert latest_state is not None
+            cumulative_owed_amount = compute_cumulative_owed_amount(
+                k=latest_state.k, unit_value=payment_channel.payword_unit_value
+            )
+            return PaywordPaymentResponseDTO(
+                channel_id=latest_state.channel_id,
+                k=latest_state.k,
+                cumulative_owed_amount=cumulative_owed_amount,
+                created_at=latest_state.created_at,
             )
 
-        if dto.k > payment_channel.payword_max_k:
-            raise ValueError("PayWord k exceeds channel max_k")
+        # Validate k (pure function)
+        validate_payword_k(
+            k=dto.k,
+            prev_k=prev_k,
+            max_k=payment_channel.payword_max_k,
+        )
 
         cumulative_owed_amount = compute_cumulative_owed_amount(
             k=dto.k, unit_value=payment_channel.payword_unit_value
         )
-        if cumulative_owed_amount > payment_channel.amount:
-            raise ValueError(
-                f"Owed amount {cumulative_owed_amount} exceeds payment channel amount {payment_channel.amount}"
-            )
+        # Validate amount (pure function)
+        validate_payword_amount(
+            cumulative_owed=cumulative_owed_amount,
+            channel_amount=payment_channel.amount,
+        )
 
         try:
             token = b64_to_bytes(dto.token_b64)
