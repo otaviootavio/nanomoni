@@ -164,7 +164,7 @@ class PaymentChannelService:
             verify_signature_bytes(
                 client_public_key, close_payload_bytes, dto.client_close_signature_b64
             )
-        except InvalidSignature as err:
+        except (InvalidSignature, binascii.Error) as err:
             raise ValueError("Invalid client signature for closing") from err
 
         # Verify vendor signature over same payload bytes
@@ -175,8 +175,8 @@ class PaymentChannelService:
             verify_signature_bytes(
                 vendor_public_key, close_payload_bytes, dto.vendor_close_signature_b64
             )
-        except InvalidSignature:
-            raise ValueError("Invalid vendor signature for closing")
+        except (InvalidSignature, binascii.Error) as err:
+            raise ValueError("Invalid vendor signature for closing") from err
 
         # Ensure vendor account exists
         vendor_key = channel.vendor_public_key_der_b64
