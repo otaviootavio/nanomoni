@@ -14,7 +14,7 @@ from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 
 class Settings(BaseModel):
     database_url: str
-    database_echo: bool
+    """database_echo: bool""" 
 
     api_host: str
     api_port: int
@@ -84,7 +84,7 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
 
 @lru_cache
 def get_settings() -> Settings:
-    database_echo_str = os.environ.get("VENDOR_DATABASE_ECHO")
+    """database_echo_str = os.environ.get("VENDOR_DATABASE_ECHO")"""
     api_debug_str = os.environ.get("VENDOR_API_DEBUG")
     api_cors_origins_str = os.environ.get("VENDOR_API_CORS_ORIGINS")
     api_port_str = os.environ.get("VENDOR_API_PORT")
@@ -99,7 +99,7 @@ def get_settings() -> Settings:
 
     api_host = os.environ.get("VENDOR_API_HOST") or "0.0.0.0"
     api_port = int(api_port_str) if api_port_str is not None else 8001
-    database_echo = (database_echo_str or "false").lower() == "true"
+    """database_echo = (database_echo_str or "false").lower() == "true"""
     api_debug = (api_debug_str or "false").lower() == "true"
     api_workers = int(api_workers_str) if api_workers_str is not None else 1
     api_cors_origins = api_cors_origins_str.split(",") if api_cors_origins_str else []
@@ -128,7 +128,7 @@ def get_settings() -> Settings:
 
     return Settings(
         database_url=database_url,
-        database_echo=database_echo,
+        #database_echo=database_echo
         api_host=api_host,
         api_port=api_port,
         api_debug=api_debug,

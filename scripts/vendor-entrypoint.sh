@@ -10,7 +10,7 @@ required_env() {
 }
 
 required_env "VENDOR_DATABASE_URL"
-required_env "VENDOR_DATABASE_ECHO"
+#required_env "VENDOR_DATABASE_ECHO"
 required_env "VENDOR_API_HOST"
 required_env "VENDOR_API_PORT"
 required_env "VENDOR_API_DEBUG"

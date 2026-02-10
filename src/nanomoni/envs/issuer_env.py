@@ -12,7 +12,7 @@ class Settings(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     database_url: str
-    database_echo: bool
+    #database_echo: bool
 
     api_host: str
     api_port: int
@@ -41,7 +41,7 @@ class Settings(BaseModel):
 
 @lru_cache
 def get_settings() -> Settings:
-    database_echo_str = os.environ.get("ISSUER_DATABASE_ECHO")
+    #database_echo_str = os.environ.get("ISSUER_DATABASE_ECHO")
     api_debug_str = os.environ.get("ISSUER_API_DEBUG")
     api_cors_origins_str = os.environ.get("ISSUER_API_CORS_ORIGINS")
     api_port_str = os.environ.get("ISSUER_API_PORT")
@@ -51,7 +51,7 @@ def get_settings() -> Settings:
         raise ValueError("ISSUER_DATABASE_URL is required")
     api_host = os.environ.get("ISSUER_API_HOST") or "0.0.0.0"
     api_port = int(api_port_str) if api_port_str is not None else 8000
-    database_echo = (database_echo_str or "false").lower() == "true"
+    #database_echo = (database_echo_str or "false").lower() == "true"
     api_debug = (api_debug_str or "false").lower() == "true"
     api_cors_origins = api_cors_origins_str.split(",") if api_cors_origins_str else []
     app_name = os.environ.get("ISSUER_APP_NAME") or "NanoMoni"
@@ -63,7 +63,7 @@ def get_settings() -> Settings:
 
     return Settings(
         database_url=database_url,
-        database_echo=database_echo,
+        #database_echo=database_echo,
         api_host=api_host,
         api_port=api_port,
         api_debug=api_debug,

@@ -6,7 +6,7 @@ export ISSUER_DATABASE_URL="redis://redis-issuer:6379/0"
 
 # For local development, without docker compose
 # export ISSUER_DATABASE_URL="redis://localhost:6380/0"
-export ISSUER_DATABASE_ECHO="false"
+#export ISSUER_DATABASE_ECHO="false"
 
 # API settings
 export ISSUER_API_HOST="0.0.0.0"

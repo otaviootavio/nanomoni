@@ -7,7 +7,7 @@ export VENDOR_DATABASE_URL="redis://redis-vendor:6379/0"
 # For local development, without docker compose
 # export VENDOR_DATABASE_URL="redis://localhost:6379/0"
 
-export VENDOR_DATABASE_ECHO="false"
+#export VENDOR_DATABASE_ECHO="false"
 
 # API settings
 export VENDOR_API_HOST="0.0.0.0"

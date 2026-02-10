@@ -10,7 +10,7 @@ required_env() {
 }
 
 required_env "ISSUER_DATABASE_URL"
-required_env "ISSUER_DATABASE_ECHO"
+#required_env "ISSUER_DATABASE_ECHO"
 required_env "ISSUER_API_HOST"
 required_env "ISSUER_API_PORT"
 required_env "ISSUER_API_DEBUG"
