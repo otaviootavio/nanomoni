@@ -205,6 +205,9 @@ VENDOR_SCRIPTS = {
         local current_raw = redis.call('GET', latest_key)
         if not current_raw then
             redis.call('SET', latest_key, new_val)
+            for idx = 3, #KEYS do
+                redis.call('SET', KEYS[idx], ARGV[idx])
+            end
             return {1, new_val}
         end
 
@@ -212,6 +215,9 @@ VENDOR_SCRIPTS = {
         local current_i = tonumber(current.i)
         if new_i > current_i then
             redis.call('SET', latest_key, new_val)
+            for idx = 3, #KEYS do
+                redis.call('SET', KEYS[idx], ARGV[idx])
+            end
             return {1, new_val}
         else
             return {0, current_raw}
@@ -252,6 +258,44 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
     return {1, state_json}
 """
 
+_SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT = """
+    local channel_key = KEYS[1]
+    local latest_key = KEYS[2]
+    local channel_json = ARGV[1]
+    local state_json = ARGV[2]
+    local created_ts = tonumber(ARGV[3])
+    local channel_id = ARGV[4]
+
+    -- Check if channel already exists
+    if redis.call('EXISTS', channel_key) == 1 then
+        return {0, ''}
+    end
+
+    -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
+    if redis.call('EXISTS', latest_key) == 1 then
+        return {0, ''}
+    end
+
+    -- 1. Save Channel Metadata
+    redis.call('SET', channel_key, channel_json)
+
+    -- 2. Save Initial State
+    redis.call('SET', latest_key, state_json)
+
+    -- 3. Save Initial Node Entries
+    -- KEYS: [3..N] are node keys and ARGV: [5..N+2] are node values
+    for idx = 3, #KEYS do
+        local arg_idx = idx + 2
+        redis.call('SET', KEYS[idx], ARGV[arg_idx])
+    end
+
+    -- 4. Update Indices
+    redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
+    redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+
+    return {1, state_json}
+"""
+
 # Register the consolidated script under the original three keys for backward compatibility
 VENDOR_SCRIPTS.update(
     {
@@ -259,7 +303,7 @@ VENDOR_SCRIPTS.update(
         "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
-        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT,
     }
 )
 

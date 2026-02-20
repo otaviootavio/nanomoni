@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
+from ...crypto.paytree_first_opt import compute_tree_depth
 from ...domain.vendor.entities import (
     PaymentChannelBase,
     PaytreeFirstOptPaymentChannel,
@@ -27,6 +28,12 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
     def __init__(self, store: KeyValueStore):
         self.store = store
+
+    @staticmethod
+    def _paytree_second_opt_node_key(
+        *, channel_id: str, level: int, position: int
+    ) -> str:
+        return f"paytree2opt_node:{channel_id}:{level}:{position}"
 
     async def save_channel(
         self, payment_channel: PaymentChannelBase
@@ -554,7 +561,10 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         return channel, state
 
     async def save_paytree_second_opt_payment(
-        self, channel: PaytreeSecondOptPaymentChannel, new_state: PaytreeSecondOptState
+        self,
+        channel: PaytreeSecondOptPaymentChannel,
+        new_state: PaytreeSecondOptState,
+        node_entries: dict[str, str],
     ) -> tuple[int, Optional[PaytreeSecondOptState]]:
         if channel.channel_id != new_state.channel_id:
             raise ValueError(
@@ -564,11 +574,17 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         latest_key = f"paytree_second_opt_state:latest:{new_state.channel_id}"
         channel_key = f"payment_channel:{new_state.channel_id}"
         payload_json = new_state.model_dump_json()
+        node_items = list(node_entries.items())
+        node_full_keys = [
+            f"paytree2opt_node:{new_state.channel_id}:{short_key}"
+            for short_key, _ in node_items
+        ]
+        node_values = [value for _, value in node_items]
 
         result = await self.store.run_script(
             "save_paytree_second_opt_payment",
-            keys=[latest_key, channel_key],
-            args=[payload_json, str(new_state.i)],
+            keys=[latest_key, channel_key] + node_full_keys,
+            args=[payload_json, str(new_state.i)] + node_values,
         )
 
         code = (
@@ -599,10 +615,54 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         else:
             return 2, None
 
+    async def get_paytree_second_opt_sibling_cache_for_index(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> dict[str, str]:
+        depth = compute_tree_depth(max_i)
+        node_keys = [
+            self._paytree_second_opt_node_key(
+                channel_id=channel_id,
+                level=level,
+                position=(i >> level) ^ 1,
+            )
+            for level in range(depth)
+        ]
+        values = await self.store.mget(node_keys)
+        cache: dict[str, str] = {}
+        for level, value in enumerate(values):
+            if value is None:
+                continue
+            position = (i >> level) ^ 1
+            cache[f"{level}:{position}"] = value
+        return cache
+
+    async def get_paytree_second_opt_siblings_for_settlement(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> list[str]:
+        depth = compute_tree_depth(max_i)
+        node_keys = [
+            self._paytree_second_opt_node_key(
+                channel_id=channel_id,
+                level=level,
+                position=(i >> level) ^ 1,
+            )
+            for level in range(depth)
+        ]
+        values = await self.store.mget(node_keys)
+        siblings: list[str] = []
+        for level, value in enumerate(values):
+            if value is None:
+                raise ValueError(
+                    "Missing required sibling in node cache for settlement"
+                )
+            siblings.append(value)
+        return siblings
+
     async def save_channel_and_initial_paytree_second_opt_state(
         self,
         channel: PaytreeSecondOptPaymentChannel,
         initial_state: PaytreeSecondOptState,
+        node_entries: dict[str, str],
     ) -> tuple[int, Optional[PaytreeSecondOptState]]:
         channel_key = f"payment_channel:{channel.channel_id}"
         latest_key = f"paytree_second_opt_state:latest:{channel.channel_id}"
@@ -610,11 +670,18 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         channel_json = channel.model_dump_json()
         state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
+        node_items = list(node_entries.items())
+        node_full_keys = [
+            f"paytree2opt_node:{channel.channel_id}:{short_key}"
+            for short_key, _ in node_items
+        ]
+        node_values = [value for _, value in node_items]
 
         result = await self.store.run_script(
             "save_channel_and_initial_paytree_second_opt_state",
-            keys=[channel_key, latest_key],
-            args=[channel_json, state_json, str(created_ts), channel.channel_id],
+            keys=[channel_key, latest_key] + node_full_keys,
+            args=[channel_json, state_json, str(created_ts), channel.channel_id]
+            + node_values,
         )
         code = int(result[0])
         if code == 1:

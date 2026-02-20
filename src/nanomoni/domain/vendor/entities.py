@@ -176,17 +176,13 @@ class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
 
 
 class PaytreeSecondOptState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree Second Opt payment state (index + pruned proof + cache)."""
+    """Latest PayTree Second Opt payment state (index + pruned proof)."""
 
     channel_id: str = Field(..., description="Payment channel identifier")
     i: int = Field(..., ge=0, description="Monotonic PayTree index")
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
     siblings_b64: list[str] = Field(
         ..., description="Pruned list of base64-encoded sibling hashes"
-    )
-    node_cache_b64: dict[str, str] = Field(
-        default_factory=dict,
-        description="Node cache keyed by level:position with base64 hash values",
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

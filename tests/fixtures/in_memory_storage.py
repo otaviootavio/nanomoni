@@ -151,9 +151,14 @@ class InMemoryKeyValueStore(KeyValueStore):
             return self._execute_save_paytree_payment(keys, args)
         elif script_name_lower in {
             "save_paytree_first_opt_payment",
-            "save_paytree_second_opt_payment",
         }:
             return self._execute_save_paytree_payment(keys, args)
+        elif script_name_lower == "save_paytree_second_opt_payment":
+            return self._execute_save_paytree_second_opt_payment(keys, args)
+        elif script_name_lower == "save_channel_and_initial_paytree_second_opt_state":
+            return self._execute_save_channel_and_initial_paytree_second_opt_state(
+                keys, args
+            )
         elif (
             "save_channel_and_initial" in script_lower or "channel_json" in script_lower
         ):
@@ -290,6 +295,46 @@ class InMemoryKeyValueStore(KeyValueStore):
         else:
             return [0, current_raw]
 
+    def _execute_save_paytree_second_opt_payment(
+        self, keys: List[str], args: List[str]
+    ) -> list[Any]:
+        """Execute save_paytree_second_opt_payment script logic."""
+        latest_key = keys[0]
+        channel_key = keys[1]
+        new_val = args[0]
+        new_i = float(args[1])
+
+        channel_raw: Optional[str] = self._data.get(channel_key)
+        if not channel_raw:
+            return [2, ""]
+
+        channel = json.loads(channel_raw)
+        max_i = float(channel.get("paytree_second_opt_max_i", 0))
+        if not max_i:
+            return [2, ""]
+
+        if new_i > max_i:
+            error_current = self._data.get(latest_key, "") or ""
+            return [3, error_current]
+
+        current_raw: Optional[str] = self._data.get(latest_key)
+        if not current_raw:
+            self._data[latest_key] = new_val
+            for idx in range(2, len(keys)):
+                self._data[keys[idx]] = args[idx]
+            return [1, new_val]
+
+        current = json.loads(current_raw)
+        current_i = float(current.get("i", 0))
+
+        if new_i > current_i:
+            self._data[latest_key] = new_val
+            for idx in range(2, len(keys)):
+                self._data[keys[idx]] = args[idx]
+            return [1, new_val]
+        else:
+            return [0, current_raw]
+
     def _execute_save_channel_and_initial_state(
         self, keys: List[str], args: List[str]
     ) -> list[Any]:
@@ -323,6 +368,43 @@ class InMemoryKeyValueStore(KeyValueStore):
             (channel_id, created_ts)
         )
         # Keep sorted
+        self._sorted_sets["payment_channels:all"].sort(key=lambda x: x[1], reverse=True)
+        self._sorted_sets["payment_channels:open"].sort(
+            key=lambda x: x[1], reverse=True
+        )
+
+        return [1, state_json]
+
+    def _execute_save_channel_and_initial_paytree_second_opt_state(
+        self, keys: List[str], args: List[str]
+    ) -> list[Any]:
+        """Execute save_channel_and_initial_paytree_second_opt_state script logic."""
+        channel_key = keys[0]
+        latest_key = keys[1]
+        channel_json = args[0]
+        state_json = args[1]
+        created_ts = float(args[2])
+        channel_id = args[3]
+
+        if channel_key in self._data:
+            return [0, ""]
+        if latest_key in self._data:
+            return [0, ""]
+
+        self._data[channel_key] = channel_json
+        self._data[latest_key] = state_json
+
+        # args[4:] align with keys[2:]
+        for idx in range(2, len(keys)):
+            arg_idx = idx + 2
+            self._data[keys[idx]] = args[arg_idx]
+
+        self._sorted_sets.setdefault("payment_channels:all", []).append(
+            (channel_id, created_ts)
+        )
+        self._sorted_sets.setdefault("payment_channels:open", []).append(
+            (channel_id, created_ts)
+        )
         self._sorted_sets["payment_channels:all"].sort(key=lambda x: x[1], reverse=True)
         self._sorted_sets["payment_channels:open"].sort(
             key=lambda x: x[1], reverse=True
