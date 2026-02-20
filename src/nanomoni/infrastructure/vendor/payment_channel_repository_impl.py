@@ -7,7 +7,11 @@ from typing import Optional
 
 from ...domain.vendor.entities import (
     PaymentChannelBase,
+    PaytreeFirstOptPaymentChannel,
+    PaytreeFirstOptState,
     PaytreePaymentChannel,
+    PaytreeSecondOptPaymentChannel,
+    PaytreeSecondOptState,
     PaytreeState,
     PaywordPaymentChannel,
     PaywordState,
@@ -71,6 +75,10 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         data = json.loads(raw)
         if data.get("payword_root_b64"):
             return PaywordPaymentChannel.model_validate(data)
+        if data.get("paytree_first_opt_root_b64"):
+            return PaytreeFirstOptPaymentChannel.model_validate(data)
+        if data.get("paytree_second_opt_root_b64"):
+            return PaytreeSecondOptPaymentChannel.model_validate(data)
         if data.get("paytree_root_b64"):
             return PaytreePaymentChannel.model_validate(data)
         return SignaturePaymentChannel.model_validate(data)
@@ -422,3 +430,193 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             return 1, initial_state
         else:
             return 0, None
+
+    async def get_paytree_first_opt_state(
+        self, channel_id: str
+    ) -> Optional[PaytreeFirstOptState]:
+        key = f"paytree_first_opt_state:latest:{channel_id}"
+        raw = await self.store.get(key)
+        if not raw:
+            return None
+        return PaytreeFirstOptState.model_validate_json(raw)
+
+    async def get_paytree_first_opt_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaytreeFirstOptPaymentChannel], Optional[PaytreeFirstOptState]]:
+        channel_key = f"payment_channel:{channel_id}"
+        state_key = f"paytree_first_opt_state:latest:{channel_id}"
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
+        if not channel_json:
+            return None, None
+        channel = self._deserialize_channel(channel_json)
+        if not isinstance(channel, PaytreeFirstOptPaymentChannel):
+            raise TypeError("Payment channel is not PayTree First Opt-enabled")
+        state = (
+            PaytreeFirstOptState.model_validate_json(state_json) if state_json else None
+        )
+        return channel, state
+
+    async def save_paytree_first_opt_payment(
+        self, channel: PaytreeFirstOptPaymentChannel, new_state: PaytreeFirstOptState
+    ) -> tuple[int, Optional[PaytreeFirstOptState]]:
+        if channel.channel_id != new_state.channel_id:
+            raise ValueError(
+                "Channel channel_id mismatch for PayTree First Opt payment"
+            )
+
+        latest_key = f"paytree_first_opt_state:latest:{new_state.channel_id}"
+        channel_key = f"payment_channel:{new_state.channel_id}"
+        payload_json = new_state.model_dump_json()
+
+        result = await self.store.run_script(
+            "save_paytree_first_opt_payment",
+            keys=[latest_key, channel_key],
+            args=[payload_json, str(new_state.i)],
+        )
+
+        code = (
+            int(result[0])
+            if result and result[0] is not None and result[0] != ""
+            else 0
+        )
+        payload = (
+            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        )
+
+        if code == 1:
+            if payload is None:
+                raise RuntimeError(
+                    "Unexpected: save_paytree_first_opt_payment returned success but no payload"
+                )
+            return 1, PaytreeFirstOptState.model_validate_json(payload)
+        elif code == 0:
+            return (
+                0,
+                PaytreeFirstOptState.model_validate_json(payload) if payload else None,
+            )
+        elif code == 3:
+            return (
+                3,
+                PaytreeFirstOptState.model_validate_json(payload) if payload else None,
+            )
+        else:
+            return 2, None
+
+    async def save_channel_and_initial_paytree_first_opt_state(
+        self,
+        channel: PaytreeFirstOptPaymentChannel,
+        initial_state: PaytreeFirstOptState,
+    ) -> tuple[int, Optional[PaytreeFirstOptState]]:
+        channel_key = f"payment_channel:{channel.channel_id}"
+        latest_key = f"paytree_first_opt_state:latest:{channel.channel_id}"
+
+        channel_json = channel.model_dump_json()
+        state_json = initial_state.model_dump_json()
+        created_ts = channel.created_at.timestamp()
+
+        result = await self.store.run_script(
+            "save_channel_and_initial_paytree_first_opt_state",
+            keys=[channel_key, latest_key],
+            args=[channel_json, state_json, str(created_ts), channel.channel_id],
+        )
+        code = int(result[0])
+        if code == 1:
+            return 1, initial_state
+        return 0, None
+
+    async def get_paytree_second_opt_state(
+        self, channel_id: str
+    ) -> Optional[PaytreeSecondOptState]:
+        key = f"paytree_second_opt_state:latest:{channel_id}"
+        raw = await self.store.get(key)
+        if not raw:
+            return None
+        return PaytreeSecondOptState.model_validate_json(raw)
+
+    async def get_paytree_second_opt_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[
+        Optional[PaytreeSecondOptPaymentChannel], Optional[PaytreeSecondOptState]
+    ]:
+        channel_key = f"payment_channel:{channel_id}"
+        state_key = f"paytree_second_opt_state:latest:{channel_id}"
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
+        if not channel_json:
+            return None, None
+        channel = self._deserialize_channel(channel_json)
+        if not isinstance(channel, PaytreeSecondOptPaymentChannel):
+            raise TypeError("Payment channel is not PayTree Second Opt-enabled")
+        state = (
+            PaytreeSecondOptState.model_validate_json(state_json)
+            if state_json
+            else None
+        )
+        return channel, state
+
+    async def save_paytree_second_opt_payment(
+        self, channel: PaytreeSecondOptPaymentChannel, new_state: PaytreeSecondOptState
+    ) -> tuple[int, Optional[PaytreeSecondOptState]]:
+        if channel.channel_id != new_state.channel_id:
+            raise ValueError(
+                "Channel channel_id mismatch for PayTree Second Opt payment"
+            )
+
+        latest_key = f"paytree_second_opt_state:latest:{new_state.channel_id}"
+        channel_key = f"payment_channel:{new_state.channel_id}"
+        payload_json = new_state.model_dump_json()
+
+        result = await self.store.run_script(
+            "save_paytree_second_opt_payment",
+            keys=[latest_key, channel_key],
+            args=[payload_json, str(new_state.i)],
+        )
+
+        code = (
+            int(result[0])
+            if result and result[0] is not None and result[0] != ""
+            else 0
+        )
+        payload = (
+            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+        )
+
+        if code == 1:
+            if payload is None:
+                raise RuntimeError(
+                    "Unexpected: save_paytree_second_opt_payment returned success but no payload"
+                )
+            return 1, PaytreeSecondOptState.model_validate_json(payload)
+        elif code == 0:
+            return (
+                0,
+                PaytreeSecondOptState.model_validate_json(payload) if payload else None,
+            )
+        elif code == 3:
+            return (
+                3,
+                PaytreeSecondOptState.model_validate_json(payload) if payload else None,
+            )
+        else:
+            return 2, None
+
+    async def save_channel_and_initial_paytree_second_opt_state(
+        self,
+        channel: PaytreeSecondOptPaymentChannel,
+        initial_state: PaytreeSecondOptState,
+    ) -> tuple[int, Optional[PaytreeSecondOptState]]:
+        channel_key = f"payment_channel:{channel.channel_id}"
+        latest_key = f"paytree_second_opt_state:latest:{channel.channel_id}"
+
+        channel_json = channel.model_dump_json()
+        state_json = initial_state.model_dump_json()
+        created_ts = channel.created_at.timestamp()
+
+        result = await self.store.run_script(
+            "save_channel_and_initial_paytree_second_opt_state",
+            keys=[channel_key, latest_key],
+            args=[channel_json, state_json, str(created_ts), channel.channel_id],
+        )
+        code = int(result[0])
+        if code == 1:
+            return 1, initial_state
+        return 0, None

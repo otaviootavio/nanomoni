@@ -15,6 +15,12 @@ from ...application.issuer.use_cases.registration import RegistrationService
 from ...application.issuer.use_cases.payment_channel import PaymentChannelService
 from ...application.issuer.use_cases.payword_channel import PaywordChannelService
 from ...application.issuer.use_cases.paytree_channel import PaytreeChannelService
+from ...application.issuer.use_cases.paytree_first_opt_channel import (
+    PaytreeFirstOptChannelService,
+)
+from ...application.issuer.use_cases.paytree_second_opt_channel import (
+    PaytreeSecondOptChannelService,
+)
 
 
 @lru_cache
@@ -76,5 +82,23 @@ def get_paytree_channel_service() -> PaytreeChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaytreeChannelService(
+        account_repo, channel_repo, settings.issuer_private_key
+    )
+
+
+def get_paytree_first_opt_channel_service() -> PaytreeFirstOptChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    settings = get_settings_dependency()
+    return PaytreeFirstOptChannelService(
+        account_repo, channel_repo, settings.issuer_private_key
+    )
+
+
+def get_paytree_second_opt_channel_service() -> PaytreeSecondOptChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    settings = get_settings_dependency()
+    return PaytreeSecondOptChannelService(
         account_repo, channel_repo, settings.issuer_private_key
     )

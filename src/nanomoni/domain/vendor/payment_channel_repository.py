@@ -7,7 +7,11 @@ from typing import Optional
 
 from .entities import (
     PaymentChannelBase,
+    PaytreeFirstOptPaymentChannel,
+    PaytreeFirstOptState,
     PaytreePaymentChannel,
+    PaytreeSecondOptPaymentChannel,
+    PaytreeSecondOptState,
     PaytreeState,
     PaywordPaymentChannel,
     PaywordState,
@@ -134,6 +138,76 @@ class PaymentChannelRepository(ABC):
         Returns:
           (1, state) -> stored (success)
           (0, None) -> rejected (race condition)
+        """
+        pass
+
+    @abstractmethod
+    async def get_paytree_first_opt_state(
+        self, channel_id: str
+    ) -> Optional[PaytreeFirstOptState]:
+        """Get the latest PayTree First Opt state for this channel."""
+        pass
+
+    @abstractmethod
+    async def get_paytree_first_opt_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[Optional[PaytreeFirstOptPaymentChannel], Optional[PaytreeFirstOptState]]:
+        """Get PayTree First Opt channel metadata and latest state in one call."""
+        pass
+
+    @abstractmethod
+    async def save_paytree_first_opt_payment(
+        self, channel: PaytreeFirstOptPaymentChannel, new_state: PaytreeFirstOptState
+    ) -> tuple[int, Optional[PaytreeFirstOptState]]:
+        """
+        Atomically update the channel's latest PayTree First Opt state.
+        """
+        pass
+
+    @abstractmethod
+    async def save_channel_and_initial_paytree_first_opt_state(
+        self,
+        channel: PaytreeFirstOptPaymentChannel,
+        initial_state: PaytreeFirstOptState,
+    ) -> tuple[int, Optional[PaytreeFirstOptState]]:
+        """
+        Atomically save channel metadata AND the first PayTree First Opt state.
+        """
+        pass
+
+    @abstractmethod
+    async def get_paytree_second_opt_state(
+        self, channel_id: str
+    ) -> Optional[PaytreeSecondOptState]:
+        """Get the latest PayTree Second Opt state for this channel."""
+        pass
+
+    @abstractmethod
+    async def get_paytree_second_opt_channel_and_latest_state(
+        self, channel_id: str
+    ) -> tuple[
+        Optional[PaytreeSecondOptPaymentChannel], Optional[PaytreeSecondOptState]
+    ]:
+        """Get PayTree Second Opt channel metadata and latest state in one call."""
+        pass
+
+    @abstractmethod
+    async def save_paytree_second_opt_payment(
+        self, channel: PaytreeSecondOptPaymentChannel, new_state: PaytreeSecondOptState
+    ) -> tuple[int, Optional[PaytreeSecondOptState]]:
+        """
+        Atomically update the channel's latest PayTree Second Opt state.
+        """
+        pass
+
+    @abstractmethod
+    async def save_channel_and_initial_paytree_second_opt_state(
+        self,
+        channel: PaytreeSecondOptPaymentChannel,
+        initial_state: PaytreeSecondOptState,
+    ) -> tuple[int, Optional[PaytreeSecondOptState]]:
+        """
+        Atomically save channel metadata AND the first PayTree Second Opt state.
         """
         pass
 

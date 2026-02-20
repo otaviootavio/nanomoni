@@ -30,10 +30,26 @@ from nanomoni.application.issuer.paytree_dtos import (
     PaytreePaymentChannelResponseDTO,
     PaytreeSettlementRequestDTO,
 )
+from nanomoni.application.issuer.paytree_first_opt_dtos import (
+    PaytreeFirstOptOpenChannelResponseDTO,
+    PaytreeFirstOptPaymentChannelResponseDTO,
+    PaytreeFirstOptSettlementRequestDTO,
+)
+from nanomoni.application.issuer.paytree_second_opt_dtos import (
+    PaytreeSecondOptOpenChannelResponseDTO,
+    PaytreeSecondOptPaymentChannelResponseDTO,
+    PaytreeSecondOptSettlementRequestDTO,
+)
 from nanomoni.application.issuer.use_cases.registration import RegistrationService
 from nanomoni.application.issuer.use_cases.payment_channel import PaymentChannelService
 from nanomoni.application.issuer.use_cases.payword_channel import PaywordChannelService
 from nanomoni.application.issuer.use_cases.paytree_channel import PaytreeChannelService
+from nanomoni.application.issuer.use_cases.paytree_first_opt_channel import (
+    PaytreeFirstOptChannelService,
+)
+from nanomoni.application.issuer.use_cases.paytree_second_opt_channel import (
+    PaytreeSecondOptChannelService,
+)
 
 
 @dataclass(frozen=True)
@@ -66,11 +82,15 @@ class UseCaseIssuerClient:
         payment_channel_service: PaymentChannelService,
         payword_channel_service: PaywordChannelService,
         paytree_channel_service: PaytreeChannelService,
+        paytree_first_opt_channel_service: PaytreeFirstOptChannelService,
+        paytree_second_opt_channel_service: PaytreeSecondOptChannelService,
     ) -> None:
         self.registration_service = registration_service
         self.payment_channel_service = payment_channel_service
         self.payword_channel_service = payword_channel_service
         self.paytree_channel_service = paytree_channel_service
+        self.paytree_first_opt_channel_service = paytree_first_opt_channel_service
+        self.paytree_second_opt_channel_service = paytree_second_opt_channel_service
 
     async def register(self, dto: RegistrationRequestDTO) -> RegistrationResponseDTO:
         """Register a client account with the issuer (protocol method)."""
@@ -197,6 +217,76 @@ class UseCaseIssuerClient:
     ) -> CloseChannelResponseDTO:
         """Settle a PayTree payment channel (protocol method)."""
         return await self.paytree_channel_service.settle_channel(channel_id, dto)
+
+    async def open_paytree_first_opt_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeFirstOptOpenChannelResponseDTO:
+        """Open a PayTree First Opt payment channel (protocol method)."""
+        return await self.paytree_first_opt_channel_service.open_channel(dto)
+
+    async def get_paytree_first_opt_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaytreeFirstOptPaymentChannelResponseDTO:
+        """Get a PayTree First Opt payment channel (protocol method)."""
+        return await self.paytree_first_opt_channel_service.get_channel(dto)
+
+    async def settle_paytree_first_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: PaytreeFirstOptSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        """Settle a PayTree First Opt payment channel (protocol method)."""
+        return await self.paytree_first_opt_channel_service.settle_channel(
+            channel_id, dto
+        )
+
+    async def open_paytree_first_opt_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeFirstOptOpenChannelResponseDTO:
+        """Open a PayTree First Opt payment channel."""
+        return await self.paytree_first_opt_channel_service.open_channel(dto)
+
+    async def get_paytree_first_opt_channel(
+        self, channel_id: str
+    ) -> PaytreeFirstOptPaymentChannelResponseDTO:
+        """Get a PayTree First Opt payment channel."""
+        dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
+        return await self.paytree_first_opt_channel_service.get_channel(dto)
+
+    async def open_paytree_second_opt_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeSecondOptOpenChannelResponseDTO:
+        """Open a PayTree Second Opt payment channel (protocol method)."""
+        return await self.paytree_second_opt_channel_service.open_channel(dto)
+
+    async def get_paytree_second_opt_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaytreeSecondOptPaymentChannelResponseDTO:
+        """Get a PayTree Second Opt payment channel (protocol method)."""
+        return await self.paytree_second_opt_channel_service.get_channel(dto)
+
+    async def settle_paytree_second_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: PaytreeSecondOptSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        """Settle a PayTree Second Opt payment channel (protocol method)."""
+        return await self.paytree_second_opt_channel_service.settle_channel(
+            channel_id, dto
+        )
+
+    async def open_paytree_second_opt_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeSecondOptOpenChannelResponseDTO:
+        """Open a PayTree Second Opt payment channel."""
+        return await self.paytree_second_opt_channel_service.open_channel(dto)
+
+    async def get_paytree_second_opt_channel(
+        self, channel_id: str
+    ) -> PaytreeSecondOptPaymentChannelResponseDTO:
+        """Get a PayTree Second Opt payment channel."""
+        dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
+        return await self.paytree_second_opt_channel_service.get_channel(dto)
 
     async def aclose(self) -> None:
         """Close the client (no-op for in-process adapter)."""

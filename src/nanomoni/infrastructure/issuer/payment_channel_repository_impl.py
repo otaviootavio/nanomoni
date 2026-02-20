@@ -8,7 +8,9 @@ from typing import Optional
 
 from ...domain.issuer.entities import (
     PaymentChannelBase,
+    PaytreeFirstOptPaymentChannel,
     PaytreePaymentChannel,
+    PaytreeSecondOptPaymentChannel,
     PaywordPaymentChannel,
     SignaturePaymentChannel,
 )
@@ -43,6 +45,10 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         data = json.loads(raw)
         if data.get("payword_root_b64"):
             return PaywordPaymentChannel.model_validate(data)
+        if data.get("paytree_first_opt_root_b64"):
+            return PaytreeFirstOptPaymentChannel.model_validate(data)
+        if data.get("paytree_second_opt_root_b64"):
+            return PaytreeSecondOptPaymentChannel.model_validate(data)
         if data.get("paytree_root_b64"):
             return PaytreePaymentChannel.model_validate(data)
         return SignaturePaymentChannel.model_validate(data)

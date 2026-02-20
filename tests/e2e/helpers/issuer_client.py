@@ -21,6 +21,14 @@ from nanomoni.application.issuer.paytree_dtos import (
     PaytreeOpenChannelResponseDTO,
     PaytreePaymentChannelResponseDTO,
 )
+from nanomoni.application.issuer.paytree_first_opt_dtos import (
+    PaytreeFirstOptOpenChannelResponseDTO,
+    PaytreeFirstOptPaymentChannelResponseDTO,
+)
+from nanomoni.application.issuer.paytree_second_opt_dtos import (
+    PaytreeSecondOptOpenChannelResponseDTO,
+    PaytreeSecondOptPaymentChannelResponseDTO,
+)
 
 from tests.e2e.helpers.http import AiohttpResponse
 
@@ -266,3 +274,85 @@ class IssuerTestClient:
 
         response.raise_for_status()
         return PaytreePaymentChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_first_opt_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaytreeFirstOptOpenChannelResponseDTO:
+        """Open a PayTree First Opt-enabled payment channel."""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree_first_opt",
+            json=open_channel_request.model_dump(),
+        )
+
+        response.raise_for_status()
+        return PaytreeFirstOptOpenChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_first_opt_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> AiohttpResponse:
+        """
+        Open a PayTree First Opt-enabled payment channel without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        return await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree_first_opt",
+            json=open_channel_request.model_dump(),
+        )
+
+    async def get_paytree_first_opt_channel(
+        self, channel_id: str
+    ) -> PaytreeFirstOptPaymentChannelResponseDTO:
+        """Get PayTree First Opt payment channel state by channel ID."""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/channels/paytree_first_opt/{channel_id}",
+        )
+
+        response.raise_for_status()
+        return PaytreeFirstOptPaymentChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_second_opt_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaytreeSecondOptOpenChannelResponseDTO:
+        """Open a PayTree Second Opt-enabled payment channel."""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree_second_opt",
+            json=open_channel_request.model_dump(),
+        )
+
+        response.raise_for_status()
+        return PaytreeSecondOptOpenChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_second_opt_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> AiohttpResponse:
+        """
+        Open a PayTree Second Opt-enabled payment channel without raising on error status.
+
+        Returns the raw HTTP response for error case testing.
+        """
+        return await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree_second_opt",
+            json=open_channel_request.model_dump(),
+        )
+
+    async def get_paytree_second_opt_channel(
+        self, channel_id: str
+    ) -> PaytreeSecondOptPaymentChannelResponseDTO:
+        """Get PayTree Second Opt payment channel state by channel ID."""
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/channels/paytree_second_opt/{channel_id}",
+        )
+
+        response.raise_for_status()
+        return PaytreeSecondOptPaymentChannelResponseDTO.model_validate(response.json())

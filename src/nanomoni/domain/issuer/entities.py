@@ -57,3 +57,19 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+
+
+class PaytreeFirstOptPaymentChannel(PaymentChannelBase):
+    """PayTree First Opt channel with Merkle tree commitment."""
+
+    paytree_first_opt_root_b64: str
+    paytree_first_opt_unit_value: int
+    paytree_first_opt_max_i: int
+
+
+class PaytreeSecondOptPaymentChannel(PaymentChannelBase):
+    """PayTree Second Opt channel with Merkle tree commitment."""
+
+    paytree_second_opt_root_b64: str
+    paytree_second_opt_unit_value: int
+    paytree_second_opt_max_i: int

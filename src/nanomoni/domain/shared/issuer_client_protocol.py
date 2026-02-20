@@ -32,6 +32,16 @@ if TYPE_CHECKING:
         PaytreePaymentChannelResponseDTO,
         PaytreeSettlementRequestDTO,
     )
+    from ...application.issuer.paytree_first_opt_dtos import (
+        PaytreeFirstOptOpenChannelResponseDTO,
+        PaytreeFirstOptPaymentChannelResponseDTO,
+        PaytreeFirstOptSettlementRequestDTO,
+    )
+    from ...application.issuer.paytree_second_opt_dtos import (
+        PaytreeSecondOptOpenChannelResponseDTO,
+        PaytreeSecondOptPaymentChannelResponseDTO,
+        PaytreeSecondOptSettlementRequestDTO,
+    )
 
 
 class IssuerClientProtocol(Protocol):
@@ -200,6 +210,50 @@ class IssuerClientProtocol(Protocol):
         Returns:
             Close channel response with updated balances
         """
+        ...
+
+    # PayTree First Opt Payment Channels
+
+    async def open_paytree_first_opt_payment_channel(
+        self, dto: "OpenChannelRequestDTO"
+    ) -> "PaytreeFirstOptOpenChannelResponseDTO":
+        """Open a PayTree First Opt payment channel."""
+        ...
+
+    async def get_paytree_first_opt_payment_channel(
+        self, dto: "GetPaymentChannelRequestDTO"
+    ) -> "PaytreeFirstOptPaymentChannelResponseDTO":
+        """Get a PayTree First Opt payment channel by ID."""
+        ...
+
+    async def settle_paytree_first_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: "PaytreeFirstOptSettlementRequestDTO",
+    ) -> "CloseChannelResponseDTO":
+        """Settle a PayTree First Opt payment channel."""
+        ...
+
+    # PayTree Second Opt Payment Channels
+
+    async def open_paytree_second_opt_payment_channel(
+        self, dto: "OpenChannelRequestDTO"
+    ) -> "PaytreeSecondOptOpenChannelResponseDTO":
+        """Open a PayTree Second Opt payment channel."""
+        ...
+
+    async def get_paytree_second_opt_payment_channel(
+        self, dto: "GetPaymentChannelRequestDTO"
+    ) -> "PaytreeSecondOptPaymentChannelResponseDTO":
+        """Get a PayTree Second Opt payment channel by ID."""
+        ...
+
+    async def settle_paytree_second_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: "PaytreeSecondOptSettlementRequestDTO",
+    ) -> "CloseChannelResponseDTO":
+        """Settle a PayTree Second Opt payment channel."""
         ...
 
     # Context Manager Support

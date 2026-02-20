@@ -149,6 +149,11 @@ class InMemoryKeyValueStore(KeyValueStore):
             "save_paytree_payment" in script_lower and "new_i" in script_lower
         ):
             return self._execute_save_paytree_payment(keys, args)
+        elif script_name_lower in {
+            "save_paytree_first_opt_payment",
+            "save_paytree_second_opt_payment",
+        }:
+            return self._execute_save_paytree_payment(keys, args)
         elif (
             "save_channel_and_initial" in script_lower or "channel_json" in script_lower
         ):
@@ -250,8 +255,21 @@ class InMemoryKeyValueStore(KeyValueStore):
             return [2, ""]
 
         channel = json.loads(channel_raw)
-        max_i = float(channel.get("paytree_max_i", 0))
-        if not max_i:
+        max_i = float(
+            channel.get(
+                "paytree_max_i",
+                channel.get(
+                    "paytree_first_opt_max_i",
+                    channel.get("paytree_second_opt_max_i", 0),
+                ),
+            )
+        )
+        has_any_paytree_max_i = (
+            "paytree_max_i" in channel
+            or "paytree_first_opt_max_i" in channel
+            or "paytree_second_opt_max_i" in channel
+        )
+        if not has_any_paytree_max_i:
             return [2, ""]
 
         if new_i > max_i:

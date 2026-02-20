@@ -147,6 +147,76 @@ VENDOR_SCRIPTS = {
             return {0, current_raw}
         end
     """,
+    "save_paytree_first_opt_payment": """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local new_val = ARGV[1]
+        local new_i = tonumber(ARGV[2])
+
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_i = tonumber(channel.paytree_first_opt_max_i)
+        if not max_i then
+            return {2, ''}
+        end
+        if new_i > max_i then
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
+        end
+
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        end
+
+        local current = cjson.decode(current_raw)
+        local current_i = tonumber(current.i)
+        if new_i > current_i then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+    """,
+    "save_paytree_second_opt_payment": """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local new_val = ARGV[1]
+        local new_i = tonumber(ARGV[2])
+
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_i = tonumber(channel.paytree_second_opt_max_i)
+        if not max_i then
+            return {2, ''}
+        end
+        if new_i > max_i then
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
+        end
+
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        end
+
+        local current = cjson.decode(current_raw)
+        local current_i = tonumber(current.i)
+        if new_i > current_i then
+            redis.call('SET', latest_key, new_val)
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+    """,
 }
 
 # Consolidated script used for all three channel initialization scenarios
@@ -188,6 +258,8 @@ VENDOR_SCRIPTS.update(
         "save_channel_and_initial_payment": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
     }
 )
 
