@@ -185,12 +185,10 @@ class PaytreeSecondOptPaymentService:
             channel_amount=payment_channel.amount,
         )
 
-        sibling_cache = (
-            await self.payment_channel_repository.get_paytree_second_opt_sibling_cache_for_index(
-                channel_id=channel_id,
-                i=dto.i,
-                max_i=payment_channel.paytree_second_opt_max_i,
-            )
+        sibling_cache = await self.payment_channel_repository.get_paytree_second_opt_sibling_cache_for_index(
+            channel_id=channel_id,
+            i=dto.i,
+            max_i=payment_channel.paytree_second_opt_max_i,
         )
         ok, full_siblings_b64, _ = verify_pruned_paytree_proof(
             i=dto.i,
@@ -269,12 +267,10 @@ class PaytreeSecondOptPaymentService:
         if cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
-        full_siblings_b64 = (
-            await self.payment_channel_repository.get_paytree_second_opt_siblings_for_settlement(
-                channel_id=dto.channel_id,
-                i=latest_state.i,
-                max_i=channel.paytree_second_opt_max_i,
-            )
+        full_siblings_b64 = await self.payment_channel_repository.get_paytree_second_opt_siblings_for_settlement(
+            channel_id=dto.channel_id,
+            i=latest_state.i,
+            max_i=channel.paytree_second_opt_max_i,
         )
         settlement_payload = PaytreeSecondOptSettlementPayload(
             channel_id=dto.channel_id,
