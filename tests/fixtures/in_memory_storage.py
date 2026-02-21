@@ -152,9 +152,13 @@ class InMemoryKeyValueStore(KeyValueStore):
         elif script_name_lower in {
             "save_paytree_first_opt_payment",
         }:
-            return self._execute_save_paytree_payment(keys, args)
+            return self._execute_save_paytree_first_opt_payment(keys, args)
         elif script_name_lower == "save_paytree_second_opt_payment":
             return self._execute_save_paytree_second_opt_payment(keys, args)
+        elif script_name_lower == "save_channel_and_initial_paytree_first_opt_state":
+            return self._execute_save_channel_and_initial_paytree_second_opt_state(
+                keys, args
+            )
         elif script_name_lower == "save_channel_and_initial_paytree_second_opt_state":
             return self._execute_save_channel_and_initial_paytree_second_opt_state(
                 keys, args
@@ -310,6 +314,46 @@ class InMemoryKeyValueStore(KeyValueStore):
 
         channel = json.loads(channel_raw)
         max_i = float(channel.get("paytree_second_opt_max_i", 0))
+        if not max_i:
+            return [2, ""]
+
+        if new_i > max_i:
+            error_current = self._data.get(latest_key, "") or ""
+            return [3, error_current]
+
+        current_raw: Optional[str] = self._data.get(latest_key)
+        if not current_raw:
+            self._data[latest_key] = new_val
+            for idx in range(2, len(keys)):
+                self._data[keys[idx]] = args[idx]
+            return [1, new_val]
+
+        current = json.loads(current_raw)
+        current_i = float(current.get("i", 0))
+
+        if new_i > current_i:
+            self._data[latest_key] = new_val
+            for idx in range(2, len(keys)):
+                self._data[keys[idx]] = args[idx]
+            return [1, new_val]
+        else:
+            return [0, current_raw]
+
+    def _execute_save_paytree_first_opt_payment(
+        self, keys: List[str], args: List[str]
+    ) -> list[Any]:
+        """Execute save_paytree_first_opt_payment script logic."""
+        latest_key = keys[0]
+        channel_key = keys[1]
+        new_val = args[0]
+        new_i = float(args[1])
+
+        channel_raw: Optional[str] = self._data.get(channel_key)
+        if not channel_raw:
+            return [2, ""]
+
+        channel = json.loads(channel_raw)
+        max_i = float(channel.get("paytree_first_opt_max_i", 0))
         if not max_i:
             return [2, ""]
 

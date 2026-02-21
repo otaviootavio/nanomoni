@@ -157,7 +157,10 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def save_paytree_first_opt_payment(
-        self, channel: PaytreeFirstOptPaymentChannel, new_state: PaytreeFirstOptState
+        self,
+        channel: PaytreeFirstOptPaymentChannel,
+        new_state: PaytreeFirstOptState,
+        node_entries: dict[str, str],
     ) -> tuple[int, Optional[PaytreeFirstOptState]]:
         """
         Atomically update the channel's latest PayTree First Opt state.
@@ -169,10 +172,30 @@ class PaymentChannelRepository(ABC):
         self,
         channel: PaytreeFirstOptPaymentChannel,
         initial_state: PaytreeFirstOptState,
+        node_entries: dict[str, str],
     ) -> tuple[int, Optional[PaytreeFirstOptState]]:
         """
         Atomically save channel metadata AND the first PayTree First Opt state.
         """
+        pass
+
+    @abstractmethod
+    async def get_paytree_first_opt_sibling_cache_for_index(
+        self,
+        *,
+        channel_id: str,
+        i: int,
+        max_i: int,
+        trusted_level: Optional[int] = None,
+    ) -> dict[str, str]:
+        """Load per-index sibling cache entries needed for proof reconstruction."""
+        pass
+
+    @abstractmethod
+    async def get_paytree_first_opt_siblings_for_settlement(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> list[str]:
+        """Load full sibling list from per-node storage for settlement."""
         pass
 
     @abstractmethod
@@ -192,6 +215,19 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_paytree_second_opt_channel_state_and_sibling_cache(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> tuple[
+        Optional[PaytreeSecondOptPaymentChannel],
+        Optional[PaytreeSecondOptState],
+        dict[str, str],
+    ]:
+        """
+        Get channel metadata, latest state, and per-index sibling cache in one call.
+        """
+        pass
+
+    @abstractmethod
     async def save_paytree_second_opt_payment(
         self,
         channel: PaytreeSecondOptPaymentChannel,
@@ -205,7 +241,12 @@ class PaymentChannelRepository(ABC):
 
     @abstractmethod
     async def get_paytree_second_opt_sibling_cache_for_index(
-        self, *, channel_id: str, i: int, max_i: int
+        self,
+        *,
+        channel_id: str,
+        i: int,
+        max_i: int,
+        trusted_level: Optional[int] = None,
     ) -> dict[str, str]:
         """Load per-index sibling cache entries needed for proof reconstruction."""
         pass

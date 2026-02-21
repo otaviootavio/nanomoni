@@ -7,34 +7,13 @@ from typing import Optional
 
 from .paytree import (
     Paytree,
-    _verify_merkle_proof,
+    _cache_key,
     b64_to_bytes,
+    compute_lcp,
+    compute_tree_depth,
+    update_cache_with_siblings_and_path,
+    verify_proof_to_known_node,
 )
-
-
-def _cache_key(level: int, position: int) -> str:
-    return f"{level}:{position}"
-
-
-def compute_tree_depth(max_i: int) -> int:
-    """Return tree depth (number of sibling levels) for indices [0..max_i]."""
-    if max_i < 0:
-        raise ValueError("max_i must be >= 0")
-    leaf_count = max_i + 1
-    padded = 1 if leaf_count <= 1 else 1 << (leaf_count - 1).bit_length()
-    return padded.bit_length() - 1
-
-
-def compute_lcp(a: int, b: int, n: int) -> int:
-    """Longest common prefix length for n-bit integers."""
-    if a < 0 or b < 0:
-        raise ValueError("indices must be >= 0")
-    if n < 0:
-        raise ValueError("n must be >= 0")
-    xor = a ^ b
-    if xor == 0:
-        return n
-    return max(0, n - xor.bit_length())
 
 
 def compute_send_levels(
@@ -125,18 +104,54 @@ def verify_pruned_paytree_proof(
     try:
         leaf = b64_to_bytes(leaf_b64)
         siblings = [b64_to_bytes(s) for s in full_siblings_b64]
-        root = b64_to_bytes(root_b64)
     except Exception:
         return False, [], node_cache_b64
 
-    ok = _verify_merkle_proof(leaf, siblings, root, i)
+    ok = False
+    trusted_level: Optional[int] = None
+    known_node_hash = None
+    if last_verified_index is not None:
+        k_max = compute_lcp(i, last_verified_index, depth)
+        trusted_level = depth - k_max
+        known_key = _cache_key(trusted_level, i >> trusted_level)
+        known_node_b64 = node_cache_b64.get(known_key)
+        if known_node_b64 is not None:
+            try:
+                known_node_hash = b64_to_bytes(known_node_b64)
+            except Exception:
+                known_node_hash = None
+
+    if trusted_level is not None and known_node_hash is not None:
+        ok = verify_proof_to_known_node(
+            leaf_hash=leaf,
+            leaf_index=i,
+            siblings=siblings[:trusted_level],
+            known_node_hash=known_node_hash,
+            known_node_level=trusted_level,
+        )
+    else:
+        try:
+            root = b64_to_bytes(root_b64)
+        except Exception:
+            return False, [], node_cache_b64
+        ok = verify_proof_to_known_node(
+            leaf_hash=leaf,
+            leaf_index=i,
+            siblings=siblings,
+            known_node_hash=root,
+            known_node_level=depth,
+        )
     if not ok:
         return False, [], node_cache_b64
 
-    updated_cache = update_cache_with_full_siblings(
+    updated_cache = update_cache_with_siblings_and_path(
         i=i,
+        leaf_b64=leaf_b64,
         full_siblings_b64=full_siblings_b64,
+        node_cache_b64=node_cache_b64,
     )
+    if updated_cache is None:
+        return False, [], node_cache_b64
     return True, full_siblings_b64, updated_cache
 
 

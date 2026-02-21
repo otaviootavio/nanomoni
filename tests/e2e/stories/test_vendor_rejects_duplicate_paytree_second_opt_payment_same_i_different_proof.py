@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nanomoni.crypto.paytree_second_opt import update_cache_with_siblings_and_path
+from nanomoni.crypto.paytree import update_cache_with_siblings_and_path
 from tests.e2e.helpers.client_actor import ClientActor
 from tests.e2e.helpers.issuer_client import IssuerTestClient
 from tests.e2e.helpers.vendor_client import VendorTestClient
@@ -36,21 +36,21 @@ async def test_vendor_rejects_duplicate_paytree_second_opt_payment_same_i_differ
 
     i = 10
     node_cache_b64: dict[str, str] = {}
-    i_val, leaf_b64, siblings_b64 = paytree.payment_proof(
-        i=i, node_cache_b64=node_cache_b64
+    i_val, leaf_b64, siblings_b64, full_siblings_b64 = (
+        paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
     )
     await vendor_client.receive_paytree_second_opt_payment(
         channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
     )
-    _, _, full_siblings_b64 = paytree.base.payment_proof(i=i_val)
-    updated_cache = update_cache_with_siblings_and_path(
-        i=i_val,
-        leaf_b64=leaf_b64,
-        full_siblings_b64=full_siblings_b64,
-        node_cache_b64=node_cache_b64,
+    assert (
+        update_cache_with_siblings_and_path(
+            i=i_val,
+            leaf_b64=leaf_b64,
+            full_siblings_b64=full_siblings_b64,
+            node_cache_b64=node_cache_b64,
+        )
+        is not None
     )
-    assert updated_cache is not None
-    node_cache_b64 = updated_cache
 
     # Replay attempt: same i but proof for a different index.
     _i2, leaf2_b64, siblings2_b64 = paytree.payment_proof(

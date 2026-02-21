@@ -26,6 +26,99 @@ def hash_bytes(data: bytes) -> bytes:
     return hashlib.new(SHA256, data).digest()
 
 
+def _cache_key(level: int, position: int) -> str:
+    """Canonical cache key for Merkle nodes."""
+    return f"{level}:{position}"
+
+
+def compute_tree_depth(max_i: int) -> int:
+    """Return tree depth (number of sibling levels) for indices [0..max_i]."""
+    if max_i < 0:
+        raise ValueError("max_i must be >= 0")
+    leaf_count = max_i + 1
+    padded = 1 if leaf_count <= 1 else 1 << (leaf_count - 1).bit_length()
+    return padded.bit_length() - 1
+
+
+def compute_lcp(a: int, b: int, n: int) -> int:
+    """Longest common prefix length for n-bit integers."""
+    if a < 0 or b < 0:
+        raise ValueError("indices must be >= 0")
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    xor = a ^ b
+    if xor == 0:
+        return n
+    return max(0, n - xor.bit_length())
+
+
+def update_cache_with_siblings_and_path(
+    *,
+    i: int,
+    leaf_b64: str,
+    full_siblings_b64: list[str],
+    node_cache_b64: dict[str, str],
+) -> Optional[dict[str, str]]:
+    """Store both P(x) siblings and Q(x) computed path nodes.
+
+    Mutates *node_cache_b64* in place and returns it (or ``None`` on
+    decode error).
+    """
+    try:
+        current = b64_to_bytes(leaf_b64)
+        siblings = [b64_to_bytes(s) for s in full_siblings_b64]
+    except Exception:
+        return None
+
+    node_cache_b64[_cache_key(0, i)] = leaf_b64
+
+    current_position = i
+    for level, sibling_bytes in enumerate(siblings):
+        sibling_pos = current_position ^ 1
+        node_cache_b64[_cache_key(level, sibling_pos)] = bytes_to_b64(sibling_bytes)
+
+        if (current_position % 2) == 0:
+            parent = hash_bytes(current + sibling_bytes)
+        else:
+            parent = hash_bytes(sibling_bytes + current)
+
+        current = parent
+        current_position = current_position // 2
+        node_cache_b64[_cache_key(level + 1, current_position)] = bytes_to_b64(current)
+
+    return node_cache_b64
+
+
+def verify_proof_to_known_node(
+    *,
+    leaf_hash: bytes,
+    leaf_index: int,
+    siblings: list[bytes],
+    known_node_hash: bytes,
+    known_node_level: int,
+) -> bool:
+    """
+    Verify a Merkle proof segment from leaf up to a known node.
+
+    `siblings` must contain exactly one sibling per level in [0, known_node_level).
+    """
+    if leaf_index < 0 or known_node_level < 0:
+        return False
+    if len(siblings) != known_node_level:
+        return False
+
+    current = leaf_hash
+    current_index = leaf_index
+    for sibling in siblings:
+        is_left = (current_index % 2) == 0
+        if is_left:
+            current = hash_bytes(current + sibling)
+        else:
+            current = hash_bytes(sibling + current)
+        current_index = current_index // 2
+    return current == known_node_hash
+
+
 def _next_power_of_two(n: int) -> int:
     """Return the smallest power of 2 >= n."""
     if n <= 0:
@@ -127,19 +220,13 @@ def _verify_merkle_proof(
     Returns:
         True if the proof is valid, False otherwise
     """
-    current = leaf_hash
-    current_index = leaf_index
-
-    for sibling in siblings:
-        is_left = (current_index % 2) == 0
-        if is_left:
-            parent = hash_bytes(current + sibling)
-        else:
-            parent = hash_bytes(sibling + current)
-        current = parent
-        current_index = current_index // 2
-
-    return current == root
+    return verify_proof_to_known_node(
+        leaf_hash=leaf_hash,
+        leaf_index=leaf_index,
+        siblings=siblings,
+        known_node_hash=root,
+        known_node_level=len(siblings),
+    )
 
 
 @dataclass(frozen=True)

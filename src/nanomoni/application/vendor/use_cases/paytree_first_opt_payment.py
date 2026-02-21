@@ -16,7 +16,10 @@ from ....application.shared.paytree_first_opt_payloads import (
 )
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.paytree import compute_cumulative_owed_amount
+from ....crypto.paytree import (
+    compute_cumulative_owed_amount,
+    compute_lcp,
+)
 from ....crypto.paytree_first_opt import (
     compute_tree_depth,
     verify_pruned_paytree_proof,
@@ -89,6 +92,7 @@ class PaytreeFirstOptPaymentService:
         channel_id: str,
         payment_channel: PaytreeFirstOptPaymentChannel,
         new_state: PaytreeFirstOptState,
+        node_entries: dict[str, str],
         is_first_payment: bool,
     ) -> tuple[int, Optional[PaytreeFirstOptState], PaytreeFirstOptPaymentChannel]:
         for attempt in range(2):
@@ -97,7 +101,7 @@ class PaytreeFirstOptPaymentService:
                     status,
                     stored_state,
                 ) = await self.payment_channel_repository.save_channel_and_initial_paytree_first_opt_state(
-                    payment_channel, new_state
+                    payment_channel, new_state, node_entries
                 )
                 if status == 1:
                     return status, stored_state, payment_channel
@@ -118,7 +122,7 @@ class PaytreeFirstOptPaymentService:
                 status,
                 stored_state,
             ) = await self.payment_channel_repository.save_paytree_first_opt_payment(
-                payment_channel, new_state
+                payment_channel, new_state, node_entries
             )
             if status != 2:
                 return status, stored_state, payment_channel
@@ -184,19 +188,35 @@ class PaytreeFirstOptPaymentService:
             channel_amount=payment_channel.amount,
         )
 
+        sibling_cache: dict[str, str] = {}
         last_verified_index = latest_state.last_verified_index if latest_state else None
-        node_cache_b64 = latest_state.node_cache_b64 if latest_state else {}
-        ok, _, updated_cache = verify_pruned_paytree_proof(
+        if not is_first_payment:
+            trusted_level = None
+            if last_verified_index is not None:
+                depth = compute_tree_depth(payment_channel.paytree_first_opt_max_i)
+                k_max = compute_lcp(dto.i, last_verified_index, depth)
+                trusted_level = depth - k_max
+            sibling_cache = await self.payment_channel_repository.get_paytree_first_opt_sibling_cache_for_index(
+                channel_id=channel_id,
+                i=dto.i,
+                max_i=payment_channel.paytree_first_opt_max_i,
+                trusted_level=trusted_level,
+            )
+        existing_keys = set(sibling_cache.keys())
+        ok, full_siblings_b64, updated_cache = verify_pruned_paytree_proof(
             i=dto.i,
             root_b64=payment_channel.paytree_first_opt_root_b64,
             leaf_b64=dto.leaf_b64,
             pruned_siblings_b64=dto.siblings_b64,
             max_i=payment_channel.paytree_first_opt_max_i,
             last_verified_index=last_verified_index,
-            node_cache_b64=node_cache_b64,
+            node_cache_b64=sibling_cache,
         )
         if not ok:
             raise ValueError("Invalid PayTree First Opt proof")
+        node_entries = {
+            k: v for k, v in updated_cache.items() if k not in existing_keys
+        }
 
         new_state = PaytreeFirstOptState(
             channel_id=channel_id,
@@ -204,7 +224,6 @@ class PaytreeFirstOptPaymentService:
             leaf_b64=dto.leaf_b64,
             siblings_b64=dto.siblings_b64,
             last_verified_index=dto.i,
-            node_cache_b64=updated_cache,
             created_at=datetime.now(timezone.utc),
         )
 
@@ -212,6 +231,7 @@ class PaytreeFirstOptPaymentService:
             channel_id=channel_id,
             payment_channel=payment_channel,
             new_state=new_state,
+            node_entries=node_entries,
             is_first_payment=is_first_payment,
         )
         if status == 1:
@@ -231,22 +251,6 @@ class PaytreeFirstOptPaymentService:
         if status == 3:
             raise ValueError("PayTree First Opt i exceeds max_i for this channel")
         raise RuntimeError(f"Unexpected result from atomic save: status={status}")
-
-    def _full_siblings_from_cache(
-        self, *, i: int, max_i: int, node_cache_b64: dict[str, str]
-    ) -> list[str]:
-        depth = compute_tree_depth(max_i)
-        siblings: list[str] = []
-        for level in range(depth):
-            sibling_position = (i >> level) ^ 1
-            key = f"{level}:{sibling_position}"
-            value = node_cache_b64.get(key)
-            if value is None:
-                raise ValueError(
-                    "Missing required sibling in node cache for settlement"
-                )
-            siblings.append(value)
-        return siblings
 
     async def settle_channel(self, dto: CloseChannelDTO) -> None:
         channel = await self.payment_channel_repository.get_by_channel_id(
@@ -273,10 +277,10 @@ class PaytreeFirstOptPaymentService:
         if cumulative_owed_amount > channel.amount:
             raise ValueError("Invalid owed amount")
 
-        full_siblings_b64 = self._full_siblings_from_cache(
+        full_siblings_b64 = await self.payment_channel_repository.get_paytree_first_opt_siblings_for_settlement(
+            channel_id=dto.channel_id,
             i=latest_state.i,
             max_i=channel.paytree_first_opt_max_i,
-            node_cache_b64=latest_state.node_cache_b64,
         )
         settlement_payload = PaytreeFirstOptSettlementPayload(
             channel_id=dto.channel_id,

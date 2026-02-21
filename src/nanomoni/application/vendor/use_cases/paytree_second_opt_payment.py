@@ -16,9 +16,13 @@ from ....application.shared.paytree_second_opt_payloads import (
 )
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.paytree import compute_cumulative_owed_amount
-from ....crypto.paytree_second_opt import (
+from ....crypto.paytree import (
+    compute_cumulative_owed_amount,
+    compute_lcp,
+    compute_tree_depth,
     update_cache_with_siblings_and_path,
+)
+from ....crypto.paytree_second_opt import (
     verify_pruned_paytree_proof,
 )
 from ....domain.shared import IssuerClientFactory
@@ -185,18 +189,28 @@ class PaytreeSecondOptPaymentService:
             channel_amount=payment_channel.amount,
         )
 
-        sibling_cache = await self.payment_channel_repository.get_paytree_second_opt_sibling_cache_for_index(
-            channel_id=channel_id,
-            i=dto.i,
-            max_i=payment_channel.paytree_second_opt_max_i,
-        )
-        ok, full_siblings_b64, _ = verify_pruned_paytree_proof(
+        last_verified_index = latest_state.i if latest_state else None
+        sibling_cache: dict[str, str] = {}
+        if not is_first_payment:
+            trusted_level = None
+            if last_verified_index is not None:
+                depth = compute_tree_depth(payment_channel.paytree_second_opt_max_i)
+                k_max = compute_lcp(dto.i, last_verified_index, depth)
+                trusted_level = depth - k_max
+            sibling_cache = await self.payment_channel_repository.get_paytree_second_opt_sibling_cache_for_index(
+                channel_id=channel_id,
+                i=dto.i,
+                max_i=payment_channel.paytree_second_opt_max_i,
+                trusted_level=trusted_level,
+            )
+        ok, full_siblings_b64 = verify_pruned_paytree_proof(
             i=dto.i,
             root_b64=payment_channel.paytree_second_opt_root_b64,
             leaf_b64=dto.leaf_b64,
             pruned_siblings_b64=dto.siblings_b64,
             max_i=payment_channel.paytree_second_opt_max_i,
             node_cache_b64=sibling_cache,
+            last_verified_index=last_verified_index,
         )
         if not ok:
             raise ValueError("Invalid PayTree Second Opt proof")

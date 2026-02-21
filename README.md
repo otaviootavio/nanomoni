@@ -167,8 +167,9 @@ E2E tests are true end-to-end tests that exercise the full system via HTTP. They
 ```sh
 # 1. Start required services
 source ./envs/issuer.env.sh
-source ./envs/vendor.env.sh
 docker compose up -d issuer redis-issuer
+
+source ./envs/vendor.env.sh
 docker compose up -d vendor redis-vendor
 
 # 2. Wait for services to be ready, then run tests

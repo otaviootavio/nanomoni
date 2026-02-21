@@ -168,10 +168,6 @@ class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
         None,
         description="Most recently verified PayTree index",
     )
-    node_cache_b64: dict[str, str] = Field(
-        default_factory=dict,
-        description="Node cache keyed by level:position with base64 hash values",
-    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

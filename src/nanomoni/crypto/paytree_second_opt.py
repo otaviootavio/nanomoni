@@ -7,15 +7,12 @@ from typing import Optional
 
 from .paytree import (
     Paytree,
+    _cache_key,
     b64_to_bytes,
-    bytes_to_b64,
-    hash_bytes,
+    compute_lcp,
+    compute_tree_depth,
+    verify_proof_to_known_node,
 )
-from .paytree_first_opt import compute_tree_depth
-
-
-def _cache_key(level: int, position: int) -> str:
-    return f"{level}:{position}"
 
 
 def compute_send_levels(
@@ -43,6 +40,7 @@ def reconstruct_full_siblings(
     pruned_siblings_b64: list[str],
     send_levels: list[int],
     node_cache_b64: dict[str, str],
+    stop_level: Optional[int] = None,
 ) -> Optional[list[str]]:
     """Reconstruct complete sibling list from sparse levels + cache."""
     if len(pruned_siblings_b64) != len(send_levels):
@@ -50,7 +48,8 @@ def reconstruct_full_siblings(
 
     send_by_level = {level: sib for level, sib in zip(send_levels, pruned_siblings_b64)}
     full: list[str] = []
-    for level in range(depth):
+    target_depth = depth if stop_level is None else min(depth, max(0, stop_level))
+    for level in range(target_depth):
         if level in send_by_level:
             full.append(send_by_level[level])
             continue
@@ -62,42 +61,6 @@ def reconstruct_full_siblings(
     return full
 
 
-def update_cache_with_siblings_and_path(
-    *,
-    i: int,
-    leaf_b64: str,
-    full_siblings_b64: list[str],
-    node_cache_b64: dict[str, str],
-) -> Optional[dict[str, str]]:
-    """Store both P(x) siblings and Q(x) computed path nodes."""
-    try:
-        current = b64_to_bytes(leaf_b64)
-        siblings = [b64_to_bytes(s) for s in full_siblings_b64]
-    except Exception:
-        return None
-
-    updated = dict(node_cache_b64)
-
-    # Store Q(x) level 0 (leaf node)
-    updated[_cache_key(0, i)] = leaf_b64
-
-    current_position = i
-    for level, sibling_bytes in enumerate(siblings):
-        sibling_pos = current_position ^ 1
-        updated[_cache_key(level, sibling_pos)] = bytes_to_b64(sibling_bytes)
-
-        if (current_position % 2) == 0:
-            parent = hash_bytes(current + sibling_bytes)
-        else:
-            parent = hash_bytes(sibling_bytes + current)
-
-        current = parent
-        current_position = current_position // 2
-        updated[_cache_key(level + 1, current_position)] = bytes_to_b64(current)
-
-    return updated
-
-
 def verify_pruned_paytree_proof(
     *,
     i: int,
@@ -106,51 +69,65 @@ def verify_pruned_paytree_proof(
     pruned_siblings_b64: list[str],
     max_i: int,
     node_cache_b64: dict[str, str],
-) -> tuple[bool, list[str], dict[str, str]]:
+    last_verified_index: Optional[int] = None,
+) -> tuple[bool, list[str]]:
     """
-    Verify second-optimization proof and return reconstructed siblings + updated cache.
+    Verify second-optimization proof and return reconstructed siblings.
     """
     if i < 0 or i > max_i:
-        return False, [], node_cache_b64
+        return False, []
 
     depth = compute_tree_depth(max_i)
     send_levels = compute_send_levels(i=i, node_cache_b64=node_cache_b64, depth=depth)
+    trusted_level = depth
+    known_node_b64 = root_b64
+    if last_verified_index is not None:
+        k_max = compute_lcp(i, last_verified_index, depth)
+        candidate_level = depth - k_max
+        candidate_key = _cache_key(candidate_level, i >> candidate_level)
+        candidate_node = node_cache_b64.get(candidate_key)
+        if candidate_node is not None:
+            trusted_level = candidate_level
+            known_node_b64 = candidate_node
+
+    # For early-stop verification we only need levels [0, trusted_level).
+    # The client's pruned proof may include entries for higher levels too;
+    # those are irrelevant once we verify against a trusted Q-node.
+    send_levels_for_verification = [
+        level for level in send_levels if level < trusted_level
+    ]
+    if len(pruned_siblings_b64) < len(send_levels_for_verification):
+        return False, []
+    pruned_for_verification = pruned_siblings_b64[: len(send_levels_for_verification)]
+
     full_siblings_b64 = reconstruct_full_siblings(
         i=i,
         depth=depth,
-        pruned_siblings_b64=pruned_siblings_b64,
-        send_levels=send_levels,
+        pruned_siblings_b64=pruned_for_verification,
+        send_levels=send_levels_for_verification,
         node_cache_b64=node_cache_b64,
+        stop_level=trusted_level,
     )
     if full_siblings_b64 is None:
-        return False, [], node_cache_b64
+        return False, []
 
     try:
-        root = b64_to_bytes(root_b64)
+        known_node_hash = b64_to_bytes(known_node_b64)
         current = b64_to_bytes(leaf_b64)
-        current_position = i
-        for sibling_b64 in full_siblings_b64:
-            sibling = b64_to_bytes(sibling_b64)
-            if (current_position % 2) == 0:
-                current = hash_bytes(current + sibling)
-            else:
-                current = hash_bytes(sibling + current)
-            current_position = current_position // 2
+        siblings = [b64_to_bytes(s) for s in full_siblings_b64]
     except Exception:
-        return False, [], node_cache_b64
+        return False, []
 
-    if current != root:
-        return False, [], node_cache_b64
+    if not verify_proof_to_known_node(
+        leaf_hash=current,
+        leaf_index=i,
+        siblings=siblings,
+        known_node_hash=known_node_hash,
+        known_node_level=trusted_level,
+    ):
+        return False, []
 
-    updated_cache = update_cache_with_siblings_and_path(
-        i=i,
-        leaf_b64=leaf_b64,
-        full_siblings_b64=full_siblings_b64,
-        node_cache_b64=node_cache_b64,
-    )
-    if updated_cache is None:
-        return False, [], node_cache_b64
-    return True, full_siblings_b64, updated_cache
+    return True, full_siblings_b64
 
 
 @dataclass(frozen=True)
@@ -175,9 +152,18 @@ class PaytreeSecondOpt:
         self, *, i: int, node_cache_b64: Optional[dict[str, str]] = None
     ) -> tuple[int, str, list[str]]:
         """Generate second-optimization proof with pruned sibling set."""
+        i_val, leaf_b64, pruned, _ = self.payment_proof_with_full_siblings(
+            i=i, node_cache_b64=node_cache_b64
+        )
+        return i_val, leaf_b64, pruned
+
+    def payment_proof_with_full_siblings(
+        self, *, i: int, node_cache_b64: Optional[dict[str, str]] = None
+    ) -> tuple[int, str, list[str], list[str]]:
+        """Generate pruned proof and also return full siblings for cache update."""
         cache = node_cache_b64 or {}
         _, leaf_b64, full_siblings = self.base.payment_proof(i=i)
         depth = compute_tree_depth(self.max_i)
         send_levels = compute_send_levels(i=i, node_cache_b64=cache, depth=depth)
         pruned = [full_siblings[level] for level in send_levels]
-        return i, leaf_b64, pruned
+        return i, leaf_b64, pruned, full_siblings

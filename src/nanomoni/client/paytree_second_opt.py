@@ -12,10 +12,8 @@ from nanomoni.application.vendor.paytree_second_opt_dtos import (
     ReceivePaytreeSecondOptPaymentDTO,
 )
 from nanomoni.crypto.certificates import json_to_bytes, sign_bytes
-from nanomoni.crypto.paytree_second_opt import (
-    PaytreeSecondOpt,
-    update_cache_with_siblings_and_path,
-)
+from nanomoni.crypto.paytree import update_cache_with_siblings_and_path
+from nanomoni.crypto.paytree_second_opt import PaytreeSecondOpt
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
 if TYPE_CHECKING:
@@ -100,8 +98,8 @@ async def send_payments(
     """Send PayTree Second Opt payments with sequentially pruned proofs."""
     node_cache_b64: dict[str, str] = {}
     for i in payments:
-        i_val, leaf_b64, siblings_b64 = paytree.payment_proof(
-            i=i, node_cache_b64=node_cache_b64
+        i_val, leaf_b64, siblings_b64, full_siblings_b64 = (
+            paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
         )
         await vendor.send_paytree_second_opt_payment(
             channel_id,
@@ -109,13 +107,13 @@ async def send_payments(
                 i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
             ),
         )
-        _, _, full_siblings_b64 = paytree.base.payment_proof(i=i_val)
-        updated_cache = update_cache_with_siblings_and_path(
-            i=i_val,
-            leaf_b64=leaf_b64,
-            full_siblings_b64=full_siblings_b64,
-            node_cache_b64=node_cache_b64,
-        )
-        if updated_cache is None:
+        if (
+            update_cache_with_siblings_and_path(
+                i=i_val,
+                leaf_b64=leaf_b64,
+                full_siblings_b64=full_siblings_b64,
+                node_cache_b64=node_cache_b64,
+            )
+            is None
+        ):
             raise RuntimeError("Failed to update PayTree Second Opt node cache")
-        node_cache_b64 = updated_cache
