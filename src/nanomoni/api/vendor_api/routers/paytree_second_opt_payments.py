@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
@@ -16,6 +17,8 @@ from ....application.vendor.use_cases.paytree_second_opt_payment import (
     PaytreeSecondOptPaymentService,
 )
 from ..dependencies import get_paytree_second_opt_payment_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/channels/paytree_second_opt",
@@ -76,7 +79,8 @@ async def receive_paytree_second_opt_payment(
             status="client_error"
         ).observe(elapsed)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to process PayTree Second Opt payment")
         paytree_second_opt_payment_requests_total.labels(status="server_error").inc()
         elapsed = (time.perf_counter() - start_time) * 1000
         paytree_second_opt_payment_request_duration_milliseconds.labels(
@@ -84,7 +88,7 @@ async def receive_paytree_second_opt_payment(
         ).observe(elapsed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process PayTree Second Opt payment: {str(e)}",
+            detail="Failed to process PayTree Second Opt payment",
         )
     finally:
         paytree_second_opt_payment_requests_inprogress.dec()

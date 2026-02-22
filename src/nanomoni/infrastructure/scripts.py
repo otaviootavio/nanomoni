@@ -266,7 +266,7 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
     return {1, state_json}
 """
 
-_SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT = """
+_SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT = """
     local channel_key = KEYS[1]
     local latest_key = KEYS[2]
     local hash_key = KEYS[3]
@@ -309,8 +309,8 @@ VENDOR_SCRIPTS.update(
         "save_channel_and_initial_payment": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
-        "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT,
-        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
     }
 )
 

@@ -28,6 +28,19 @@ class KeyValueStore(ABC):
         pass
 
     @abstractmethod
+    async def mget_and_hmget(
+        self,
+        mget_keys: List[str],
+        hmget_key: str,
+        hmget_fields: List[str],
+    ) -> tuple[List[Optional[str]], List[Optional[str]]]:
+        """
+        Fetch string keys and hash fields in one round-trip (pipeline).
+        Returns (mget_results, hmget_results).
+        """
+        pass
+
+    @abstractmethod
     async def hset(self, key: str, mapping: Mapping[str, str]) -> int:
         """Set multiple hash field-value pairs."""
         pass
@@ -90,6 +103,23 @@ class RedisKeyValueStore(KeyValueStore):
         async with self._db_client.get_connection() as conn:
             result = conn.hmget(key, fields)
             return await cast(Awaitable[List[Optional[str]]], result)
+
+    async def mget_and_hmget(
+        self,
+        mget_keys: List[str],
+        hmget_key: str,
+        hmget_fields: List[str],
+    ) -> tuple[List[Optional[str]], List[Optional[str]]]:
+        """Fetch MGET and HMGET in one round-trip via pipeline."""
+        async with self._db_client.get_connection() as conn:
+            pipe = conn.pipeline()
+            pipe.mget(mget_keys)
+            pipe.hmget(hmget_key, hmget_fields)
+            results = await cast(Awaitable[list], pipe.execute())
+            return (
+                cast(List[Optional[str]], results[0]),
+                cast(List[Optional[str]], results[1]),
+            )
 
     async def hset(self, key: str, mapping: Mapping[str, str]) -> int:
         """Set multiple hash field-value pairs."""

@@ -28,6 +28,16 @@ class InMemoryKeyValueStore(KeyValueStore):
         h = self._hash_data.get(key, {})
         return [h.get(f) for f in fields]
 
+    async def mget_and_hmget(
+        self,
+        mget_keys: List[str],
+        hmget_key: str,
+        hmget_fields: List[str],
+    ) -> tuple[List[Optional[str]], List[Optional[str]]]:
+        mget_results = await self.mget(mget_keys)
+        hmget_results = await self.hmget(hmget_key, hmget_fields)
+        return mget_results, hmget_results
+
     async def hset(self, key: str, mapping: Mapping[str, str]) -> int:
         self._hash_data.setdefault(key, {}).update(mapping)
         return len(mapping)
@@ -335,7 +345,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         if not current_raw:
             self._data[latest_key] = new_val
             self._hash_data.setdefault(hash_key, {})
-            for idx in range(3, len(args) - 1, 2):
+            for idx in range(2, len(args) - 1, 2):
                 self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
 
@@ -345,7 +355,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         if new_i > current_i:
             self._data[latest_key] = new_val
             self._hash_data.setdefault(hash_key, {})
-            for idx in range(3, len(args) - 1, 2):
+            for idx in range(2, len(args) - 1, 2):
                 self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
         else:
@@ -378,7 +388,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         if not current_raw:
             self._data[latest_key] = new_val
             self._hash_data.setdefault(hash_key, {})
-            for idx in range(3, len(args) - 1, 2):
+            for idx in range(2, len(args) - 1, 2):
                 self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
 
@@ -388,7 +398,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         if new_i > current_i:
             self._data[latest_key] = new_val
             self._hash_data.setdefault(hash_key, {})
-            for idx in range(3, len(args) - 1, 2):
+            for idx in range(2, len(args) - 1, 2):
                 self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
         else:
@@ -455,7 +465,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         self._data[latest_key] = state_json
 
         self._hash_data.setdefault(hash_key, {})
-        for idx in range(5, len(args) - 1, 2):
+        for idx in range(4, len(args) - 1, 2):
             self._hash_data[hash_key][args[idx]] = args[idx + 1]
 
         self._sorted_sets.setdefault("payment_channels:all", []).append(

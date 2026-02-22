@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
@@ -16,6 +17,8 @@ from ....application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
 )
 from ..dependencies import get_paytree_first_opt_payment_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/channels/paytree_first_opt",
@@ -77,6 +80,9 @@ async def receive_paytree_first_opt_payment(
         ).observe(elapsed)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.exception(
+            "Internal server error while processing PayTree First Opt payment: %s", e
+        )
         paytree_first_opt_payment_requests_total.labels(status="server_error").inc()
         elapsed = (time.perf_counter() - start_time) * 1000
         paytree_first_opt_payment_request_duration_milliseconds.labels(
@@ -84,7 +90,7 @@ async def receive_paytree_first_opt_payment(
         ).observe(elapsed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process PayTree First Opt payment: {str(e)}",
+            detail="Internal server error while processing PayTree First Opt payment",
         )
     finally:
         paytree_first_opt_payment_requests_inprogress.dec()
@@ -108,7 +114,10 @@ async def settle_paytree_first_opt_channel(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.exception(
+            "Internal server error while closing PayTree First Opt channel: %s", e
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to close PayTree First Opt channel: {str(e)}",
+            detail="Internal server error while closing PayTree First Opt channel",
         )
