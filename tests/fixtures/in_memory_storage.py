@@ -13,6 +13,7 @@ class InMemoryKeyValueStore(KeyValueStore):
 
     def __init__(self) -> None:
         self._data: dict[str, str] = {}
+        self._hash_data: dict[str, dict[str, str]] = {}
         self._sorted_sets: dict[str, list[tuple[str, float]]] = {}
         self._script_cache: dict[str, str] = {}
         self._script_sources: dict[str, str] = {}
@@ -22,6 +23,14 @@ class InMemoryKeyValueStore(KeyValueStore):
 
     async def mget(self, keys: List[str]) -> List[Optional[str]]:
         return [self._data.get(key) for key in keys]
+
+    async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
+        h = self._hash_data.get(key, {})
+        return [h.get(f) for f in fields]
+
+    async def hset(self, key: str, mapping: Mapping[str, str]) -> int:
+        self._hash_data.setdefault(key, {}).update(mapping)
+        return len(mapping)
 
     async def set(self, key: str, value: str) -> None:
         self._data[key] = value
@@ -305,6 +314,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         """Execute save_paytree_second_opt_payment script logic."""
         latest_key = keys[0]
         channel_key = keys[1]
+        hash_key = keys[2]
         new_val = args[0]
         new_i = float(args[1])
 
@@ -324,8 +334,9 @@ class InMemoryKeyValueStore(KeyValueStore):
         current_raw: Optional[str] = self._data.get(latest_key)
         if not current_raw:
             self._data[latest_key] = new_val
-            for idx in range(2, len(keys)):
-                self._data[keys[idx]] = args[idx]
+            self._hash_data.setdefault(hash_key, {})
+            for idx in range(3, len(args) - 1, 2):
+                self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
 
         current = json.loads(current_raw)
@@ -333,8 +344,9 @@ class InMemoryKeyValueStore(KeyValueStore):
 
         if new_i > current_i:
             self._data[latest_key] = new_val
-            for idx in range(2, len(keys)):
-                self._data[keys[idx]] = args[idx]
+            self._hash_data.setdefault(hash_key, {})
+            for idx in range(3, len(args) - 1, 2):
+                self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
         else:
             return [0, current_raw]
@@ -345,6 +357,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         """Execute save_paytree_first_opt_payment script logic."""
         latest_key = keys[0]
         channel_key = keys[1]
+        hash_key = keys[2]
         new_val = args[0]
         new_i = float(args[1])
 
@@ -364,8 +377,9 @@ class InMemoryKeyValueStore(KeyValueStore):
         current_raw: Optional[str] = self._data.get(latest_key)
         if not current_raw:
             self._data[latest_key] = new_val
-            for idx in range(2, len(keys)):
-                self._data[keys[idx]] = args[idx]
+            self._hash_data.setdefault(hash_key, {})
+            for idx in range(3, len(args) - 1, 2):
+                self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
 
         current = json.loads(current_raw)
@@ -373,8 +387,9 @@ class InMemoryKeyValueStore(KeyValueStore):
 
         if new_i > current_i:
             self._data[latest_key] = new_val
-            for idx in range(2, len(keys)):
-                self._data[keys[idx]] = args[idx]
+            self._hash_data.setdefault(hash_key, {})
+            for idx in range(3, len(args) - 1, 2):
+                self._hash_data[hash_key][args[idx]] = args[idx + 1]
             return [1, new_val]
         else:
             return [0, current_raw]
@@ -425,6 +440,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         """Execute save_channel_and_initial_paytree_second_opt_state script logic."""
         channel_key = keys[0]
         latest_key = keys[1]
+        hash_key = keys[2]
         channel_json = args[0]
         state_json = args[1]
         created_ts = float(args[2])
@@ -438,10 +454,9 @@ class InMemoryKeyValueStore(KeyValueStore):
         self._data[channel_key] = channel_json
         self._data[latest_key] = state_json
 
-        # args[4:] align with keys[2:]
-        for idx in range(2, len(keys)):
-            arg_idx = idx + 2
-            self._data[keys[idx]] = args[arg_idx]
+        self._hash_data.setdefault(hash_key, {})
+        for idx in range(5, len(args) - 1, 2):
+            self._hash_data[hash_key][args[idx]] = args[idx + 1]
 
         self._sorted_sets.setdefault("payment_channels:all", []).append(
             (channel_id, created_ts)
@@ -470,6 +485,7 @@ class InMemoryKeyValueStore(KeyValueStore):
     def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
         self._data.clear()
+        self._hash_data.clear()
         self._sorted_sets.clear()
         self._script_cache.clear()
         self._script_sources.clear()

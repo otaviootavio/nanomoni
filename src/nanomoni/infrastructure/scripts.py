@@ -150,6 +150,7 @@ VENDOR_SCRIPTS = {
     "save_paytree_first_opt_payment": """
         local latest_key = KEYS[1]
         local channel_key = KEYS[2]
+        local hash_key = KEYS[3]
         local new_val = ARGV[1]
         local new_i = tonumber(ARGV[2])
 
@@ -170,13 +171,8 @@ VENDOR_SCRIPTS = {
         local current_raw = redis.call('GET', latest_key)
         if not current_raw then
             redis.call('SET', latest_key, new_val)
-            if #KEYS > 2 then
-                local mset_args = {}
-                for idx = 3, #KEYS do
-                    mset_args[#mset_args + 1] = KEYS[idx]
-                    mset_args[#mset_args + 1] = ARGV[idx]
-                end
-                redis.call('MSET', unpack(mset_args))
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
             end
             return {1, new_val}
         end
@@ -185,13 +181,8 @@ VENDOR_SCRIPTS = {
         local current_i = tonumber(current.i)
         if new_i > current_i then
             redis.call('SET', latest_key, new_val)
-            if #KEYS > 2 then
-                local mset_args = {}
-                for idx = 3, #KEYS do
-                    mset_args[#mset_args + 1] = KEYS[idx]
-                    mset_args[#mset_args + 1] = ARGV[idx]
-                end
-                redis.call('MSET', unpack(mset_args))
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
             end
             return {1, new_val}
         else
@@ -201,6 +192,7 @@ VENDOR_SCRIPTS = {
     "save_paytree_second_opt_payment": """
         local latest_key = KEYS[1]
         local channel_key = KEYS[2]
+        local hash_key = KEYS[3]
         local new_val = ARGV[1]
         local new_i = tonumber(ARGV[2])
 
@@ -221,13 +213,8 @@ VENDOR_SCRIPTS = {
         local current_raw = redis.call('GET', latest_key)
         if not current_raw then
             redis.call('SET', latest_key, new_val)
-            if #KEYS > 2 then
-                local mset_args = {}
-                for idx = 3, #KEYS do
-                    mset_args[#mset_args + 1] = KEYS[idx]
-                    mset_args[#mset_args + 1] = ARGV[idx]
-                end
-                redis.call('MSET', unpack(mset_args))
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
             end
             return {1, new_val}
         end
@@ -236,13 +223,8 @@ VENDOR_SCRIPTS = {
         local current_i = tonumber(current.i)
         if new_i > current_i then
             redis.call('SET', latest_key, new_val)
-            if #KEYS > 2 then
-                local mset_args = {}
-                for idx = 3, #KEYS do
-                    mset_args[#mset_args + 1] = KEYS[idx]
-                    mset_args[#mset_args + 1] = ARGV[idx]
-                end
-                redis.call('MSET', unpack(mset_args))
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
             end
             return {1, new_val}
         else
@@ -287,6 +269,7 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
 _SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT = """
     local channel_key = KEYS[1]
     local latest_key = KEYS[2]
+    local hash_key = KEYS[3]
     local channel_json = ARGV[1]
     local state_json = ARGV[2]
     local created_ts = tonumber(ARGV[3])
@@ -308,16 +291,9 @@ _SAVE_CHANNEL_AND_INITIAL_PAYTREE_SECOND_OPT_STATE_SCRIPT = """
     -- 2. Save Initial State
     redis.call('SET', latest_key, state_json)
 
-    -- 3. Save Initial Node Entries
-    -- KEYS: [3..N] are node keys and ARGV: [5..N+2] are node values
-    if #KEYS > 2 then
-        local mset_args = {}
-        for idx = 3, #KEYS do
-            local arg_idx = idx + 2
-            mset_args[#mset_args + 1] = KEYS[idx]
-            mset_args[#mset_args + 1] = ARGV[arg_idx]
-        end
-        redis.call('MSET', unpack(mset_args))
+    -- 3. Save Initial Node Entries (ARGV[5], ARGV[6] = field1, val1, etc.)
+    for idx = 5, #ARGV - 1, 2 do
+        redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
     end
 
     -- 4. Update Indices

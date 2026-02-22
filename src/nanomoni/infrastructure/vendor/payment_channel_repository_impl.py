@@ -30,16 +30,17 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         self.store = store
 
     @staticmethod
-    def _paytree_first_opt_node_key(
-        *, channel_id: str, level: int, position: int
-    ) -> str:
-        return f"paytree1opt_node:{channel_id}:{level}:{position}"
+    def _paytree_first_opt_hash_key(channel_id: str) -> str:
+        return f"paytree1opt_nodes:{channel_id}"
 
     @staticmethod
-    def _paytree_second_opt_node_key(
-        *, channel_id: str, level: int, position: int
-    ) -> str:
-        return f"paytree2opt_node:{channel_id}:{level}:{position}"
+    def _paytree_second_opt_hash_key(channel_id: str) -> str:
+        return f"paytree2opt_nodes:{channel_id}"
+
+    @staticmethod
+    def _node_field(level: int, position: int) -> str:
+        """Canonical hash field for node cache: level:position."""
+        return f"{level}:{position}"
 
     async def save_channel(
         self, payment_channel: PaymentChannelBase
@@ -477,32 +478,21 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         dict[str, str],
     ]:
         depth = compute_tree_depth(max_i)
-        sibling_keys = [
-            self._paytree_first_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
-            for level in range(depth)
+        sibling_fields = [
+            self._node_field(level, (i >> level) ^ 1) for level in range(depth)
         ]
-        path_keys = [
-            self._paytree_first_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=i >> level,
-            )
-            for level in range(depth)
-        ]
+        path_fields = [self._node_field(level, i >> level) for level in range(depth)]
+        fields = sibling_fields + path_fields
+
         channel_key = f"payment_channel:{channel_id}"
         state_key = f"paytree_first_opt_state:latest:{channel_id}"
-        values = await self.store.mget(
-            [channel_key, state_key] + sibling_keys + path_keys
-        )
+        hash_key = self._paytree_first_opt_hash_key(channel_id)
 
-        channel_json = values[0]
-        state_json = values[1]
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
         if not channel_json:
             return None, None, {}
+
+        hash_values = await self.store.hmget(hash_key, fields)
 
         channel = self._deserialize_channel(channel_json)
         if not isinstance(channel, PaytreeFirstOptPaymentChannel):
@@ -511,14 +501,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             PaytreeFirstOptState.model_validate_json(state_json) if state_json else None
         )
         cache: dict[str, str] = {}
-        for level, value in enumerate(values[2 : 2 + depth]):
-            if value is None:
-                continue
-            cache[f"{level}:{(i >> level) ^ 1}"] = value
-        for level, value in enumerate(values[2 + depth : 2 + 2 * depth]):
-            if value is None:
-                continue
-            cache[f"{level}:{i >> level}"] = value
+        for field, value in zip(fields, hash_values):
+            if value is not None:
+                cache[field] = value
         return channel, state, cache
 
     async def save_paytree_first_opt_payment(
@@ -534,18 +519,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         latest_key = f"paytree_first_opt_state:latest:{new_state.channel_id}"
         channel_key = f"payment_channel:{new_state.channel_id}"
+        hash_key = self._paytree_first_opt_hash_key(new_state.channel_id)
         payload_json = new_state.model_dump_json()
-        node_items = list(node_entries.items())
-        node_full_keys = [
-            f"paytree1opt_node:{new_state.channel_id}:{short_key}"
-            for short_key, _ in node_items
-        ]
-        node_values = [value for _, value in node_items]
+        node_args = [f for pair in node_entries.items() for f in pair]
 
         result = await self.store.run_script(
             "save_paytree_first_opt_payment",
-            keys=[latest_key, channel_key] + node_full_keys,
-            args=[payload_json, str(new_state.i)] + node_values,
+            keys=[latest_key, channel_key, hash_key],
+            args=[payload_json, str(new_state.i)] + node_args,
         )
 
         code = (
@@ -584,22 +565,18 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     ) -> tuple[int, Optional[PaytreeFirstOptState]]:
         channel_key = f"payment_channel:{channel.channel_id}"
         latest_key = f"paytree_first_opt_state:latest:{channel.channel_id}"
+        hash_key = self._paytree_first_opt_hash_key(channel.channel_id)
 
         channel_json = channel.model_dump_json()
         state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
-        node_items = list(node_entries.items())
-        node_full_keys = [
-            f"paytree1opt_node:{channel.channel_id}:{short_key}"
-            for short_key, _ in node_items
-        ]
-        node_values = [value for _, value in node_items]
+        node_args = [f for pair in node_entries.items() for f in pair]
 
         result = await self.store.run_script(
             "save_channel_and_initial_paytree_first_opt_state",
-            keys=[channel_key, latest_key] + node_full_keys,
+            keys=[channel_key, latest_key, hash_key],
             args=[channel_json, state_json, str(created_ts), channel.channel_id]
-            + node_values,
+            + node_args,
         )
         code = int(result[0])
         if code == 1:
@@ -619,52 +596,29 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if trusted_level is not None:
             start_level = min(depth, max(0, trusted_level))
 
-        sibling_keys = [
-            self._paytree_first_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
+        sibling_fields = [
+            self._node_field(level, (i >> level) ^ 1)
             for level in range(start_level, depth)
         ]
-        keys = list(sibling_keys)
         include_trusted_q_node = start_level < depth
         if include_trusted_q_node:
-            keys.append(
-                self._paytree_first_opt_node_key(
-                    channel_id=channel_id,
-                    level=start_level,
-                    position=i >> start_level,
-                )
-            )
+            sibling_fields.append(self._node_field(start_level, i >> start_level))
 
-        values = await self.store.mget(keys)
+        hash_key = self._paytree_first_opt_hash_key(channel_id)
+        values = await self.store.hmget(hash_key, sibling_fields)
         cache: dict[str, str] = {}
-        for level_offset, value in enumerate(values[: len(sibling_keys)]):
-            if value is None:
-                continue
-            level = start_level + level_offset
-            position = (i >> level) ^ 1
-            cache[f"{level}:{position}"] = value
-        if include_trusted_q_node and len(values) > len(sibling_keys):
-            q_value = values[len(sibling_keys)]
-            if q_value is not None:
-                cache[f"{start_level}:{i >> start_level}"] = q_value
+        for field, value in zip(sibling_fields, values):
+            if value is not None:
+                cache[field] = value
         return cache
 
     async def get_paytree_first_opt_siblings_for_settlement(
         self, *, channel_id: str, i: int, max_i: int
     ) -> list[str]:
         depth = compute_tree_depth(max_i)
-        node_keys = [
-            self._paytree_first_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
-            for level in range(depth)
-        ]
-        values = await self.store.mget(node_keys)
+        fields = [self._node_field(level, (i >> level) ^ 1) for level in range(depth)]
+        hash_key = self._paytree_first_opt_hash_key(channel_id)
+        values = await self.store.hmget(hash_key, fields)
         siblings: list[str] = []
         for value in values:
             if value is None:
@@ -711,32 +665,21 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         dict[str, str],
     ]:
         depth = compute_tree_depth(max_i)
-        sibling_keys = [
-            self._paytree_second_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
-            for level in range(depth)
+        sibling_fields = [
+            self._node_field(level, (i >> level) ^ 1) for level in range(depth)
         ]
-        path_keys = [
-            self._paytree_second_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=i >> level,
-            )
-            for level in range(depth)
-        ]
+        path_fields = [self._node_field(level, i >> level) for level in range(depth)]
+        fields = sibling_fields + path_fields
+
         channel_key = f"payment_channel:{channel_id}"
         state_key = f"paytree_second_opt_state:latest:{channel_id}"
-        values = await self.store.mget(
-            [channel_key, state_key] + sibling_keys + path_keys
-        )
+        hash_key = self._paytree_second_opt_hash_key(channel_id)
 
-        channel_json = values[0]
-        state_json = values[1]
+        channel_json, state_json = await self.store.mget([channel_key, state_key])
         if not channel_json:
             return None, None, {}
+
+        hash_values = await self.store.hmget(hash_key, fields)
 
         channel = self._deserialize_channel(channel_json)
         if not isinstance(channel, PaytreeSecondOptPaymentChannel):
@@ -747,14 +690,9 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             else None
         )
         cache: dict[str, str] = {}
-        for level, value in enumerate(values[2 : 2 + depth]):
-            if value is None:
-                continue
-            cache[f"{level}:{(i >> level) ^ 1}"] = value
-        for level, value in enumerate(values[2 + depth : 2 + 2 * depth]):
-            if value is None:
-                continue
-            cache[f"{level}:{i >> level}"] = value
+        for field, value in zip(fields, hash_values):
+            if value is not None:
+                cache[field] = value
         return channel, state, cache
 
     async def save_paytree_second_opt_payment(
@@ -770,18 +708,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
 
         latest_key = f"paytree_second_opt_state:latest:{new_state.channel_id}"
         channel_key = f"payment_channel:{new_state.channel_id}"
+        hash_key = self._paytree_second_opt_hash_key(new_state.channel_id)
         payload_json = new_state.model_dump_json()
-        node_items = list(node_entries.items())
-        node_full_keys = [
-            f"paytree2opt_node:{new_state.channel_id}:{short_key}"
-            for short_key, _ in node_items
-        ]
-        node_values = [value for _, value in node_items]
+        node_args = [f for pair in node_entries.items() for f in pair]
 
         result = await self.store.run_script(
             "save_paytree_second_opt_payment",
-            keys=[latest_key, channel_key] + node_full_keys,
-            args=[payload_json, str(new_state.i)] + node_values,
+            keys=[latest_key, channel_key, hash_key],
+            args=[payload_json, str(new_state.i)] + node_args,
         )
 
         code = (
@@ -825,53 +759,30 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if trusted_level is not None:
             sibling_depth = min(depth, max(0, trusted_level))
 
-        sibling_keys = [
-            self._paytree_second_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
-            for level in range(sibling_depth)
+        sibling_fields = [
+            self._node_field(level, (i >> level) ^ 1) for level in range(sibling_depth)
         ]
-        keys = list(sibling_keys)
         include_trusted_q_node = sibling_depth < depth
         if include_trusted_q_node:
-            keys.append(
-                self._paytree_second_opt_node_key(
-                    channel_id=channel_id,
-                    level=sibling_depth,
-                    position=i >> sibling_depth,
-                )
-            )
+            sibling_fields.append(self._node_field(sibling_depth, i >> sibling_depth))
 
-        values = await self.store.mget(keys)
+        hash_key = self._paytree_second_opt_hash_key(channel_id)
+        values = await self.store.hmget(hash_key, sibling_fields)
         cache: dict[str, str] = {}
-        for level, value in enumerate(values[:sibling_depth]):
-            if value is None:
-                continue
-            position = (i >> level) ^ 1
-            cache[f"{level}:{position}"] = value
-        if include_trusted_q_node and len(values) > sibling_depth:
-            q_value = values[sibling_depth]
-            if q_value is not None:
-                cache[f"{sibling_depth}:{i >> sibling_depth}"] = q_value
+        for field, value in zip(sibling_fields, values):
+            if value is not None:
+                cache[field] = value
         return cache
 
     async def get_paytree_second_opt_siblings_for_settlement(
         self, *, channel_id: str, i: int, max_i: int
     ) -> list[str]:
         depth = compute_tree_depth(max_i)
-        node_keys = [
-            self._paytree_second_opt_node_key(
-                channel_id=channel_id,
-                level=level,
-                position=(i >> level) ^ 1,
-            )
-            for level in range(depth)
-        ]
-        values = await self.store.mget(node_keys)
+        fields = [self._node_field(level, (i >> level) ^ 1) for level in range(depth)]
+        hash_key = self._paytree_second_opt_hash_key(channel_id)
+        values = await self.store.hmget(hash_key, fields)
         siblings: list[str] = []
-        for level, value in enumerate(values):
+        for value in values:
             if value is None:
                 raise ValueError(
                     "Missing required sibling in node cache for settlement"
@@ -887,22 +798,18 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     ) -> tuple[int, Optional[PaytreeSecondOptState]]:
         channel_key = f"payment_channel:{channel.channel_id}"
         latest_key = f"paytree_second_opt_state:latest:{channel.channel_id}"
+        hash_key = self._paytree_second_opt_hash_key(channel.channel_id)
 
         channel_json = channel.model_dump_json()
         state_json = initial_state.model_dump_json()
         created_ts = channel.created_at.timestamp()
-        node_items = list(node_entries.items())
-        node_full_keys = [
-            f"paytree2opt_node:{channel.channel_id}:{short_key}"
-            for short_key, _ in node_items
-        ]
-        node_values = [value for _, value in node_items]
+        node_args = [f for pair in node_entries.items() for f in pair]
 
         result = await self.store.run_script(
             "save_channel_and_initial_paytree_second_opt_state",
-            keys=[channel_key, latest_key] + node_full_keys,
+            keys=[channel_key, latest_key, hash_key],
             args=[channel_json, state_json, str(created_ts), channel.channel_id]
-            + node_values,
+            + node_args,
         )
         code = int(result[0])
         if code == 1:

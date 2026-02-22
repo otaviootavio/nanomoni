@@ -40,14 +40,20 @@ def reconstruct_full_siblings(
     pruned_siblings_b64: list[str],
     send_levels: list[int],
     node_cache_b64: dict[str, str],
+    stop_level: Optional[int] = None,
 ) -> Optional[list[str]]:
-    """Reconstruct full sibling list from pruned siblings + cache."""
+    """Reconstruct sibling list from pruned siblings + cache.
+
+    When stop_level is set (early-stop verification), only levels [0..stop_level-1]
+    are reconstructed; higher-level siblings are not needed for verification.
+    """
     if len(pruned_siblings_b64) != len(send_levels):
         return None
 
+    target_depth = min(depth, stop_level) if stop_level is not None else depth
     send_by_level = {level: sib for level, sib in zip(send_levels, pruned_siblings_b64)}
     full: list[str] = []
-    for level in range(depth):
+    for level in range(target_depth):
         if level in send_by_level:
             full.append(send_by_level[level])
             continue
@@ -79,23 +85,7 @@ def verify_pruned_paytree_proof(
     send_levels = compute_send_levels(
         i=i, last_verified_index=last_verified_index, depth=depth
     )
-    full_siblings_b64 = reconstruct_full_siblings(
-        i=i,
-        depth=depth,
-        pruned_siblings_b64=pruned_siblings_b64,
-        send_levels=send_levels,
-        node_cache_b64=node_cache_b64,
-    )
-    if full_siblings_b64 is None:
-        return False, [], node_cache_b64
 
-    try:
-        leaf = b64_to_bytes(leaf_b64)
-        siblings = [b64_to_bytes(s) for s in full_siblings_b64]
-    except Exception:
-        return False, [], node_cache_b64
-
-    ok = False
     trusted_level: Optional[int] = None
     known_node_hash = None
     if last_verified_index is not None:
@@ -109,6 +99,32 @@ def verify_pruned_paytree_proof(
             except Exception:
                 known_node_hash = None
 
+    stop_level = (
+        trusted_level
+        if (trusted_level is not None and known_node_hash is not None)
+        else None
+    )
+    send_levels_truncated = [
+        lvl for lvl in send_levels if stop_level is None or lvl < stop_level
+    ]
+    full_siblings_b64 = reconstruct_full_siblings(
+        i=i,
+        depth=depth,
+        pruned_siblings_b64=pruned_siblings_b64[: len(send_levels_truncated)],
+        send_levels=send_levels_truncated,
+        node_cache_b64=node_cache_b64,
+        stop_level=stop_level,
+    )
+    if full_siblings_b64 is None:
+        return False, [], node_cache_b64
+
+    try:
+        leaf = b64_to_bytes(leaf_b64)
+        siblings = [b64_to_bytes(s) for s in full_siblings_b64]
+    except Exception:
+        return False, [], node_cache_b64
+
+    ok = False
     if trusted_level is not None and known_node_hash is not None:
         ok = verify_proof_to_known_node(
             leaf_hash=leaf,
