@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from ...crypto.paytree import compute_tree_depth
+from ...crypto.paytree import (
+    _cache_key,
+    compute_lcp,
+    compute_tree_depth,
+)
 from ...domain.vendor.entities import (
     PaymentChannelBase,
     PaytreeFirstOptPaymentChannel,
@@ -477,13 +481,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         Optional[PaytreeFirstOptState],
         dict[str, str],
     ]:
-        depth = compute_tree_depth(max_i)
-        sibling_fields = [
-            self._node_field(level, (i >> level) ^ 1) for level in range(depth)
-        ]
-        path_fields = [self._node_field(level, i >> level) for level in range(depth)]
-        fields = sibling_fields + path_fields
-
         channel_key = f"payment_channel:{channel_id}"
         state_key = f"paytree_first_opt_state:latest:{channel_id}"
         hash_key = self._paytree_first_opt_hash_key(channel_id)
@@ -492,19 +489,41 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         if not channel_json:
             return None, None, {}
 
-        hash_values = await self.store.hmget(hash_key, fields)
-
         channel = self._deserialize_channel(channel_json)
         if not isinstance(channel, PaytreeFirstOptPaymentChannel):
             raise TypeError("Payment channel is not PayTree First Opt-enabled")
         state = (
             PaytreeFirstOptState.model_validate_json(state_json) if state_json else None
         )
-        cache: dict[str, str] = {}
-        for field, value in zip(fields, hash_values):
+
+        depth = compute_tree_depth(max_i)
+        last_verified_index = state.last_verified_index if state is not None else None
+
+        if last_verified_index is not None:
+            k_max = compute_lcp(i, last_verified_index, depth)
+            trusted_level = depth - k_max
+            known_key = _cache_key(trusted_level, i >> trusted_level)
+            hash_values = await self.store.hmget(hash_key, [known_key])
+            known_value = hash_values[0] if hash_values else None
+            if known_value is not None:
+                cache = {known_key: known_value}
+                return channel, state, cache
+            fallback_fields = [
+                self._node_field(level, (i >> level) ^ 1)
+                for level in range(trusted_level, depth)
+            ]
+        else:
+            fallback_fields = []
+
+        if not fallback_fields:
+            return channel, state, {}
+
+        hash_values = await self.store.hmget(hash_key, fallback_fields)
+        fallback_cache: dict[str, str] = {}
+        for field, value in zip(fallback_fields, hash_values):
             if value is not None:
-                cache[field] = value
-        return channel, state, cache
+                fallback_cache[field] = value
+        return channel, state, fallback_cache
 
     async def save_paytree_first_opt_payment(
         self,
