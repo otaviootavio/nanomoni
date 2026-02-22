@@ -147,6 +147,90 @@ VENDOR_SCRIPTS = {
             return {0, current_raw}
         end
     """,
+    "save_paytree_first_opt_payment": """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local hash_key = KEYS[3]
+        local new_val = ARGV[1]
+        local new_i = tonumber(ARGV[2])
+
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_i = tonumber(channel.paytree_first_opt_max_i)
+        if not max_i then
+            return {2, ''}
+        end
+        if new_i > max_i then
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
+        end
+
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
+            end
+            return {1, new_val}
+        end
+
+        local current = cjson.decode(current_raw)
+        local current_i = tonumber(current.i)
+        if new_i > current_i then
+            redis.call('SET', latest_key, new_val)
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
+            end
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+    """,
+    "save_paytree_second_opt_payment": """
+        local latest_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local hash_key = KEYS[3]
+        local new_val = ARGV[1]
+        local new_i = tonumber(ARGV[2])
+
+        local channel_raw = redis.call('GET', channel_key)
+        if not channel_raw then
+            return {2, ''}
+        end
+        local channel = cjson.decode(channel_raw)
+        local max_i = tonumber(channel.paytree_second_opt_max_i)
+        if not max_i then
+            return {2, ''}
+        end
+        if new_i > max_i then
+            local current_raw = redis.call('GET', latest_key)
+            return {3, current_raw or ''}
+        end
+
+        local current_raw = redis.call('GET', latest_key)
+        if not current_raw then
+            redis.call('SET', latest_key, new_val)
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
+            end
+            return {1, new_val}
+        end
+
+        local current = cjson.decode(current_raw)
+        local current_i = tonumber(current.i)
+        if new_i > current_i then
+            redis.call('SET', latest_key, new_val)
+            for idx = 3, #ARGV - 1, 2 do
+                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
+            end
+            return {1, new_val}
+        else
+            return {0, current_raw}
+        end
+    """,
 }
 
 # Consolidated script used for all three channel initialization scenarios
@@ -182,12 +266,51 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
     return {1, state_json}
 """
 
+_SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT = """
+    local channel_key = KEYS[1]
+    local latest_key = KEYS[2]
+    local hash_key = KEYS[3]
+    local channel_json = ARGV[1]
+    local state_json = ARGV[2]
+    local created_ts = tonumber(ARGV[3])
+    local channel_id = ARGV[4]
+
+    -- Check if channel already exists
+    if redis.call('EXISTS', channel_key) == 1 then
+        return {0, ''}
+    end
+
+    -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
+    if redis.call('EXISTS', latest_key) == 1 then
+        return {0, ''}
+    end
+
+    -- 1. Save Channel Metadata
+    redis.call('SET', channel_key, channel_json)
+
+    -- 2. Save Initial State
+    redis.call('SET', latest_key, state_json)
+
+    -- 3. Save Initial Node Entries (ARGV[5], ARGV[6] = field1, val1, etc.)
+    for idx = 5, #ARGV - 1, 2 do
+        redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
+    end
+
+    -- 4. Update Indices
+    redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
+    redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
+
+    return {1, state_json}
+"""
+
 # Register the consolidated script under the original three keys for backward compatibility
 VENDOR_SCRIPTS.update(
     {
         "save_channel_and_initial_payment": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
+        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
     }
 )
 

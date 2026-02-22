@@ -155,6 +155,34 @@ class PaytreeState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
+    """Latest PayTree First Opt payment state (index + pruned proof + cache)."""
+
+    channel_id: str = Field(..., description="Payment channel identifier")
+    i: int = Field(..., ge=0, description="Monotonic PayTree index")
+    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
+    siblings_b64: list[str] = Field(
+        ..., description="Pruned list of base64-encoded sibling hashes"
+    )
+    last_verified_index: Optional[int] = Field(
+        None,
+        description="Most recently verified PayTree index",
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PaytreeSecondOptState(DatetimeSerializerMixin, BaseModel):
+    """Latest PayTree Second Opt payment state (index + pruned proof)."""
+
+    channel_id: str = Field(..., description="Payment channel identifier")
+    i: int = Field(..., ge=0, description="Monotonic PayTree index")
+    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
+    siblings_b64: list[str] = Field(
+        ..., description="Pruned list of base64-encoded sibling hashes"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class PaymentChannelBase(CommonSerializersMixin, BaseModel):
     """Base entity for a unidirectional client→vendor payment channel."""
 
@@ -196,3 +224,19 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+
+
+class PaytreeFirstOptPaymentChannel(PaymentChannelBase):
+    """PayTree First Opt channel with Merkle tree commitment."""
+
+    paytree_first_opt_root_b64: str
+    paytree_first_opt_unit_value: int
+    paytree_first_opt_max_i: int
+
+
+class PaytreeSecondOptPaymentChannel(PaymentChannelBase):
+    """PayTree Second Opt channel with Merkle tree commitment."""
+
+    paytree_second_opt_root_b64: str
+    paytree_second_opt_unit_value: int
+    paytree_second_opt_max_i: int

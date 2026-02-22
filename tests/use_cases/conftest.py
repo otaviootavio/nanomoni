@@ -12,9 +12,21 @@ from nanomoni.application.issuer.use_cases.registration import RegistrationServi
 from nanomoni.application.issuer.use_cases.payment_channel import PaymentChannelService
 from nanomoni.application.issuer.use_cases.payword_channel import PaywordChannelService
 from nanomoni.application.issuer.use_cases.paytree_channel import PaytreeChannelService
+from nanomoni.application.issuer.use_cases.paytree_first_opt_channel import (
+    PaytreeFirstOptChannelService,
+)
+from nanomoni.application.issuer.use_cases.paytree_second_opt_channel import (
+    PaytreeSecondOptChannelService,
+)
 from nanomoni.application.vendor.use_cases.payment import PaymentService
 from nanomoni.application.vendor.use_cases.payword_payment import PaywordPaymentService
 from nanomoni.application.vendor.use_cases.paytree_payment import PaytreePaymentService
+from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
+    PaytreeFirstOptPaymentService,
+)
+from nanomoni.application.vendor.use_cases.paytree_second_opt_payment import (
+    PaytreeSecondOptPaymentService,
+)
 from tests.fixtures import (
     InMemoryPaymentChannelRepository,
     InMemoryUserRepository,
@@ -179,6 +191,34 @@ def paytree_channel_service(
     )
 
 
+@pytest.fixture
+def paytree_first_opt_channel_service(
+    issuer_account_repository: InMemoryAccountRepository,
+    issuer_payment_channel_repository: InMemoryIssuerPaymentChannelRepository,
+    issuer_private_key: ec.EllipticCurvePrivateKey,
+) -> PaytreeFirstOptChannelService:
+    """Create a PayTree First Opt channel service for testing."""
+    return PaytreeFirstOptChannelService(
+        account_repo=issuer_account_repository,
+        channel_repo=issuer_payment_channel_repository,
+        issuer_private_key=issuer_private_key,
+    )
+
+
+@pytest.fixture
+def paytree_second_opt_channel_service(
+    issuer_account_repository: InMemoryAccountRepository,
+    issuer_payment_channel_repository: InMemoryIssuerPaymentChannelRepository,
+    issuer_private_key: ec.EllipticCurvePrivateKey,
+) -> PaytreeSecondOptChannelService:
+    """Create a PayTree Second Opt channel service for testing."""
+    return PaytreeSecondOptChannelService(
+        account_repo=issuer_account_repository,
+        channel_repo=issuer_payment_channel_repository,
+        issuer_private_key=issuer_private_key,
+    )
+
+
 # ============================================================================
 # Issuer Client Adapter Fixtures
 # ============================================================================
@@ -190,6 +230,8 @@ def issuer_client(
     payment_channel_service: PaymentChannelService,
     payword_channel_service: PaywordChannelService,
     paytree_channel_service: PaytreeChannelService,
+    paytree_first_opt_channel_service: PaytreeFirstOptChannelService,
+    paytree_second_opt_channel_service: PaytreeSecondOptChannelService,
 ) -> UseCaseIssuerClient:
     """Create an issuer client adapter that calls use cases directly."""
     return UseCaseIssuerClient(
@@ -197,6 +239,8 @@ def issuer_client(
         payment_channel_service=payment_channel_service,
         payword_channel_service=payword_channel_service,
         paytree_channel_service=paytree_channel_service,
+        paytree_first_opt_channel_service=paytree_first_opt_channel_service,
+        paytree_second_opt_channel_service=paytree_second_opt_channel_service,
     )
 
 
@@ -206,6 +250,8 @@ def issuer_client_factory(
     payment_channel_service: PaymentChannelService,
     payword_channel_service: PaywordChannelService,
     paytree_channel_service: PaytreeChannelService,
+    paytree_first_opt_channel_service: PaytreeFirstOptChannelService,
+    paytree_second_opt_channel_service: PaytreeSecondOptChannelService,
 ) -> IssuerClientFactory:
     """Create an issuer client factory that returns the use case adapter."""
 
@@ -217,6 +263,8 @@ def issuer_client_factory(
             payment_channel_service=payment_channel_service,
             payword_channel_service=payword_channel_service,
             paytree_channel_service=paytree_channel_service,
+            paytree_first_opt_channel_service=paytree_first_opt_channel_service,
+            paytree_second_opt_channel_service=paytree_second_opt_channel_service,
         )
         return client
 
@@ -290,6 +338,38 @@ def paytree_payment_service(
     )
 
 
+@pytest.fixture
+def paytree_first_opt_payment_service(
+    payment_channel_repository: InMemoryPaymentChannelRepository,
+    issuer_client_factory: IssuerClientFactory,
+    vendor_public_key_der_b64: str,
+    vendor_private_key_pem: str,
+) -> PaytreeFirstOptPaymentService:
+    """Create a PayTree First Opt payment service for testing."""
+    return PaytreeFirstOptPaymentService(
+        payment_channel_repository=payment_channel_repository,
+        issuer_client_factory=issuer_client_factory,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        vendor_private_key_pem=vendor_private_key_pem,
+    )
+
+
+@pytest.fixture
+def paytree_second_opt_payment_service(
+    payment_channel_repository: InMemoryPaymentChannelRepository,
+    issuer_client_factory: IssuerClientFactory,
+    vendor_public_key_der_b64: str,
+    vendor_private_key_pem: str,
+) -> PaytreeSecondOptPaymentService:
+    """Create a PayTree Second Opt payment service for testing."""
+    return PaytreeSecondOptPaymentService(
+        payment_channel_repository=payment_channel_repository,
+        issuer_client_factory=issuer_client_factory,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        vendor_private_key_pem=vendor_private_key_pem,
+    )
+
+
 # ============================================================================
 # Vendor Client Adapter Fixtures
 # ============================================================================
@@ -300,6 +380,8 @@ def vendor_client(
     payment_service: PaymentService,
     payword_payment_service: PaywordPaymentService,
     paytree_payment_service: PaytreePaymentService,
+    paytree_first_opt_payment_service: PaytreeFirstOptPaymentService,
+    paytree_second_opt_payment_service: PaytreeSecondOptPaymentService,
     vendor_public_key_der_b64: str,
 ) -> UseCaseVendorClient:
     """Create a vendor client adapter that calls use cases directly."""
@@ -307,5 +389,7 @@ def vendor_client(
         payment_service=payment_service,
         payword_payment_service=payword_payment_service,
         paytree_payment_service=paytree_payment_service,
+        paytree_first_opt_payment_service=paytree_first_opt_payment_service,
+        paytree_second_opt_payment_service=paytree_second_opt_payment_service,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
     )

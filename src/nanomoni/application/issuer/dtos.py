@@ -49,6 +49,16 @@ class OpenChannelRequestDTO(BaseModel):
     paytree_unit_value: Optional[int] = None
     paytree_max_i: Optional[int] = None
 
+    # PayTree First Opt-specific fields (optional)
+    paytree_first_opt_root_b64: Optional[str] = None
+    paytree_first_opt_unit_value: Optional[int] = None
+    paytree_first_opt_max_i: Optional[int] = None
+
+    # PayTree Second Opt-specific fields (optional)
+    paytree_second_opt_root_b64: Optional[str] = None
+    paytree_second_opt_unit_value: Optional[int] = None
+    paytree_second_opt_max_i: Optional[int] = None
+
 
 class OpenChannelResponseDTO(BaseModel):
     """Response containing the opened channel details."""

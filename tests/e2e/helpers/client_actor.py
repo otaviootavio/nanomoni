@@ -20,6 +20,12 @@ from nanomoni.application.shared.payword_payloads import (
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
 )
+from nanomoni.application.shared.paytree_first_opt_payloads import (
+    PaytreeFirstOptOpenChannelRequestPayload,
+)
+from nanomoni.application.shared.paytree_second_opt_payloads import (
+    PaytreeSecondOptOpenChannelRequestPayload,
+)
 from nanomoni.application.vendor.dtos import ReceivePaymentDTO
 from nanomoni.crypto.certificates import (
     json_to_bytes,
@@ -27,6 +33,8 @@ from nanomoni.crypto.certificates import (
 )
 from nanomoni.crypto.payword import Payword
 from nanomoni.crypto.paytree import Paytree
+from nanomoni.crypto.paytree_first_opt import PaytreeFirstOpt
+from nanomoni.crypto.paytree_second_opt import PaytreeSecondOpt
 
 
 class ClientActor:
@@ -232,6 +240,94 @@ class ClientActor:
                 paytree_root_b64=root_b64,
                 paytree_unit_value=unit_value,
                 paytree_max_i=max_i,
+            ),
+            paytree,
+        )
+
+    def create_open_channel_request_paytree_first_opt(
+        self,
+        vendor_public_key_der_b64: str,
+        *,
+        amount: int,
+        unit_value: int,
+        max_i: int,
+    ) -> tuple[OpenChannelRequestDTO, PaytreeFirstOpt]:
+        """
+        Create an open channel request with an embedded PayTree First Opt commitment.
+
+        Returns:
+            (OpenChannelRequestDTO, PaytreeFirstOpt) so tests can generate proofs efficiently.
+        """
+        if unit_value <= 0:
+            raise ValueError("unit_value must be > 0")
+
+        paytree = PaytreeFirstOpt.create(max_i=max_i)
+        root_b64 = paytree.commitment_root_b64
+
+        payload = PaytreeFirstOptOpenChannelRequestPayload(
+            client_public_key_der_b64=self.public_key_der_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            paytree_first_opt_root_b64=root_b64,
+            paytree_first_opt_unit_value=unit_value,
+            paytree_first_opt_max_i=max_i,
+        )
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
+
+        return (
+            OpenChannelRequestDTO(
+                client_public_key_der_b64=self.public_key_der_b64,
+                vendor_public_key_der_b64=vendor_public_key_der_b64,
+                amount=amount,
+                open_signature_b64=signature_b64,
+                paytree_first_opt_root_b64=root_b64,
+                paytree_first_opt_unit_value=unit_value,
+                paytree_first_opt_max_i=max_i,
+            ),
+            paytree,
+        )
+
+    def create_open_channel_request_paytree_second_opt(
+        self,
+        vendor_public_key_der_b64: str,
+        *,
+        amount: int,
+        unit_value: int,
+        max_i: int,
+    ) -> tuple[OpenChannelRequestDTO, PaytreeSecondOpt]:
+        """
+        Create an open channel request with an embedded PayTree Second Opt commitment.
+
+        Returns:
+            (OpenChannelRequestDTO, PaytreeSecondOpt) so tests can generate proofs efficiently.
+        """
+        if unit_value <= 0:
+            raise ValueError("unit_value must be > 0")
+
+        paytree = PaytreeSecondOpt.create(max_i=max_i)
+        root_b64 = paytree.commitment_root_b64
+
+        payload = PaytreeSecondOptOpenChannelRequestPayload(
+            client_public_key_der_b64=self.public_key_der_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            paytree_second_opt_root_b64=root_b64,
+            paytree_second_opt_unit_value=unit_value,
+            paytree_second_opt_max_i=max_i,
+        )
+        payload_bytes = json_to_bytes(payload.model_dump())
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
+
+        return (
+            OpenChannelRequestDTO(
+                client_public_key_der_b64=self.public_key_der_b64,
+                vendor_public_key_der_b64=vendor_public_key_der_b64,
+                amount=amount,
+                open_signature_b64=signature_b64,
+                paytree_second_opt_root_b64=root_b64,
+                paytree_second_opt_unit_value=unit_value,
+                paytree_second_opt_max_i=max_i,
             ),
             paytree,
         )
