@@ -599,7 +599,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         sibling_fields = [
             _cache_key(level, (i >> level) ^ 1) for level in range(start_level, depth)
         ]
-        include_trusted_q_node = start_level < depth
+        include_trusted_q_node = trusted_level is not None and start_level < depth
         if include_trusted_q_node:
             sibling_fields.append(_cache_key(start_level, i >> start_level))
 
