@@ -39,8 +39,13 @@ class InMemoryKeyValueStore(KeyValueStore):
         return mget_results, hmget_results
 
     async def hset(self, key: str, mapping: Mapping[str, str]) -> int:
-        self._hash_data.setdefault(key, {}).update(mapping)
-        return len(mapping)
+        h = self._hash_data.setdefault(key, {})
+        added = 0
+        for field, value in mapping.items():
+            if field not in h:
+                added += 1
+            h[field] = value
+        return added
 
     async def set(self, key: str, value: str) -> None:
         self._data[key] = value

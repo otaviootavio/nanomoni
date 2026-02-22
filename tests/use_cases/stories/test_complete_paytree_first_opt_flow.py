@@ -47,6 +47,7 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
     )
     channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
     channel_id = channel_response.channel_id
+    assert channel_id, "expected non-empty channel_id"
     assert channel_response.amount == channel_amount
     assert channel_response.paytree_first_opt_root_b64 is not None
     assert channel_response.paytree_first_opt_unit_value == unit_value
