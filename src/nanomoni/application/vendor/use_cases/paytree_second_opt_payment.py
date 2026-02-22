@@ -18,8 +18,6 @@ from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
 from ....crypto.paytree import (
     compute_cumulative_owed_amount,
-    compute_lcp,
-    compute_tree_depth,
     update_cache_with_siblings_and_path,
 )
 from ....crypto.paytree_second_opt import (
@@ -139,8 +137,11 @@ class PaytreeSecondOptPaymentService:
         (
             payment_channel,
             latest_state,
-        ) = await self.payment_channel_repository.get_paytree_second_opt_channel_and_latest_state(
-            channel_id
+            sibling_cache,
+        ) = await self.payment_channel_repository.get_paytree_second_opt_channel_state_and_sibling_cache(
+            channel_id=channel_id,
+            i=dto.i,
+            max_i=dto.max_i,
         )
 
         is_first_payment = False
@@ -148,9 +149,12 @@ class PaytreeSecondOptPaymentService:
             payment_channel = await self._verify_channel(channel_id)
             is_first_payment = True
             latest_state = None
+            sibling_cache = {}
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
+        if dto.max_i != payment_channel.paytree_second_opt_max_i:
+            raise ValueError("PayTree Second Opt max_i does not match channel metadata")
 
         prev_i = latest_state.i if latest_state else 0
         prev_leaf = latest_state.leaf_b64 if latest_state else None
@@ -189,20 +193,8 @@ class PaytreeSecondOptPaymentService:
             channel_amount=payment_channel.amount,
         )
 
+        existing_keys = set(sibling_cache.keys())
         last_verified_index = latest_state.i if latest_state else None
-        sibling_cache: dict[str, str] = {}
-        if not is_first_payment:
-            trusted_level = None
-            if last_verified_index is not None:
-                depth = compute_tree_depth(payment_channel.paytree_second_opt_max_i)
-                k_max = compute_lcp(dto.i, last_verified_index, depth)
-                trusted_level = depth - k_max
-            sibling_cache = await self.payment_channel_repository.get_paytree_second_opt_sibling_cache_for_index(
-                channel_id=channel_id,
-                i=dto.i,
-                max_i=payment_channel.paytree_second_opt_max_i,
-                trusted_level=trusted_level,
-            )
         ok, full_siblings_b64 = verify_pruned_paytree_proof(
             i=dto.i,
             root_b64=payment_channel.paytree_second_opt_root_b64,
@@ -218,10 +210,11 @@ class PaytreeSecondOptPaymentService:
             i=dto.i,
             leaf_b64=dto.leaf_b64,
             full_siblings_b64=full_siblings_b64,
-            node_cache_b64={},
+            node_cache_b64=sibling_cache,
         )
         if node_entries is None:
             raise ValueError("Failed to build PayTree Second Opt node entries")
+        node_entries = {k: v for k, v in node_entries.items() if k not in existing_keys}
 
         new_state = PaytreeSecondOptState(
             channel_id=channel_id,

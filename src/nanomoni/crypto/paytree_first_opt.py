@@ -59,18 +59,6 @@ def reconstruct_full_siblings(
     return full
 
 
-def update_cache_with_full_siblings(
-    *,
-    i: int,
-    full_siblings_b64: list[str],
-) -> dict[str, str]:
-    """Store all known P(x) sibling nodes in the cache."""
-    return {
-        _cache_key(level, (i >> level) ^ 1): sibling_b64
-        for level, sibling_b64 in enumerate(full_siblings_b64)
-    }
-
-
 def verify_pruned_paytree_proof(
     *,
     i: int,

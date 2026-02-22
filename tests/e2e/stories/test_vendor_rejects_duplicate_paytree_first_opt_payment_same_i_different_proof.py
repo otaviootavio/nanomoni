@@ -36,13 +36,21 @@ async def test_vendor_rejects_duplicate_paytree_first_opt_payment_same_i_differe
     i = 10
     i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i, last_verified_index=None)
     await vendor_client.receive_paytree_first_opt_payment(
-        channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+        channel_id,
+        i=i_val,
+        max_i=paytree.max_i,
+        leaf_b64=leaf_b64,
+        siblings_b64=siblings_b64,
     )
 
     # Replay attempt: same i but proof for a different index.
     _i2, leaf2_b64, siblings2_b64 = paytree.payment_proof(i=11, last_verified_index=10)
     resp = await vendor_client.receive_paytree_first_opt_payment_raw(
-        channel_id, i=i_val, leaf_b64=leaf2_b64, siblings_b64=siblings2_b64
+        channel_id,
+        i=i_val,
+        max_i=paytree.max_i,
+        leaf_b64=leaf2_b64,
+        siblings_b64=siblings2_b64,
     )
     assert resp.status_code == 400
     assert "duplicate" in (resp.json().get("detail", "").lower())

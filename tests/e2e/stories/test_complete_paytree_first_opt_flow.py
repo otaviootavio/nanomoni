@@ -69,7 +69,11 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
             i=i, last_verified_index=last_verified_index
         )
         resp = await vendor_client.receive_paytree_first_opt_payment(
-            channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            channel_id,
+            i=i_val,
+            max_i=paytree.max_i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
         )
         assert resp.channel_id == channel_id
         assert resp.i == i

@@ -59,7 +59,11 @@ async def test_complete_paytree_second_opt_flow_all_actors_succeed(
             paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
         )
         resp = await vendor_client.receive_paytree_second_opt_payment(
-            channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            channel_id,
+            i=i_val,
+            max_i=paytree.max_i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
         )
         assert resp.channel_id == channel_id
         assert resp.i == i

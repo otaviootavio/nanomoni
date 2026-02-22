@@ -127,11 +127,17 @@ class UseCaseVendorClient:
         await self.paytree_payment_service.settle_channel(dto)
 
     async def receive_paytree_first_opt_payment(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        max_i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> PaytreeFirstOptPaymentResponseDTO:
         """Submit a PayTree First Opt payment to the vendor."""
         dto = ReceivePaytreeFirstOptPaymentDTO(
-            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
         )
         return await self.paytree_first_opt_payment_service.receive_payment(
             channel_id, dto
@@ -145,11 +151,17 @@ class UseCaseVendorClient:
         await self.paytree_first_opt_payment_service.settle_channel(dto)
 
     async def receive_paytree_second_opt_payment(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        max_i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> PaytreeSecondOptPaymentResponseDTO:
         """Submit a PayTree Second Opt payment to the vendor."""
         dto = ReceivePaytreeSecondOptPaymentDTO(
-            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
         )
         return await self.paytree_second_opt_payment_service.receive_payment(
             channel_id, dto
@@ -229,7 +241,13 @@ class UseCaseVendorClient:
             )
 
     async def receive_paytree_first_opt_payment_raw(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        max_i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> UseCaseResponse:
         """
         Submit a PayTree First Opt payment to the vendor without raising on error.
@@ -238,7 +256,7 @@ class UseCaseVendorClient:
         """
         try:
             dto = ReceivePaytreeFirstOptPaymentDTO(
-                i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
             )
             result = await self.paytree_first_opt_payment_service.receive_payment(
                 channel_id, dto
@@ -252,7 +270,13 @@ class UseCaseVendorClient:
             )
 
     async def receive_paytree_second_opt_payment_raw(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        max_i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> UseCaseResponse:
         """
         Submit a PayTree Second Opt payment to the vendor without raising on error.
@@ -261,7 +285,7 @@ class UseCaseVendorClient:
         """
         try:
             dto = ReceivePaytreeSecondOptPaymentDTO(
-                i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
             )
             result = await self.paytree_second_opt_payment_service.receive_payment(
                 channel_id, dto

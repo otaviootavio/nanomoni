@@ -469,6 +469,58 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         )
         return channel, state
 
+    async def get_paytree_first_opt_channel_state_and_sibling_cache(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> tuple[
+        Optional[PaytreeFirstOptPaymentChannel],
+        Optional[PaytreeFirstOptState],
+        dict[str, str],
+    ]:
+        depth = compute_tree_depth(max_i)
+        sibling_keys = [
+            self._paytree_first_opt_node_key(
+                channel_id=channel_id,
+                level=level,
+                position=(i >> level) ^ 1,
+            )
+            for level in range(depth)
+        ]
+        path_keys = [
+            self._paytree_first_opt_node_key(
+                channel_id=channel_id,
+                level=level,
+                position=i >> level,
+            )
+            for level in range(depth)
+        ]
+        channel_key = f"payment_channel:{channel_id}"
+        state_key = f"paytree_first_opt_state:latest:{channel_id}"
+        values = await self.store.mget(
+            [channel_key, state_key] + sibling_keys + path_keys
+        )
+
+        channel_json = values[0]
+        state_json = values[1]
+        if not channel_json:
+            return None, None, {}
+
+        channel = self._deserialize_channel(channel_json)
+        if not isinstance(channel, PaytreeFirstOptPaymentChannel):
+            raise TypeError("Payment channel is not PayTree First Opt-enabled")
+        state = (
+            PaytreeFirstOptState.model_validate_json(state_json) if state_json else None
+        )
+        cache: dict[str, str] = {}
+        for level, value in enumerate(values[2 : 2 + depth]):
+            if value is None:
+                continue
+            cache[f"{level}:{(i >> level) ^ 1}"] = value
+        for level, value in enumerate(values[2 + depth : 2 + 2 * depth]):
+            if value is None:
+                continue
+            cache[f"{level}:{i >> level}"] = value
+        return channel, state, cache
+
     async def save_paytree_first_opt_payment(
         self,
         channel: PaytreeFirstOptPaymentChannel,
@@ -659,7 +711,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         dict[str, str],
     ]:
         depth = compute_tree_depth(max_i)
-        node_keys = [
+        sibling_keys = [
             self._paytree_second_opt_node_key(
                 channel_id=channel_id,
                 level=level,
@@ -667,9 +719,19 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             )
             for level in range(depth)
         ]
+        path_keys = [
+            self._paytree_second_opt_node_key(
+                channel_id=channel_id,
+                level=level,
+                position=i >> level,
+            )
+            for level in range(depth)
+        ]
         channel_key = f"payment_channel:{channel_id}"
         state_key = f"paytree_second_opt_state:latest:{channel_id}"
-        values = await self.store.mget([channel_key, state_key] + node_keys)
+        values = await self.store.mget(
+            [channel_key, state_key] + sibling_keys + path_keys
+        )
 
         channel_json = values[0]
         state_json = values[1]
@@ -685,11 +747,14 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             else None
         )
         cache: dict[str, str] = {}
-        for level, value in enumerate(values[2:]):
+        for level, value in enumerate(values[2 : 2 + depth]):
             if value is None:
                 continue
-            position = (i >> level) ^ 1
-            cache[f"{level}:{position}"] = value
+            cache[f"{level}:{(i >> level) ^ 1}"] = value
+        for level, value in enumerate(values[2 + depth : 2 + 2 * depth]):
+            if value is None:
+                continue
+            cache[f"{level}:{i >> level}"] = value
         return channel, state, cache
 
     async def save_paytree_second_opt_payment(

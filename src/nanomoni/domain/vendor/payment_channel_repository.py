@@ -156,6 +156,19 @@ class PaymentChannelRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_paytree_first_opt_channel_state_and_sibling_cache(
+        self, *, channel_id: str, i: int, max_i: int
+    ) -> tuple[
+        Optional[PaytreeFirstOptPaymentChannel],
+        Optional[PaytreeFirstOptState],
+        dict[str, str],
+    ]:
+        """
+        Get channel metadata, latest state, and per-index sibling cache in one call.
+        """
+        pass
+
+    @abstractmethod
     async def save_paytree_first_opt_payment(
         self,
         channel: PaytreeFirstOptPaymentChannel,

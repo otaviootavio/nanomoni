@@ -103,7 +103,10 @@ async def send_payments(
         await vendor.send_paytree_first_opt_payment(
             channel_id,
             ReceivePaytreeFirstOptPaymentDTO(
-                i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                i=i_val,
+                max_i=paytree.max_i,
+                leaf_b64=leaf_b64,
+                siblings_b64=siblings_b64,
             ),
         )
         last_verified_index = i_val

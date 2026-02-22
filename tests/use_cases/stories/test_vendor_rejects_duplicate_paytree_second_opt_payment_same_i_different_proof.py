@@ -38,7 +38,11 @@ async def test_vendor_rejects_duplicate_paytree_second_opt_payment_same_i_differ
         paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
     )
     await vendor_client.receive_paytree_second_opt_payment(
-        channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+        channel_id,
+        i=i_val,
+        max_i=paytree.max_i,
+        leaf_b64=leaf_b64,
+        siblings_b64=siblings_b64,
     )
     assert (
         update_cache_with_siblings_and_path(
@@ -55,7 +59,11 @@ async def test_vendor_rejects_duplicate_paytree_second_opt_payment_same_i_differ
         i=11, node_cache_b64=node_cache_b64
     )
     resp = await vendor_client.receive_paytree_second_opt_payment_raw(
-        channel_id, i=i_val, leaf_b64=leaf2_b64, siblings_b64=siblings2_b64
+        channel_id,
+        i=i_val,
+        max_i=paytree.max_i,
+        leaf_b64=leaf2_b64,
+        siblings_b64=siblings2_b64,
     )
     assert resp.status_code == 400
     assert "duplicate" in (resp.json().get("detail", "").lower())
