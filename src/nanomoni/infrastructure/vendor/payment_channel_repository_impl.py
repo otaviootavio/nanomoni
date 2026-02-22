@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from ...crypto.paytree import compute_tree_depth
+from ...crypto.paytree import _cache_key, compute_tree_depth
 from ...domain.vendor.entities import (
     PaymentChannelBase,
     PaytreeFirstOptPaymentChannel,
@@ -36,11 +36,6 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
     @staticmethod
     def _paytree_second_opt_hash_key(channel_id: str) -> str:
         return f"paytree2opt_nodes:{channel_id}"
-
-    @staticmethod
-    def _node_field(level: int, position: int) -> str:
-        """Canonical hash field for node cache: level:position."""
-        return f"{level}:{position}"
 
     async def save_channel(
         self, payment_channel: PaymentChannelBase
@@ -482,10 +477,8 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         hash_key = self._paytree_first_opt_hash_key(channel_id)
 
         depth = compute_tree_depth(max_i)
-        sibling_fields = [
-            self._node_field(level, (i >> level) ^ 1) for level in range(depth)
-        ]
-        path_fields = [self._node_field(level, i >> level) for level in range(depth)]
+        sibling_fields = [_cache_key(level, (i >> level) ^ 1) for level in range(depth)]
+        path_fields = [_cache_key(level, i >> level) for level in range(depth)]
         fields = sibling_fields + path_fields
 
         mget_results, hash_values = await self.store.mget_and_hmget(
@@ -604,12 +597,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             start_level = min(depth, max(0, trusted_level))
 
         sibling_fields = [
-            self._node_field(level, (i >> level) ^ 1)
-            for level in range(start_level, depth)
+            _cache_key(level, (i >> level) ^ 1) for level in range(start_level, depth)
         ]
         include_trusted_q_node = start_level < depth
         if include_trusted_q_node:
-            sibling_fields.append(self._node_field(start_level, i >> start_level))
+            sibling_fields.append(_cache_key(start_level, i >> start_level))
 
         hash_key = self._paytree_first_opt_hash_key(channel_id)
         values = await self.store.hmget(hash_key, sibling_fields)
@@ -623,7 +615,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         self, *, channel_id: str, i: int, max_i: int
     ) -> list[str]:
         depth = compute_tree_depth(max_i)
-        fields = [self._node_field(level, (i >> level) ^ 1) for level in range(depth)]
+        fields = [_cache_key(level, (i >> level) ^ 1) for level in range(depth)]
         hash_key = self._paytree_first_opt_hash_key(channel_id)
         values = await self.store.hmget(hash_key, fields)
         siblings: list[str] = []
@@ -672,10 +664,8 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         dict[str, str],
     ]:
         depth = compute_tree_depth(max_i)
-        sibling_fields = [
-            self._node_field(level, (i >> level) ^ 1) for level in range(depth)
-        ]
-        path_fields = [self._node_field(level, i >> level) for level in range(depth)]
+        sibling_fields = [_cache_key(level, (i >> level) ^ 1) for level in range(depth)]
+        path_fields = [_cache_key(level, i >> level) for level in range(depth)]
         fields = sibling_fields + path_fields
 
         channel_key = f"payment_channel:{channel_id}"
@@ -772,11 +762,11 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
             sibling_depth = min(depth, max(0, trusted_level))
 
         sibling_fields = [
-            self._node_field(level, (i >> level) ^ 1) for level in range(sibling_depth)
+            _cache_key(level, (i >> level) ^ 1) for level in range(sibling_depth)
         ]
         include_trusted_q_node = sibling_depth < depth
         if include_trusted_q_node:
-            sibling_fields.append(self._node_field(sibling_depth, i >> sibling_depth))
+            sibling_fields.append(_cache_key(sibling_depth, i >> sibling_depth))
 
         hash_key = self._paytree_second_opt_hash_key(channel_id)
         values = await self.store.hmget(hash_key, sibling_fields)
@@ -790,7 +780,7 @@ class PaymentChannelRepositoryImpl(PaymentChannelRepository):
         self, *, channel_id: str, i: int, max_i: int
     ) -> list[str]:
         depth = compute_tree_depth(max_i)
-        fields = [self._node_field(level, (i >> level) ^ 1) for level in range(depth)]
+        fields = [_cache_key(level, (i >> level) ^ 1) for level in range(depth)]
         hash_key = self._paytree_second_opt_hash_key(channel_id)
         values = await self.store.hmget(hash_key, fields)
         siblings: list[str] = []
