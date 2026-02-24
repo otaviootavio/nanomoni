@@ -28,11 +28,13 @@ from nanomoni.application.vendor.use_cases.paytree_second_opt_payment import (
     PaytreeSecondOptPaymentService,
 )
 from tests.fixtures import (
-    InMemoryPaymentChannelRepository,
-    InMemoryUserRepository,
-    InMemoryTaskRepository,
     InMemoryAccountRepository,
     InMemoryIssuerPaymentChannelRepository,
+    InMemoryTaskRepository,
+    InMemoryUserRepository,
+    VendorPaymentRepositories,
+    create_vendor_payment_repositories,
+    initialize_vendor_payment_repositories,
 )
 from tests.use_cases.helpers.issuer_client_adapter import UseCaseIssuerClient
 from tests.use_cases.helpers.vendor_client_adapter import UseCaseVendorClient
@@ -70,14 +72,14 @@ async def issuer_payment_channel_repository() -> AsyncGenerator[
 
 
 @pytest.fixture
-async def payment_channel_repository() -> AsyncGenerator[
-    InMemoryPaymentChannelRepository, None
+async def vendor_payment_repositories() -> AsyncGenerator[
+    VendorPaymentRepositories, None
 ]:
-    """Create an in-memory payment channel repository."""
-    repo = InMemoryPaymentChannelRepository()
-    await repo.initialize()
-    yield repo
-    repo.clear()
+    """Create in-memory vendor payment channel repositories (separate repos, shared store)."""
+    repos = create_vendor_payment_repositories()
+    await initialize_vendor_payment_repositories(repos)
+    yield repos
+    repos.clear()
 
 
 @pytest.fixture
@@ -292,14 +294,14 @@ def vendor_private_key_pem(
 
 @pytest.fixture
 def payment_service(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
     vendor_private_key_pem: str,
 ) -> PaymentService:
     """Create a payment service for testing."""
     return PaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.signature,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=vendor_private_key_pem,
@@ -308,14 +310,14 @@ def payment_service(
 
 @pytest.fixture
 def payword_payment_service(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
     vendor_private_key_pem: str,
 ) -> PaywordPaymentService:
     """Create a PayWord payment service for testing."""
     return PaywordPaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.payword,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=vendor_private_key_pem,
@@ -324,14 +326,14 @@ def payword_payment_service(
 
 @pytest.fixture
 def paytree_payment_service(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
     vendor_private_key_pem: str,
 ) -> PaytreePaymentService:
     """Create a PayTree payment service for testing."""
     return PaytreePaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.paytree,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=vendor_private_key_pem,
@@ -340,14 +342,14 @@ def paytree_payment_service(
 
 @pytest.fixture
 def paytree_first_opt_payment_service(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
     vendor_private_key_pem: str,
 ) -> PaytreeFirstOptPaymentService:
     """Create a PayTree First Opt payment service for testing."""
     return PaytreeFirstOptPaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.paytree_first_opt,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=vendor_private_key_pem,
@@ -356,14 +358,14 @@ def paytree_first_opt_payment_service(
 
 @pytest.fixture
 def paytree_second_opt_payment_service(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
     vendor_private_key_pem: str,
 ) -> PaytreeSecondOptPaymentService:
     """Create a PayTree Second Opt payment service for testing."""
     return PaytreeSecondOptPaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.paytree_second_opt,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=vendor_private_key_pem,

@@ -16,18 +16,20 @@ from ....application.shared.paytree_first_opt_payloads import (
 )
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.paytree import (
-    compute_cumulative_owed_amount,
-)
+from ....crypto.merkle_index import compute_tree_depth, key
+from ....crypto.paytree import compute_cumulative_owed_amount
 from ....crypto.paytree_first_opt import (
-    verify_pruned_paytree_proof,
+    NoSubTreeForSubPathError,
+    verifier_receive_leaf_subproof_b64,
+    verifier_receive_root_b64,
 )
+
 from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import (
     PaytreeFirstOptPaymentChannel,
     PaytreeFirstOptState,
 )
-from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....domain.vendor.paytree_first_opt_repository import PaytreeFirstOptRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..paytree_first_opt_dtos import (
@@ -46,7 +48,7 @@ class PaytreeFirstOptPaymentService:
 
     def __init__(
         self,
-        payment_channel_repository: PaymentChannelRepository,
+        payment_channel_repository: PaytreeFirstOptRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,
@@ -141,6 +143,7 @@ class PaytreeFirstOptPaymentService:
             channel_id=channel_id,
             i=dto.i,
             max_i=dto.max_i,
+            siblings_count=len(dto.siblings_b64),
         )
 
         is_first_payment = False
@@ -192,22 +195,34 @@ class PaytreeFirstOptPaymentService:
             channel_amount=payment_channel.amount,
         )
 
-        last_verified_index = latest_state.last_verified_index if latest_state else None
-        existing_keys = set(sibling_cache.keys())
-        ok, full_siblings_b64, updated_cache = verify_pruned_paytree_proof(
-            i=dto.i,
-            root_b64=payment_channel.paytree_first_opt_root_b64,
-            leaf_b64=dto.leaf_b64,
-            pruned_siblings_b64=dto.siblings_b64,
-            max_i=payment_channel.paytree_first_opt_max_i,
-            last_verified_index=last_verified_index,
-            node_cache_b64=sibling_cache,
-        )
-        if not ok:
+        # Sub-tree validation: ensure sub-root in repo, verify, save incoming proof only
+        max_i = payment_channel.paytree_first_opt_max_i
+        tree_size = max_i + 1
+        depth = compute_tree_depth(max_i)
+        node_repo: dict[str, str] = dict(sibling_cache)
+        existing_keys = set(node_repo.keys())
+        # Full proof: sub-root = root; add from channel if not yet in repo
+        if len(dto.siblings_b64) >= depth:
+            root_key = key(depth, 0)
+            if root_key not in node_repo:
+                verifier_receive_root_b64(
+                    node_repo,
+                    payment_channel.paytree_first_opt_root_b64,
+                    tree_size,
+                )
+        try:
+            verifier_receive_leaf_subproof_b64(
+                repo=node_repo,
+                leaf_index=dto.i,
+                leaf_b64=dto.leaf_b64,
+                siblings_b64=dto.siblings_b64,
+            )
+        except NoSubTreeForSubPathError:
             raise ValueError("Invalid PayTree First Opt proof")
-        node_entries = {
-            k: v for k, v in updated_cache.items() if k not in existing_keys
-        }
+        except ValueError:
+            raise ValueError("Invalid PayTree First Opt proof")
+        # First opt: verifier_receive_leaf_subproof_b64 already stored P(x) in repo
+        node_entries = {k: v for k, v in node_repo.items() if k not in existing_keys}
 
         new_state = PaytreeFirstOptState(
             channel_id=channel_id,

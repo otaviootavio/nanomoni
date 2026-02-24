@@ -17,8 +17,6 @@ ClientMode = Literal[
     "signature",
     "payword",
     "paytree",
-    "paytree_first_opt",
-    "paytree_second_opt",
 ]
 
 
@@ -28,11 +26,9 @@ def validate_mode(mode: str) -> ClientMode:
         "signature",
         "payword",
         "paytree",
-        "paytree_first_opt",
-        "paytree_second_opt",
     }:
         raise RuntimeError(
-            "client_payment_mode must be 'signature', 'payword', 'paytree', 'paytree_first_opt', or 'paytree_second_opt'"
+            "client_payment_mode must be 'signature', 'payword', or 'paytree'"
         )
     return mode  # type: ignore[return-value]
 
@@ -53,16 +49,6 @@ async def open_channel_for_mode(
     elif mode == "paytree":
         paytree_channel = await issuer.open_paytree_payment_channel(open_dto)
         return paytree_channel.channel_id
-    elif mode == "paytree_first_opt":
-        paytree_first_opt_channel = await issuer.open_paytree_first_opt_payment_channel(
-            open_dto
-        )
-        return paytree_first_opt_channel.channel_id
-    elif mode == "paytree_second_opt":
-        paytree_second_opt_channel = (
-            await issuer.open_paytree_second_opt_payment_channel(open_dto)
-        )
-        return paytree_second_opt_channel.channel_id
     else:
         sig_channel = await issuer.open_payment_channel(open_dto)
         return sig_channel.channel_id
@@ -79,10 +65,6 @@ async def request_settle_for_mode(
         await vendor.request_settle_channel_payword(close_dto)
     elif mode == "paytree":
         await vendor.request_settle_channel_paytree(close_dto)
-    elif mode == "paytree_first_opt":
-        await vendor.request_settle_channel_paytree_first_opt(close_dto)
-    elif mode == "paytree_second_opt":
-        await vendor.request_settle_channel_paytree_second_opt(close_dto)
     else:
         await vendor.request_settle_channel(close_dto)
 
@@ -104,12 +86,6 @@ async def wait_until_closed(
                 break
         elif mode == "paytree":
             if (await issuer.get_paytree_payment_channel(get_dto)).is_closed:
-                break
-        elif mode == "paytree_first_opt":
-            if (await issuer.get_paytree_first_opt_payment_channel(get_dto)).is_closed:
-                break
-        elif mode == "paytree_second_opt":
-            if (await issuer.get_paytree_second_opt_payment_channel(get_dto)).is_closed:
                 break
         else:
             if (await issuer.get_payment_channel(get_dto)).is_closed:
@@ -139,7 +115,7 @@ def compute_final_cumulative_owed_amount(
 
     if mode == "signature":
         return payments[-1]
-    elif mode in {"payword", "paytree", "paytree_first_opt", "paytree_second_opt"}:
+    elif mode in {"payword", "paytree"}:
         if unit_value is None:
             raise ValueError(f"unit_value is required for {mode} mode")
         return payments[-1] * unit_value

@@ -10,23 +10,26 @@ from fastapi import Request
 from ...application.vendor.use_cases.payment import PaymentService
 from ...application.vendor.use_cases.payword_payment import PaywordPaymentService
 from ...application.vendor.use_cases.paytree_payment import PaytreePaymentService
-from ...application.vendor.use_cases.paytree_first_opt_payment import (
-    PaytreeFirstOptPaymentService,
-)
-from ...application.vendor.use_cases.paytree_second_opt_payment import (
-    PaytreeSecondOptPaymentService,
-)
+from ...application.vendor.use_cases.verifier_flow_service import VerifierFlowService
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
 from ...domain.shared import IssuerClientFactory
-from ...domain.vendor.payment_channel_repository import PaymentChannelRepository
 from ...domain.vendor.task_repository import TaskRepository
 from ...domain.vendor.user_repository import UserRepository
 from ...infrastructure.database import DatabaseClient, get_database_client
 from ...infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
-from ...infrastructure.vendor.payment_channel_repository_impl import (
-    PaymentChannelRepositoryImpl,
+from ...domain.vendor.payment_channel_repository import (
+    PaytreeRepository,
+    PaywordRepository,
+    SignatureRepository,
+)
+from ...domain.vendor.verifier_node_repository import VerifierNodeRepository
+from ...infrastructure.vendor.paytree_repository_impl import PaytreeRepositoryImpl
+from ...infrastructure.vendor.payword_repository_impl import PaywordRepositoryImpl
+from ...infrastructure.vendor.signature_repository_impl import SignatureRepositoryImpl
+from ...infrastructure.vendor.verifier_node_repository_impl import (
+    VerifierNodeRepositoryImpl,
 )
 from ...infrastructure.vendor.task_repository_impl import TaskRepositoryImpl
 from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
@@ -62,9 +65,29 @@ def get_task_repository() -> TaskRepository:
     return TaskRepositoryImpl(get_key_value_store_dependency())
 
 
-def get_payment_channel_repository() -> PaymentChannelRepository:
-    """Get payment channel repository."""
-    return PaymentChannelRepositoryImpl(get_key_value_store_dependency())
+def get_signature_repository() -> SignatureRepository:
+    """Get signature payment channel repository."""
+    return SignatureRepositoryImpl(get_key_value_store_dependency())
+
+
+def get_payword_repository() -> PaywordRepository:
+    """Get PayWord payment channel repository."""
+    return PaywordRepositoryImpl(get_key_value_store_dependency())
+
+
+def get_paytree_repository() -> PaytreeRepository:
+    """Get PayTree payment channel repository."""
+    return PaytreeRepositoryImpl(get_key_value_store_dependency())
+
+
+def get_verifier_node_repository() -> VerifierNodeRepository:
+    """Get verifier node repository for Merkle prover/verifier flow."""
+    return VerifierNodeRepositoryImpl(get_key_value_store_dependency())
+
+
+def get_verifier_flow_service() -> VerifierFlowService:
+    """Get verifier flow service."""
+    return VerifierFlowService(get_verifier_node_repository())
 
 
 async def get_user_service() -> UserService:
@@ -92,14 +115,13 @@ def _create_issuer_client_factory(
 
 async def get_payment_service(request: Request) -> PaymentService:
     """Get payment service."""
-    payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
     issuer_client_factory = _create_issuer_client_factory(
         settings.issuer_base_url,
         session=request.app.state.issuer_session,
     )
     return PaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=get_signature_repository(),
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
@@ -108,14 +130,13 @@ async def get_payment_service(request: Request) -> PaymentService:
 
 async def get_payword_payment_service(request: Request) -> PaywordPaymentService:
     """Get PayWord payment service."""
-    payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
     issuer_client_factory = _create_issuer_client_factory(
         settings.issuer_base_url,
         session=request.app.state.issuer_session,
     )
     return PaywordPaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=get_payword_repository(),
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
@@ -124,51 +145,15 @@ async def get_payword_payment_service(request: Request) -> PaywordPaymentService
 
 async def get_paytree_payment_service(request: Request) -> PaytreePaymentService:
     """Get PayTree payment service."""
-    payment_channel_repository = get_payment_channel_repository()
     settings = get_settings_dependency()
     issuer_client_factory = _create_issuer_client_factory(
         settings.issuer_base_url,
         session=request.app.state.issuer_session,
     )
     return PaytreePaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=get_paytree_repository(),
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )
 
-
-async def get_paytree_first_opt_payment_service(
-    request: Request,
-) -> PaytreeFirstOptPaymentService:
-    """Get PayTree First Opt payment service."""
-    payment_channel_repository = get_payment_channel_repository()
-    settings = get_settings_dependency()
-    issuer_client_factory = _create_issuer_client_factory(
-        settings.issuer_base_url,
-        session=request.app.state.issuer_session,
-    )
-    return PaytreeFirstOptPaymentService(
-        payment_channel_repository=payment_channel_repository,
-        issuer_client_factory=issuer_client_factory,
-        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
-        vendor_private_key_pem=settings.vendor_private_key_pem,
-    )
-
-
-async def get_paytree_second_opt_payment_service(
-    request: Request,
-) -> PaytreeSecondOptPaymentService:
-    """Get PayTree Second Opt payment service."""
-    payment_channel_repository = get_payment_channel_repository()
-    settings = get_settings_dependency()
-    issuer_client_factory = _create_issuer_client_factory(
-        settings.issuer_base_url,
-        session=request.app.state.issuer_session,
-    )
-    return PaytreeSecondOptPaymentService(
-        payment_channel_repository=payment_channel_repository,
-        issuer_client_factory=issuer_client_factory,
-        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
-        vendor_private_key_pem=settings.vendor_private_key_pem,
-    )

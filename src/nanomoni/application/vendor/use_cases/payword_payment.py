@@ -20,7 +20,7 @@ from ....crypto.payword import (
 )
 from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import PaywordPaymentChannel, PaywordState
-from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....domain.vendor.payword_repository import PaywordRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..payword_dtos import PaywordPaymentResponseDTO, ReceivePaywordPaymentDTO
@@ -36,7 +36,7 @@ class PaywordPaymentService:
 
     def __init__(
         self,
-        payment_channel_repository: PaymentChannelRepository,
+        payment_channel_repository: PaywordRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,

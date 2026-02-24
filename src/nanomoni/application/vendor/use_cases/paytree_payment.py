@@ -18,7 +18,7 @@ from ....crypto.paytree import (
 )
 from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import PaytreePaymentChannel, PaytreeState
-from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....domain.vendor.paytree_repository import PaytreeRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
@@ -34,7 +34,7 @@ class PaytreePaymentService:
 
     def __init__(
         self,
-        payment_channel_repository: PaymentChannelRepository,
+        payment_channel_repository: PaytreeRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,

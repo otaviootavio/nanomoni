@@ -10,13 +10,13 @@ from nanomoni.domain.shared.serializers import CommonSerializersMixin
 
 
 class ReceivePaytreeFirstOptPaymentDTO(BaseModel):
-    """DTO for receiving a PayTree First Opt (pruned Merkle proof) payment."""
+    """DTO for receiving a PayTree First Opt (full or pruned Merkle proof) payment."""
 
     i: int = Field(..., ge=0, description="Monotonic PayTree index")
     max_i: int = Field(..., ge=0, description="Maximum PayTree index for this channel")
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
     siblings_b64: list[str] = Field(
-        ..., description="Pruned list of base64-encoded sibling hashes"
+        ..., description="List of base64-encoded sibling hashes (full or pruned)"
     )
 
 

@@ -28,7 +28,7 @@ from ....domain.vendor.entities import (
     PaytreeSecondOptPaymentChannel,
     PaytreeSecondOptState,
 )
-from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....domain.vendor.paytree_second_opt_repository import PaytreeSecondOptRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import CloseChannelDTO
 from ..paytree_second_opt_dtos import (
@@ -47,7 +47,7 @@ class PaytreeSecondOptPaymentService:
 
     def __init__(
         self,
-        payment_channel_repository: PaymentChannelRepository,
+        payment_channel_repository: PaytreeSecondOptRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,

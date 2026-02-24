@@ -155,22 +155,6 @@ class PaytreeState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree First Opt payment state (index + pruned proof + cache)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    i: int = Field(..., ge=0, description="Monotonic PayTree index")
-    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="Pruned list of base64-encoded sibling hashes"
-    )
-    last_verified_index: Optional[int] = Field(
-        None,
-        description="Most recently verified PayTree index",
-    )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
 class PaytreeSecondOptState(DatetimeSerializerMixin, BaseModel):
     """Latest PayTree Second Opt payment state (index + pruned proof)."""
 
@@ -179,6 +163,21 @@ class PaytreeSecondOptState(DatetimeSerializerMixin, BaseModel):
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
     siblings_b64: list[str] = Field(
         ..., description="Pruned list of base64-encoded sibling hashes"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
+    """Latest PayTree First Opt payment state (index + full/pruned proof)."""
+
+    channel_id: str = Field(..., description="Payment channel identifier")
+    i: int = Field(..., ge=0, description="Monotonic PayTree index")
+    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
+    siblings_b64: list[str] = Field(
+        ..., description="List of base64-encoded sibling hashes"
+    )
+    last_verified_index: int = Field(
+        ..., ge=0, description="Last verified leaf index for first-opt pruning"
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

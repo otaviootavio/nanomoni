@@ -6,14 +6,14 @@ import pytest
 
 from nanomoni.application.vendor.use_cases.payment import PaymentService
 from tests.e2e.helpers.client_actor import ClientActor
-from tests.fixtures import InMemoryPaymentChannelRepository
+from tests.fixtures import VendorPaymentRepositories
 from tests.use_cases.helpers.issuer_client_adapter import UseCaseIssuerClient
 from nanomoni.domain.shared import IssuerClientFactory
 
 
 @pytest.mark.asyncio
 async def test_payment_service_receives_first_payment(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     issuer_client: UseCaseIssuerClient,
     vendor_public_key_der_b64: str,
@@ -35,7 +35,7 @@ async def test_payment_service_receives_first_payment(
 
     # Create service
     service = PaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.signature,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
         vendor_private_key_pem=None,  # Not needed for receiving payments
@@ -55,7 +55,7 @@ async def test_payment_service_receives_first_payment(
 
 @pytest.mark.asyncio
 async def test_payment_service_verifies_channel_with_issuer(
-    payment_channel_repository: InMemoryPaymentChannelRepository,
+    vendor_payment_repositories: VendorPaymentRepositories,
     issuer_client_factory: IssuerClientFactory,
     issuer_client: UseCaseIssuerClient,
     vendor_public_key_der_b64: str,
@@ -76,7 +76,7 @@ async def test_payment_service_verifies_channel_with_issuer(
 
     # Create service
     service = PaymentService(
-        payment_channel_repository=payment_channel_repository,
+        payment_channel_repository=vendor_payment_repositories.signature,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
     )
