@@ -25,7 +25,7 @@ from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
 from .paytree_validators import (
     validate_paytree_i,
     validate_paytree_amount,
-    check_duplicate_paytree_payment,
+    check_duplicate_paytree_payment_by_leaf,
 )
 
 
@@ -154,51 +154,60 @@ class PaytreePaymentService:
         self, channel_id: str, dto: ReceivePaytreePaymentDTO
     ) -> PaytreePaymentResponseDTO:
         """Receive and validate a PayTree (Merkle proof) payment from a client."""
-        (
-            payment_channel,
-            latest_state,
-        ) = await self.payment_channel_repository.get_paytree_channel_and_latest_state(
-            channel_id
+        # Optimization: fetch pruned channel state only (no proof fetch; duplicate check by i + leaf)
+        payment_channel = (
+            await self.payment_channel_repository.get_paytree_pruned_channel_state(
+                channel_id
+            )
         )
 
         is_first_payment = False
+
         if not payment_channel:
             payment_channel = await self._verify_paytree_channel(channel_id)
             is_first_payment = True
-            latest_state = None
+        elif not isinstance(payment_channel, PaytreePaymentChannel):
+            raise TypeError("Payment channel is not PayTree-enabled")
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
 
-        prev_i = latest_state.i if latest_state else 0
+        prev_i = payment_channel.last_leaf_index
+        prev_leaf = payment_channel.last_leaf_b64
 
-        # Idempotency + replay protection (pure function)
-        # - If the client retries the *exact same* payment (same i + same proof),
-        #   accept it and return the stored state (handles transient disconnects).
-        # - If i is the same but proof differs, reject as a replay/double-spend attempt.
-        # - Otherwise, enforce strictly increasing i.
-        prev_leaf = latest_state.leaf_b64 if latest_state else None
-        prev_siblings = latest_state.siblings_b64 if latest_state else None
-        is_duplicate = check_duplicate_paytree_payment(
-            i=dto.i,
-            leaf=dto.leaf_b64,
-            siblings=dto.siblings_b64,
-            prev_i=prev_i,
-            prev_leaf=prev_leaf,
-            prev_siblings=prev_siblings,
-        )
-        if is_duplicate:
-            # If duplicate check returns True, latest_state must not be None
-            assert latest_state is not None
-            cumulative_owed_amount = compute_cumulative_owed_amount(
-                i=latest_state.i, unit_value=payment_channel.paytree_unit_value
+        if dto.i <= prev_i:
+            # Duplicate/replay check using only (i, leaf) from pruned channel; no proof fetch
+            if prev_i >= 0 and prev_leaf is None:
+                raise RuntimeError(
+                    "Channel has last_leaf_index but no last_leaf_b64 (data inconsistency)"
+                )
+            is_duplicate = check_duplicate_paytree_payment_by_leaf(
+                i=dto.i,
+                leaf=dto.leaf_b64,
+                prev_i=prev_i,
+                prev_leaf=prev_leaf,
             )
-            return PaytreePaymentResponseDTO(
-                channel_id=latest_state.channel_id,
-                i=latest_state.i,
-                cumulative_owed_amount=cumulative_owed_amount,
-                created_at=latest_state.created_at,
-            )
+            if is_duplicate:
+                # Same (i, leaf); verify proof then return idempotent response
+                if not verify_paytree_proof(
+                    i=dto.i,
+                    leaf_b64=dto.leaf_b64,
+                    siblings_b64=dto.siblings_b64,
+                    root_b64=payment_channel.paytree_root_b64,
+                ):
+                    raise ValueError("Invalid PayTree proof (root mismatch)")
+                cumulative_owed_amount = compute_cumulative_owed_amount(
+                    i=dto.i, unit_value=payment_channel.paytree_unit_value
+                )
+                created_at = payment_channel.last_paytree_created_at or datetime.now(
+                    timezone.utc
+                )
+                return PaytreePaymentResponseDTO(
+                    channel_id=channel_id,
+                    i=dto.i,
+                    cumulative_owed_amount=cumulative_owed_amount,
+                    created_at=created_at,
+                )
 
         # Validate i (pure function)
         validate_paytree_i(

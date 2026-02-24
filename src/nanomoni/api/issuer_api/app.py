@@ -19,8 +19,6 @@ from ...infrastructure.scripts import ISSUER_SCRIPTS
 from .dependencies import get_store_dependency
 from .routers import (
     paytree_channels,
-    paytree_first_opt_channels,
-    paytree_second_opt_channels,
     payment_channel,
     payword_channels,
     registration,
@@ -69,8 +67,6 @@ def create_issuer_app() -> FastAPI:
     app.include_router(payment_channel.router, prefix="/api/v1/issuer")
     app.include_router(payword_channels.router, prefix="/api/v1/issuer")
     app.include_router(paytree_channels.router, prefix="/api/v1/issuer")
-    app.include_router(paytree_first_opt_channels.router, prefix="/api/v1/issuer")
-    app.include_router(paytree_second_opt_channels.router, prefix="/api/v1/issuer")
 
     @app.get("/")
     async def root() -> dict[str, str]:

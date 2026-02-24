@@ -10,7 +10,6 @@ from fastapi import Request
 from ...application.vendor.use_cases.payment import PaymentService
 from ...application.vendor.use_cases.payword_payment import PaywordPaymentService
 from ...application.vendor.use_cases.paytree_payment import PaytreePaymentService
-from ...application.vendor.use_cases.verifier_flow_service import VerifierFlowService
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
 from ...domain.shared import IssuerClientFactory
@@ -24,13 +23,9 @@ from ...domain.vendor.payment_channel_repository import (
     PaywordRepository,
     SignatureRepository,
 )
-from ...domain.vendor.verifier_node_repository import VerifierNodeRepository
 from ...infrastructure.vendor.paytree_repository_impl import PaytreeRepositoryImpl
 from ...infrastructure.vendor.payword_repository_impl import PaywordRepositoryImpl
 from ...infrastructure.vendor.signature_repository_impl import SignatureRepositoryImpl
-from ...infrastructure.vendor.verifier_node_repository_impl import (
-    VerifierNodeRepositoryImpl,
-)
 from ...infrastructure.vendor.task_repository_impl import TaskRepositoryImpl
 from ...infrastructure.vendor.user_repository_impl import UserRepositoryImpl
 from ...envs.vendor_env import Settings, get_settings as _get_settings
@@ -78,16 +73,6 @@ def get_payword_repository() -> PaywordRepository:
 def get_paytree_repository() -> PaytreeRepository:
     """Get PayTree payment channel repository."""
     return PaytreeRepositoryImpl(get_key_value_store_dependency())
-
-
-def get_verifier_node_repository() -> VerifierNodeRepository:
-    """Get verifier node repository for Merkle prover/verifier flow."""
-    return VerifierNodeRepositoryImpl(get_key_value_store_dependency())
-
-
-def get_verifier_flow_service() -> VerifierFlowService:
-    """Get verifier flow service."""
-    return VerifierFlowService(get_verifier_node_repository())
 
 
 async def get_user_service() -> UserService:
@@ -156,4 +141,3 @@ async def get_paytree_payment_service(request: Request) -> PaytreePaymentService
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )
-

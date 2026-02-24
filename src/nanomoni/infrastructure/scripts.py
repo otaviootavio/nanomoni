@@ -110,17 +110,21 @@ VENDOR_SCRIPTS = {
         end
     """,
     "save_paytree_payment": """
-        local latest_key = KEYS[1]
-        local channel_key = KEYS[2]
-        local new_val = ARGV[1]
+        local channel_key = KEYS[1]
+        local proof_key = KEYS[2]
+        local proof_json = ARGV[1]
         local new_i = tonumber(ARGV[2])
+        local new_leaf_b64 = ARGV[3]
+        local created_at_iso = ARGV[4] or ''
 
-        -- Load and decode the stored channel to read max_i (atomic validation)
+        -- Load and decode the stored channel
         local channel_raw = redis.call('GET', channel_key)
         if not channel_raw then
             return {2, ''}
         end
         local channel = cjson.decode(channel_raw)
+        
+        -- Validate max_i
         local max_i = tonumber(channel.paytree_max_i)
         if not max_i then
             -- Channel exists but is missing PayTree configuration
@@ -128,108 +132,63 @@ VENDOR_SCRIPTS = {
         end
         if new_i > max_i then
             -- i exceeds PayTree commitment window
-            local current_raw = redis.call('GET', latest_key)
-            return {3, current_raw or ''}
+            local current_proof = redis.call('GET', proof_key)
+            return {3, current_proof or ''}
         end
 
-        local current_raw = redis.call('GET', latest_key)
-        if not current_raw then
-            redis.call('SET', latest_key, new_val)
-            return {1, new_val}
-        end
-
-        local current = cjson.decode(current_raw)
-        local current_i = tonumber(current.i)
-        if new_i > current_i then
-            redis.call('SET', latest_key, new_val)
-            return {1, new_val}
+        -- Validate monotonic increase using channel state
+        -- Use last_leaf_index if present, default to -1
+        local last_i = tonumber(channel.last_leaf_index) or -1
+        
+        if new_i > last_i then
+            -- Update Channel State (pruned metadata for duplicate check without fetching proof)
+            channel.last_leaf_index = new_i
+            channel.last_leaf_b64 = new_leaf_b64
+            channel.last_paytree_created_at = created_at_iso
+            
+            -- Save updated channel
+            redis.call('SET', channel_key, cjson.encode(channel))
+            
+            -- Save proof
+            redis.call('SET', proof_key, proof_json)
+            
+            -- Return minimal ack to reduce Redis→app traffic
+            return {1, tostring(new_i)}
         else
-            return {0, current_raw}
+            -- Stale/Duplicate. Return last_i only (caller may fetch proof if needed).
+            return {0, tostring(last_i)}
         end
     """,
-    "save_paytree_first_opt_payment": """
-        local latest_key = KEYS[1]
-        local channel_key = KEYS[2]
-        local hash_key = KEYS[3]
-        local new_val = ARGV[1]
-        local new_i = tonumber(ARGV[2])
+    "save_channel_and_initial_paytree_pruned_state": """
+        local channel_key = KEYS[1]
+        local proof_key = KEYS[2]
+        local channel_json = ARGV[1]
+        local proof_json = ARGV[2]
+        local created_ts = tonumber(ARGV[3])
+        local channel_id = ARGV[4]
 
-        local channel_raw = redis.call('GET', channel_key)
-        if not channel_raw then
-            return {2, ''}
-        end
-        local channel = cjson.decode(channel_raw)
-        local max_i = tonumber(channel.paytree_first_opt_max_i)
-        if not max_i then
-            return {2, ''}
-        end
-        if new_i > max_i then
-            local current_raw = redis.call('GET', latest_key)
-            return {3, current_raw or ''}
+        -- Check if channel already exists
+        if redis.call('EXISTS', channel_key) == 1 then
+            return {0, ''}
         end
 
-        local current_raw = redis.call('GET', latest_key)
-        if not current_raw then
-            redis.call('SET', latest_key, new_val)
-            for idx = 3, #ARGV - 1, 2 do
-                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
-            end
-            return {1, new_val}
+        -- Check if proof already exists (shouldn't if channel doesn't, but for safety)
+        if redis.call('EXISTS', proof_key) == 1 then
+            return {0, ''}
         end
 
-        local current = cjson.decode(current_raw)
-        local current_i = tonumber(current.i)
-        if new_i > current_i then
-            redis.call('SET', latest_key, new_val)
-            for idx = 3, #ARGV - 1, 2 do
-                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
-            end
-            return {1, new_val}
-        else
-            return {0, current_raw}
-        end
-    """,
-    "save_paytree_second_opt_payment": """
-        local latest_key = KEYS[1]
-        local channel_key = KEYS[2]
-        local hash_key = KEYS[3]
-        local new_val = ARGV[1]
-        local new_i = tonumber(ARGV[2])
+        -- Save Channel Metadata (pruned channel state lives in this JSON)
+        redis.call('SET', channel_key, channel_json)
 
-        local channel_raw = redis.call('GET', channel_key)
-        if not channel_raw then
-            return {2, ''}
-        end
-        local channel = cjson.decode(channel_raw)
-        local max_i = tonumber(channel.paytree_second_opt_max_i)
-        if not max_i then
-            return {2, ''}
-        end
-        if new_i > max_i then
-            local current_raw = redis.call('GET', latest_key)
-            return {3, current_raw or ''}
-        end
+        -- Save Proof
+        redis.call('SET', proof_key, proof_json)
 
-        local current_raw = redis.call('GET', latest_key)
-        if not current_raw then
-            redis.call('SET', latest_key, new_val)
-            for idx = 3, #ARGV - 1, 2 do
-                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
-            end
-            return {1, new_val}
-        end
+        -- Update indices
+        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
+        redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
 
-        local current = cjson.decode(current_raw)
-        local current_i = tonumber(current.i)
-        if new_i > current_i then
-            redis.call('SET', latest_key, new_val)
-            for idx = 3, #ARGV - 1, 2 do
-                redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
-            end
-            return {1, new_val}
-        else
-            return {0, current_raw}
-        end
+        -- Minimal ack
+        return {1, ''}
     """,
 }
 
@@ -266,51 +225,12 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
     return {1, state_json}
 """
 
-_SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT = """
-    local channel_key = KEYS[1]
-    local latest_key = KEYS[2]
-    local hash_key = KEYS[3]
-    local channel_json = ARGV[1]
-    local state_json = ARGV[2]
-    local created_ts = tonumber(ARGV[3])
-    local channel_id = ARGV[4]
-
-    -- Check if channel already exists
-    if redis.call('EXISTS', channel_key) == 1 then
-        return {0, ''}
-    end
-
-    -- Check if tx already exists (shouldn't if channel doesn't, but for safety)
-    if redis.call('EXISTS', latest_key) == 1 then
-        return {0, ''}
-    end
-
-    -- 1. Save Channel Metadata
-    redis.call('SET', channel_key, channel_json)
-
-    -- 2. Save Initial State
-    redis.call('SET', latest_key, state_json)
-
-    -- 3. Save Initial Node Entries (ARGV[5], ARGV[6] = field1, val1, etc.)
-    for idx = 5, #ARGV - 1, 2 do
-        redis.call('HSET', hash_key, ARGV[idx], ARGV[idx + 1])
-    end
-
-    -- 4. Update Indices
-    redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
-    redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
-
-    return {1, state_json}
-"""
-
 # Register the consolidated script under the original three keys for backward compatibility
 VENDOR_SCRIPTS.update(
     {
         "save_channel_and_initial_payment": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_payword_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
         "save_channel_and_initial_paytree_state": _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT,
-        "save_channel_and_initial_paytree_first_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
-        "save_channel_and_initial_paytree_second_opt_state": _SAVE_CHANNEL_AND_INITIAL_PAYTREE_OPT_STATE_SCRIPT,
     }
 )
 

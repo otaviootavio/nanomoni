@@ -5,20 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nanomoni.domain.vendor.payment_channel_repository import (
-    PaytreeFirstOptRepository,
     PaytreeRepository,
-    PaytreeSecondOptRepository,
     PaywordRepository,
     SignatureRepository,
 )
 from nanomoni.infrastructure.scripts import VENDOR_SCRIPTS, ISSUER_SCRIPTS
-from nanomoni.infrastructure.vendor.paytree_first_opt_repository_impl import (
-    PaytreeFirstOptRepositoryImpl,
-)
 from nanomoni.infrastructure.vendor.paytree_repository_impl import PaytreeRepositoryImpl
-from nanomoni.infrastructure.vendor.paytree_second_opt_repository_impl import (
-    PaytreeSecondOptRepositoryImpl,
-)
 from nanomoni.infrastructure.vendor.payword_repository_impl import PaywordRepositoryImpl
 from nanomoni.infrastructure.vendor.signature_repository_impl import (
     SignatureRepositoryImpl,
@@ -54,8 +46,6 @@ class VendorPaymentRepositories:
     signature: SignatureRepository
     payword: PaywordRepository
     paytree: PaytreeRepository
-    paytree_first_opt: PaytreeFirstOptRepository
-    paytree_second_opt: PaytreeSecondOptRepository
     store: InMemoryKeyValueStore
 
     def clear(self) -> None:
@@ -70,8 +60,6 @@ def create_vendor_payment_repositories() -> VendorPaymentRepositories:
         signature=SignatureRepositoryImpl(store),
         payword=PaywordRepositoryImpl(store),
         paytree=PaytreeRepositoryImpl(store),
-        paytree_first_opt=PaytreeFirstOptRepositoryImpl(store),
-        paytree_second_opt=PaytreeSecondOptRepositoryImpl(store),
         store=store,
     )
 

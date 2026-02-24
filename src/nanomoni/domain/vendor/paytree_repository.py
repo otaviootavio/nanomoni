@@ -14,14 +14,26 @@ class PaytreeRepository(PaymentChannelRepositoryBase):
 
     @abstractmethod
     async def get_paytree_state(self, channel_id: str) -> Optional[PaytreeState]:
-        """Get the latest PayTree state for this channel."""
+        """Get the latest PayTree proof (full state) for this channel.
+
+        Vocabulary:
+        - pruned channel state: channel metadata without proof (used for payments)
+        - full channel state: channel metadata + latest proof (used for settlement)
+        """
         pass
 
     @abstractmethod
     async def get_paytree_channel_and_latest_state(
         self, channel_id: str
     ) -> tuple[Optional[PaytreePaymentChannel], Optional[PaytreeState]]:
-        """Get PayTree channel metadata and latest state in one call."""
+        """Get full channel state (channel + latest proof) in one call."""
+        pass
+
+    @abstractmethod
+    async def get_paytree_pruned_channel_state(
+        self, channel_id: str
+    ) -> Optional[PaytreePaymentChannel]:
+        """Get pruned channel state (channel metadata only; no proof)."""
         pass
 
     @abstractmethod

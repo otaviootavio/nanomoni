@@ -29,7 +29,6 @@ from .routers import (
     payword_payments,
     tasks,
     users,
-    verifier_flow,
 )
 
 settings = get_settings()
@@ -87,7 +86,6 @@ def create_app() -> FastAPI:
     app.include_router(payments.router, prefix="/api/v1/vendor")
     app.include_router(payword_payments.router, prefix="/api/v1/vendor")
     app.include_router(paytree_payments.router, prefix="/api/v1/vendor")
-    app.include_router(verifier_flow.router, prefix="/api/v1/vendor")
 
     @app.get("/")
     async def root() -> dict[str, str]:
