@@ -11,6 +11,8 @@ is provided by the caller: tree for issuer, cache for vendor.
 from __future__ import annotations
 
 import hashlib
+
+from nanomoni.crypto.merkle_index import level_position_from_eytzinger
 from typing import Final
 
 SHA256: Final[str] = "sha256"
@@ -102,3 +104,76 @@ def verify_proof_to_known_node(
         current = combine_children(current, sibling, left_is_first)
         current_index = current_index // 2
     return current == known_node_hash
+
+
+def is_ancestor(
+    level_a: int,
+    pos_a: int,
+    level_b: int,
+    pos_b: int,
+) -> bool:
+    """True iff node A at (level_a, pos_a) is an ancestor of node B at (level_b, pos_b).
+
+    Convention: level 0 = leaves, level depth = root. A is ancestor of B iff
+    level_a > level_b and pos_a == (pos_b >> (level_a - level_b)).
+    """
+    if level_a <= level_b:
+        return False
+    return pos_a == (pos_b >> (level_a - level_b))
+
+
+def build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
+    level_b: int,
+    pos_b: int,
+    level_a: int,
+    pos_a: int,
+) -> list[tuple[int, int]]:
+    """Return sibling indexes (level, position) from node B to ancestor A.
+
+    Common case: B = leaf (level_b=0, pos_b=leaf_index), A = root (level_a=depth, pos_a=0).
+    A node is treated as its own ancestor (returns []). Caller converts indexes to hashes.
+    """
+    if (level_a, pos_a) == (level_b, pos_b):
+        return []
+    if not is_ancestor(level_a, pos_a, level_b, pos_b):
+        raise ValueError(
+            f"A ({level_a},{pos_a}) is not an ancestor of B ({level_b},{pos_b})"
+        )
+    return [
+        (level, (pos_b >> (level - level_b)) ^ 1) for level in range(level_b, level_a)
+    ]
+
+
+def verify_proof_of_leaf_a_given_ancestor_b(
+    leaf_secret: bytes,
+    leaf_index: int,
+    merkle_proof: list[bytes],
+    subroot_node: bytes,
+    subroot_index: str,
+    depth: int,
+) -> None:
+    """Verify that the leaf has a valid Merkle proof to the given sub-root.
+
+    Generic pure verification: no store. Caller provides leaf (secret), leaf index,
+    proof array, and the sub-root node (hash) with its Eytzinger index.
+    When subroot equals the leaf itself (0, leaf_index), verifies hash(secret)==subroot_node.
+    Raises ValueError if the sub-root is not on the leaf's path or proof fails.
+    """
+    ancestor_level, ancestor_position = level_position_from_eytzinger(
+        int(subroot_index, 2), depth
+    )
+    if (ancestor_level, ancestor_position) != (0, leaf_index) and not is_ancestor(
+        ancestor_level, ancestor_position, 0, leaf_index
+    ):
+        raise ValueError(
+            f"Sub-root ({ancestor_level},{ancestor_position}) is not on path of leaf {leaf_index}"
+        )
+    leaf_hash = hash_bytes(leaf_secret)
+    if not verify_proof_to_known_node(
+        leaf_hash=leaf_hash,
+        leaf_index=leaf_index,
+        siblings=merkle_proof,
+        known_node_hash=subroot_node,
+        known_node_level=ancestor_level,
+    ):
+        raise ValueError("proof verification failed")

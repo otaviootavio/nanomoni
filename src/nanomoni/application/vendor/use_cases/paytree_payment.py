@@ -12,10 +12,8 @@ from ....application.issuer.paytree_dtos import PaytreeSettlementRequestDTO
 from ....application.shared.paytree_payloads import PaytreeSettlementPayload
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.paytree import (
-    compute_cumulative_owed_amount,
-    verify_paytree_proof,
-)
+from ...shared.paytree_proof import verify_paytree_proof_standard
+from ....crypto.paytree import compute_cumulative_owed_amount
 from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import PaytreePaymentChannel, PaytreeState
 from ....domain.vendor.paytree_repository import PaytreeRepository
@@ -23,9 +21,9 @@ from ....infrastructure.http.http_client import HttpRequestError, HttpResponseEr
 from ..dtos import CloseChannelDTO
 from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreePaymentDTO
 from .paytree_validators import (
-    validate_paytree_i,
-    validate_paytree_amount,
     check_duplicate_paytree_payment_by_leaf,
+    validate_paytree_amount,
+    validate_paytree_i,
 )
 
 
@@ -189,11 +187,12 @@ class PaytreePaymentService:
             )
             if is_duplicate:
                 # Same (i, leaf); verify proof then return idempotent response
-                if not verify_paytree_proof(
+                if not verify_paytree_proof_standard(
                     i=dto.i,
                     leaf_b64=dto.leaf_b64,
                     siblings_b64=dto.siblings_b64,
                     root_b64=payment_channel.paytree_root_b64,
+                    max_i=payment_channel.paytree_max_i,
                 ):
                     raise ValueError("Invalid PayTree proof (root mismatch)")
                 cumulative_owed_amount = compute_cumulative_owed_amount(
@@ -226,11 +225,12 @@ class PaytreePaymentService:
         )
 
         # Verify Merkle proof against root
-        if not verify_paytree_proof(
+        if not verify_paytree_proof_standard(
             i=dto.i,
             leaf_b64=dto.leaf_b64,
             siblings_b64=dto.siblings_b64,
             root_b64=payment_channel.paytree_root_b64,
+            max_i=payment_channel.paytree_max_i,
         ):
             raise ValueError("Invalid PayTree proof (root mismatch)")
 

@@ -1,9 +1,9 @@
 """Merkle tree index library: path, siblings, and navigation by (level, position).
 
-Eytzinger layout: tree operations use bitwise shifts and XOR only (left/right
-shifts, bit toggling).
+Eytzinger layout: root = index 1 (key 0001 for depth 3); leaves = 1000, 1001, ... (indices 2^n, ...).
+Tree operations use bitwise shifts and XOR only.
 
-Glossary: key = "x:y" notation; index = Eytzinger layout (binary); hash = hash value.
+Glossary: key = "level:position" for storage; key_eytzinger = display (001=root, 1000=leaf 0); hash = hash value.
 No hashes here—only indices and keys. Use index_to_hash (tree or store) to obtain hashes.
 """
 
@@ -12,9 +12,35 @@ from __future__ import annotations
 from typing import Optional
 
 
+def eytzinger_index(level: int, position: int, depth: int) -> int:
+    """Eytzinger index for node at (level, position). Root = 1 (001), leaf 0 = 2^depth (1000)."""
+    if depth < 0 or level < 0 or level > depth:
+        raise ValueError("invalid level or depth")
+    return (1 << (depth - level)) + position
+
+
 def key(level: int, position: int) -> str:
-    """Key for a node at (level, position): the "level:position" notation."""
+    """Key for a node at (level, position): the "level:position" notation (storage)."""
     return f"{level}:{position}"
+
+
+def key_eytzinger(level: int, position: int, depth: int) -> str:
+    """Eytzinger key for display: root 0001 (index 1), leaf 0 → 1000, leaf 1 → 1001. Width = depth+1 bits."""
+    idx = eytzinger_index(level, position, depth)
+    width = depth + 1
+    return format(idx, f"0{width}b")
+
+
+def level_position_from_eytzinger(eytzinger_idx: int, depth: int) -> tuple[int, int]:
+    """(level, position) from Eytzinger index. Root 1 → (depth, 0); 1000 → (0, 0)."""
+    if eytzinger_idx < 1 or depth < 0:
+        raise ValueError("invalid eytzinger index or depth")
+    # Level L has indices in [2^(depth-L), 2^(depth-L+1) - 1]
+    L = (eytzinger_idx).bit_length() - 1  # 0-based level index from top
+    level = depth - L
+    start = 1 << L
+    position = eytzinger_idx - start
+    return level, position
 
 
 def compute_tree_depth(max_i: int) -> int:
@@ -29,11 +55,14 @@ def compute_tree_depth(max_i: int) -> int:
     return padded.bit_length() - 1
 
 
-def compute_lcp(a: int, b: int, n: int) -> int:
+def lca_between(a: int, b: int, n: int) -> int:
     """Longest common prefix length LCP(a,b) for n-bit indices.
 
-    k = LCP(a,b) determines |P(a) cap P(b)| = k (Property 1) and the unique
-    intersection level n-k-1 for P(a2) cap Q(a1) (Property 2).
+    Returns LCP in bits. k = LCP(a,b) determines |P(a) cap P(b)| = k (Property 1)
+    and the unique intersection level n-k-1 for P(a2) cap Q(a1) (Property 2).
+
+    For pruning: when a=new leaf and b=prior leaf, k gives shared path length;
+    with multiple priors, max over lca_between(new, prior, n) gives k_max.
     """
     if a < 0 or b < 0:
         raise ValueError("indices must be >= 0")
@@ -61,43 +90,10 @@ def get_sibling_position_at_level(leaf_index: int, level: int) -> int:
     return (leaf_index >> level) ^ 1
 
 
-def get_path_indexes(leaf_index: int, depth: int) -> list[tuple[int, int]]:
-    """(level, index) for each node on the path Q(a) from leaf to root.
-
-    Level 0 = leaf, level depth = root. Returns n+1 nodes for depth n.
-    """
-    if depth < 0:
-        raise ValueError("depth must be >= 0")
+def get_sibling_keys_eytzinger(leaf_index: int, depth: int) -> list[str]:
+    """Eytzinger keys for authentication path P(a) (display)."""
     return [
-        (level, get_ancestor_at_level(leaf_index, level)) for level in range(depth + 1)
-    ]
-
-
-def get_sibling_indexes(leaf_index: int, depth: int) -> list[tuple[int, int]]:
-    """(level, index) for each sibling on the authentication path P(a).
-
-    One per level 0..depth-1. Prover sends these; verifier computes path nodes.
-    """
-    if depth < 0:
-        raise ValueError("depth must be >= 0")
-    return [
-        (level, get_sibling_position_at_level(leaf_index, level))
-        for level in range(depth)
-    ]
-
-
-def get_path_keys(leaf_index: int, depth: int) -> list[str]:
-    """Keys for path nodes Q(a); used to store/fetch hashes by (level, index)."""
-    return [
-        key(level, get_ancestor_at_level(leaf_index, level))
-        for level in range(depth + 1)
-    ]
-
-
-def get_sibling_keys(leaf_index: int, depth: int) -> list[str]:
-    """Keys for authentication path P(a); used to store/fetch sibling hashes."""
-    return [
-        key(level, get_sibling_position_at_level(leaf_index, level))
+        key_eytzinger(level, get_sibling_position_at_level(leaf_index, level), depth)
         for level in range(depth)
     ]
 
@@ -119,7 +115,7 @@ def compute_send_levels_first_opt(
         raise ValueError("depth must be >= 0")
     if last_verified_index is None:
         return list(range(depth))
-    k_max = compute_lcp(i, last_verified_index, depth)
+    k_max = lca_between(i, last_verified_index, depth)
     return list(range(max(0, depth - k_max)))
 
 
