@@ -16,13 +16,17 @@ from nanomoni.crypto.merkle_index import (
     key_eytzinger,
 )
 from nanomoni.crypto.merkle_tree import (
+    build_merkle_proof_indexes_for_leaf_a_given_ancestor_b,
     build_merkle_tree,
+    build_node_from_dependencies,
     combine_children,
+    get_proof_dependency_indexes,
     hash_bytes,
 )
 from nanomoni.protocol import (
     proof_indexes_first_opt,
     proof_indexes_standard,
+    subroot_index_standard,
     verify_proof,
 )
 
@@ -184,6 +188,42 @@ class VerifierReceivedIndexStore:
         return list(self._indexes)
 
 
+# ---------------------------------------------------------------------------
+# Auditor (standard protocol): receives root at setup, validates proof at end
+# ---------------------------------------------------------------------------
+
+
+class AuditorState:
+    """Auditor state for standard protocol: stores root, validates proof against it."""
+
+    def __init__(self) -> None:
+        self._root: bytes | None = None
+        self._depth: int = 0
+
+    def receive_tree(self, root: bytes, depth: int) -> None:
+        """Store root and depth (mocked: prover sends Merkle tree to auditor)."""
+        self._root = root
+        self._depth = depth
+
+    def validate_proof(
+        self,
+        secret: bytes,
+        leaf_index: int,
+        siblings: list[bytes],
+    ) -> None:
+        """Verify proof against stored root. Raises ValueError if invalid."""
+        if self._root is None:
+            raise ValueError("Auditor has no stored root")
+        verify_proof(
+            secret,
+            leaf_index,
+            siblings,
+            self._root,
+            subroot_index_standard(self._depth),
+            self._depth,
+        )
+
+
 def verifier_store_root(store: VerifierNodeStore, root: bytes, depth: int) -> None:
     """Verifier stores the received Merkle root at (depth, 0)."""
     store[_node_key(depth, 0, depth)] = root
@@ -270,6 +310,30 @@ def infer_subroot_index_for_incoming_pruned_merkle_proof(
     return key_eytzinger(trusted_level, trusted_pos, depth)
 
 
+def batch_get_node_hashes_or_secrets(
+    node_store: MerkleNodeStore,
+    secret_store: VerifierSecretStore,
+    dependency_indexes: list[tuple[int, int]],
+    depth: int,
+) -> dict[tuple[int, int], bytes]:
+    """Load all requested (level, pos) in one batch: node store and leaf secrets.
+
+    For each (level, pos): use node store if present; for level 0 missing from
+    node store, use secret store and return hash_bytes(secret). Real
+    implementation would do a single DB/cache call for nodes and one for secrets.
+    """
+    result: dict[tuple[int, int], bytes] = {}
+    for level, pos in dependency_indexes:
+        key = _node_key(level, pos, depth)
+        h = node_store.get(key)
+        if h is not None:
+            result[(level, pos)] = h
+        elif level == 0:
+            secret = secret_store.get(_leaf_index_to_binary(pos, depth))
+            if secret is not None:
+                result[(level, pos)] = hash_bytes(secret)
+    return result
+
 
 def _run_standard_setup(
     num_leaves: int,
@@ -311,9 +375,17 @@ def test_paytree_standard_walkthrough() -> None:
     prover_secrets, prover_nodes, root, verifier_nodes, verifier_secrets, depth = (
         _run_standard_setup(NUM_LEAVES, LEAF_SECRETS)
     )
+    auditor: AuditorState = AuditorState()
+    auditor.receive_tree(root, depth)
+    print(
+        "[Auditor][Setup] Prover sends Merkle root to auditor (mocked). Auditor stores root."
+    )
+    print()
+
     prover_sent_indexes: ProverSentIndexStore = ProverSentIndexStore()
     verifier_received_indexes: VerifierReceivedIndexStore = VerifierReceivedIndexStore()
 
+    last_proof: tuple[bytes, int, list[bytes]] | None = None
     for leaf_index in [0, 3, 4, 5, 6, 7]:
         print("[Standard][Leaf] ========== leaf_index =", leaf_index, "==========")
         print(
@@ -353,9 +425,7 @@ def test_paytree_standard_walkthrough() -> None:
         print("[Info] secret =", secret, "| siblings =", [x.hex() for x in siblings])
 
         # --- [Standard] Step 5: Verifier verifies proof ---
-        verify_proof(
-            secret, leaf_index, siblings, subroot_node, subroot_index, depth
-        )
+        verify_proof(secret, leaf_index, siblings, subroot_node, subroot_index, depth)
         print("[Standard][Crypto] Verifier verifies proof (leaf -> root).")
 
         # --- [Standard] Step 6: Verifier stores proof and secret after validation ---
@@ -366,6 +436,16 @@ def test_paytree_standard_walkthrough() -> None:
             "[Standard][Storage] Verifier stores proof siblings, secret, and received index."
         )
         print()
+        last_proof = (secret, leaf_index, siblings)
+
+    # --- [Auditor] Verifier sends last leaf secret and proof to auditor ---
+    assert last_proof is not None
+    auditor.validate_proof(*last_proof)
+    print(
+        "[Auditor][Validate] Verifier sends last leaf secret and proof to auditor; "
+        "auditor validates against known root."
+    )
+    print()
 
 
 # ---------------------------------------------------------------------------
@@ -381,9 +461,17 @@ def test_paytree_first_opt_walkthrough() -> None:
     prover_secrets, prover_nodes, root, verifier_nodes, verifier_secrets, depth = (
         _run_standard_setup(NUM_LEAVES, LEAF_SECRETS)
     )
+    auditor: AuditorState = AuditorState()
+    auditor.receive_tree(root, depth)
+    print(
+        "[Auditor][Setup] Prover sends Merkle root to auditor (mocked). Auditor stores root."
+    )
+    print()
+
     prover_sent_indexes: ProverSentIndexStore = ProverSentIndexStore()
     verifier_received_indexes: VerifierReceivedIndexStore = VerifierReceivedIndexStore()
 
+    last_proof: tuple[bytes, int, list[bytes]] | None = None
     for leaf_index in [0, 1, 3, 4, 6, 7]:
         print("[FirstOpt][Leaf] ========== leaf_index =", leaf_index, "==========")
         print(
@@ -400,9 +488,7 @@ def test_paytree_first_opt_walkthrough() -> None:
         prior_leaves = verifier_received_indexes.get_all()
         secret = prover_secrets[_leaf_index_to_binary(leaf_index, depth)]
         pruned_indexes = proof_indexes_first_opt(leaf_index, prior_leaves, depth)
-        pruned_siblings = _lookup_sibling_hashes(
-            prover_nodes, pruned_indexes, depth
-        )
+        pruned_siblings = _lookup_sibling_hashes(prover_nodes, pruned_indexes, depth)
         print("[FirstOpt][Storage] Prover reads leaf secret from prover secret store.")
         print("[Info] Prover gets the secret for leaf", leaf_index, ":", secret)
         print()
@@ -465,6 +551,32 @@ def test_paytree_first_opt_walkthrough() -> None:
         )
         print("[Info] Verifier node store keys:", sorted(verifier_nodes.keys()))
         print()
+        last_proof = (secret, leaf_index, siblings_received)
+
+    # --- [FirstOpt][Auditor] Verifier rebuilds full proof for last leaf and sends to auditor ---
+    assert last_proof is not None
+    last_secret, last_leaf_index, _ = last_proof
+
+    # Full proof (leaf -> root): use build_merkle_proof_indexes_for_leaf_a_given_ancestor_b
+    full_sibling_indexes = build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
+        0, last_leaf_index, depth, 0
+    )
+    dependency_indexes = get_proof_dependency_indexes(full_sibling_indexes, depth)
+
+    node_hashes = batch_get_node_hashes_or_secrets(
+        verifier_nodes, verifier_secrets, dependency_indexes, depth
+    )
+    full_siblings = [
+        build_node_from_dependencies(lev, pos, node_hashes, depth)
+        for lev, pos in full_sibling_indexes
+    ]
+
+    print(
+        "[FirstOpt][Auditor] Verifier rebuilds full proof (leaf -> root) for last leaf "
+        "from sparse node store and sends to auditor."
+    )
+    auditor.validate_proof(last_secret, last_leaf_index, full_siblings)
+    print("[Auditor][Validate] Auditor validates full proof against known root.")
     print()
 
 

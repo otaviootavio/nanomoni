@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import hashlib
 
-from nanomoni.crypto.merkle_index import level_position_from_eytzinger
+from nanomoni.crypto.merkle_index import (
+    get_node_dependency_indexes,
+    level_position_from_eytzinger,
+)
 from typing import Final
 
 SHA256: Final[str] = "sha256"
@@ -177,3 +180,46 @@ def verify_proof_of_leaf_a_given_ancestor_b(
         known_node_level=ancestor_level,
     ):
         raise ValueError("proof verification failed")
+
+
+def get_proof_dependency_indexes(
+    sibling_indexes: list[tuple[int, int]], depth: int
+) -> list[tuple[int, int]]:
+    """Return union of dependency indexes for all sibling nodes in a proof.
+
+    Single set of (level, pos) to batch-fetch for rebuilding the full proof.
+    Works for both full proof (leaf -> root) and pruned proof (leaf -> sub-root).
+    """
+    seen: set[tuple[int, int]] = set()
+    result: list[tuple[int, int]] = []
+    for level, pos in sibling_indexes:
+        for k in get_node_dependency_indexes(level, pos, depth):
+            if k not in seen:
+                seen.add(k)
+                result.append(k)
+    return result
+
+
+def build_node_from_dependencies(
+    level: int,
+    position: int,
+    node_hashes: dict[tuple[int, int], bytes],
+    depth: int,
+) -> bytes:
+    """Compute hash at (level, position) from preloaded hashes (no store access).
+
+    node_hashes is expected to be populated by a batch get of the indexes
+    returned by get_proof_dependency_indexes (nodes and leaf hashes from secrets).
+    """
+    key = (level, position)
+    if key in node_hashes:
+        return node_hashes[key]
+    if level == 0:
+        raise KeyError(
+            f"cannot rebuild node: leaf {position} not in batch result (missing from node/store or secrets)"
+        )
+    left = build_node_from_dependencies(level - 1, 2 * position, node_hashes, depth)
+    right = build_node_from_dependencies(
+        level - 1, 2 * position + 1, node_hashes, depth
+    )
+    return combine_children(left, right, True)

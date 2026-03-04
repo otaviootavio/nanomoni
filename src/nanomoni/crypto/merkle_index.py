@@ -154,3 +154,23 @@ def is_left_child(position: int) -> bool:
 def parent_position(position: int) -> int:
     """Parent index at the next level; parent = child >> 1."""
     return position // 2
+
+
+def get_node_dependency_indexes(
+    level: int,
+    position: int,
+    depth: int,
+) -> list[tuple[int, int]]:
+    """Return all (level', pos') in the subtree rooted at (level, position).
+
+    These are the indexes that must be loaded in one batch to compute the node
+    hash without further store access. Caller can batch-get these keys then
+    use build_node_from_dependencies (from merkle_tree).
+    """
+    result: list[tuple[int, int]] = []
+    for lev in range(level + 1):
+        start = position * (1 << (level - lev))
+        count = 1 << (level - lev)
+        for i in range(count):
+            result.append((lev, start + i))
+    return result
