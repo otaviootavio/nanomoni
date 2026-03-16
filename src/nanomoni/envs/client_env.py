@@ -24,7 +24,7 @@ class Settings(BaseModel):
     client_payword_max_k: Optional[int] = None
     client_paytree_unit_value: int = 1
     client_paytree_max_i: Optional[int] = None
-    client_inter_payment_delay_s: float = -1
+    client_inter_payment_delay_s: float = 0.0
 
     @field_validator("client_private_key_pem")
     @classmethod
@@ -151,7 +151,7 @@ def get_settings() -> Settings:
                 f"Invalid float for CLIENT_INTER_PAYMENT_DELAY_S: {client_inter_payment_delay_str!r}"
             ) from e
     else:
-        client_inter_payment_delay_s = -1
+        client_inter_payment_delay_s = 0.0
 
     return Settings(
         client_private_key_pem=client_private_key_pem,
