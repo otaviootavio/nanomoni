@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from asyncio import sleep
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
@@ -94,10 +96,19 @@ async def send_payments(
     channel_id: str,
     paytree: PaytreeSecondOpt,
     payments: list[int],
+    inter_payment_delay: float = 0.0,
 ) -> None:
-    """Send PayTree Second Opt payments with sequentially pruned proofs."""
+    (
+        """Send PayTree Second Opt payments with sequentially pruned proofs.
+
+    ``inter_payment_delay`` is provided by the benchmark harness to fix request
+    pacing.
+"""
+        ""
+    )
     node_cache_b64: dict[str, str] = {}
     for i in payments:
+        begin = perf_counter()
         i_val, leaf_b64, siblings_b64, full_siblings_b64 = (
             paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
         )
@@ -120,3 +131,7 @@ async def send_payments(
             is None
         ):
             raise RuntimeError("Failed to update PayTree Second Opt node cache")
+        total = perf_counter() - begin
+
+        delay = max(0.0, inter_payment_delay - total)
+        await sleep(delay)

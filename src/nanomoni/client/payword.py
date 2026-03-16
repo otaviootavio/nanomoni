@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from asyncio import sleep
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from nanomoni.application.shared.payword_payloads import (
@@ -137,8 +139,12 @@ async def send_payments(
     channel_id: str,
     payword: Payword,
     payments: list[int],
+    inter_payment_delay: float = 0.0,
 ) -> None:
     """Send PayWord payments to the vendor, generating proofs on-demand.
+
+    The ``inter_payment_delay`` parameter is used by benchmark runs to control
+    the pacing of requests.  It is ignored if zero.
 
     Note: We generate proofs on-demand in the loop rather than precomputing them.
     Since the Payword object already stores the complete hash chain, precomputing
@@ -149,10 +155,16 @@ async def send_payments(
         channel_id: The channel ID
         payword: The PayWord instance
         payments: List of k counter values (monotonic sequence)
+        inter_payment_delay: seconds to ``sleep`` between consecutive payments
     """
     for k in payments:
+        begin = perf_counter()
         token_b64 = payword.payment_proof_b64(k=k)
         await vendor.send_payword_payment(
             channel_id,
             ReceivePaywordPaymentDTO(k=k, token_b64=token_b64),
         )
+        total = perf_counter() - begin
+
+        delay = max(0.0, inter_payment_delay - total)
+        await sleep(delay)

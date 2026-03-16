@@ -184,6 +184,8 @@ async def run_client_flow() -> None:
         balance_after_open = after_open.balance
 
         # 5) Payments
+        delay = settings.client_inter_payment_delay_s
+
         if client_mode == "signature":
             payment_dtos = signature.prepare_payments(
                 channel_id,
@@ -192,14 +194,20 @@ async def run_client_flow() -> None:
                 client_private_key,
                 payments,
             )
-            await signature.send_payments(vendor, channel_id, payment_dtos)
+            await signature.send_payments(
+                vendor, channel_id, payment_dtos, inter_payment_delay=delay
+            )
         elif client_mode == "payword":
             if payword_obj is None:
                 raise RuntimeError(PAYWORD_NOT_INITIALIZED)
             # Type narrowing: mypy now knows payword_obj is not None after the check
             payword_for_payments: Payword = payword_obj
             await payword.send_payments(
-                vendor, channel_id, payword_for_payments, payments
+                vendor,
+                channel_id,
+                payword_for_payments,
+                payments,
+                inter_payment_delay=delay,
             )
         elif client_mode == "paytree":
             if paytree_obj is None:
@@ -207,21 +215,33 @@ async def run_client_flow() -> None:
             # Type narrowing: mypy now knows paytree_obj is not None after the check
             paytree_for_payments: Paytree = paytree_obj
             await paytree.send_payments(
-                vendor, channel_id, paytree_for_payments, payments
+                vendor,
+                channel_id,
+                paytree_for_payments,
+                payments,
+                inter_payment_delay=delay,
             )
         elif client_mode == "paytree_first_opt":
             if paytree_first_opt_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             paytree_first_opt_for_payments: PaytreeFirstOpt = paytree_first_opt_obj
             await paytree_first_opt.send_payments(
-                vendor, channel_id, paytree_first_opt_for_payments, payments
+                vendor,
+                channel_id,
+                paytree_first_opt_for_payments,
+                payments,
+                inter_payment_delay=delay,
             )
         elif client_mode == "paytree_second_opt":
             if paytree_second_opt_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             paytree_second_opt_for_payments: PaytreeSecondOpt = paytree_second_opt_obj
             await paytree_second_opt.send_payments(
-                vendor, channel_id, paytree_second_opt_for_payments, payments
+                vendor,
+                channel_id,
+                paytree_second_opt_for_payments,
+                payments,
+                inter_payment_delay=delay,
             )
         else:
             raise RuntimeError(f"Unsupported client mode: {client_mode}")

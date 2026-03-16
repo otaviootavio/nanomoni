@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from asyncio import sleep
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from nanomoni.application.shared.payment_channel_payloads import (
@@ -121,13 +123,25 @@ async def send_payments(
     vendor: VendorClientAsync,
     channel_id: str,
     payment_dtos: list[ReceivePaymentDTO],
+    inter_payment_delay: float = 0.0,
 ) -> None:
     """Send pre-signed payment envelopes to the vendor.
+
+    The optional ``inter_payment_delay`` parameter allows callers to pace the
+    requests at a fixed rate; this is used by the benchmarking runner so that
+    all modes see the same request interval.  Defaults to ``0.0`` (no delay).
 
     Args:
         vendor: The vendor client instance
         channel_id: The channel ID
         payment_dtos: List of pre-signed payment DTOs
+        inter_payment_delay: seconds to ``sleep`` between consecutive payments
     """
+
     for pay_dto in payment_dtos:
+        begin = perf_counter()
         await vendor.send_off_chain_payment(channel_id, pay_dto)
+        total = perf_counter() - begin
+
+        delay = max(0.0, inter_payment_delay - total)
+        await sleep(delay)
