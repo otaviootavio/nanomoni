@@ -14,5 +14,6 @@ required_env "ISSUER_BASE_URL"
 required_env "CLIENT_PRIVATE_KEY_PEM"
 required_env "CLIENT_PAYMENT_COUNT"
 required_env "CLIENT_CHANNEL_AMOUNT"
+required_env "CLIENT_INTER_PAYMENT_DELAY_S"
 
 poetry run python -m src.nanomoni.client_pay_chan

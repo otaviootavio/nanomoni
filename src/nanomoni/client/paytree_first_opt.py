@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from asyncio import sleep
+from time import perf_counter
 from typing import TYPE_CHECKING, Optional
 
 from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
@@ -93,10 +95,19 @@ async def send_payments(
     channel_id: str,
     paytree: PaytreeFirstOpt,
     payments: list[int],
+    inter_payment_delay: float = 0.0,
 ) -> None:
-    """Send PayTree First Opt payments with sequentially pruned proofs."""
+    (
+        """Send PayTree First Opt payments with sequentially pruned proofs.
+
+    ``inter_payment_delay`` may be supplied by the benchmark runner so that all
+    modes operate at the same rate.
+"""
+        ""
+    )
     last_verified_index: Optional[int] = None
     for i in payments:
+        begin = perf_counter()
         i_val, leaf_b64, siblings_b64 = paytree.payment_proof(
             i=i, last_verified_index=last_verified_index
         )
@@ -110,3 +121,7 @@ async def send_payments(
             ),
         )
         last_verified_index = i_val
+        total = perf_counter() - begin
+
+        delay = max(0.0, inter_payment_delay - total)
+        await sleep(delay)

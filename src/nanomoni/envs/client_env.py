@@ -24,6 +24,7 @@ class Settings(BaseModel):
     client_payword_max_k: Optional[int] = None
     client_paytree_unit_value: int = 1
     client_paytree_max_i: Optional[int] = None
+    client_inter_payment_delay_s: float = 0.0
 
     @field_validator("client_private_key_pem")
     @classmethod
@@ -62,6 +63,13 @@ class Settings(BaseModel):
             raise ValueError("Issuer base URL must start with http:// or https://")
         if not parsed.netloc:
             raise ValueError("Issuer base URL must include a host")
+        return v
+
+    @field_validator("client_inter_payment_delay_s")
+    @classmethod
+    def validate_inter_payment_delay(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("client_inter_payment_delay_s must be non-negative")
         return v
 
 
@@ -134,6 +142,17 @@ def get_settings() -> Settings:
     else:
         client_paytree_max_i = None
 
+    client_inter_payment_delay_str = os.environ.get("CLIENT_INTER_PAYMENT_DELAY_S")
+    if client_inter_payment_delay_str:
+        try:
+            client_inter_payment_delay_s = float(client_inter_payment_delay_str)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid float for CLIENT_INTER_PAYMENT_DELAY_S: {client_inter_payment_delay_str!r}"
+            ) from e
+    else:
+        client_inter_payment_delay_s = 0.0
+
     return Settings(
         client_private_key_pem=client_private_key_pem,
         client_public_key_der_b64=compute_public_key_der_b64_from_private_pem(
@@ -148,4 +167,5 @@ def get_settings() -> Settings:
         client_payword_max_k=client_payword_max_k,
         client_paytree_unit_value=client_paytree_unit_value,
         client_paytree_max_i=client_paytree_max_i,
+        client_inter_payment_delay_s=client_inter_payment_delay_s,
     )
