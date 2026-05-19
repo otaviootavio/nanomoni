@@ -16,13 +16,26 @@ fi
 
 docker compose build client
 
+# Timing JSON
+TIMING_JSON=""
+
+# Signature
 source envs/client.env.sh
 export CLIENT_PAYMENT_MODE="signature"
 export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
 
+START=$(date +%s%3N)
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
+STATUS=$?
+END=$(date +%s%3N)
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
+
+if [ $STATUS -eq 0 ]; then
+  TIMING_JSON="$TIMING_JSON{\"mode\":\"signature\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+else
+  TIMING_JSON="$TIMING_JSON{\"mode\":\"signature\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+fi
 
 sleep $SEEP_TIME
 source envs/client.env.sh
@@ -33,9 +46,18 @@ export CLIENT_PAYTREE_MAX_I=$BENCHMARK_COUNT_VAR
 # With unit_value=1 and max_i=500000, we need at least 500000, but use 10000000 for safety
 export CLIENT_CHANNEL_AMOUNT=10000000
 
+START=$(date +%s%3N)
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
+STATUS=$?
+END=$(date +%s%3N)
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
+
+if [ $STATUS -eq 0 ]; then
+  TIMING_JSON="$TIMING_JSON,{\"mode\":\"paytree\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+else
+  TIMING_JSON="$TIMING_JSON,{\"mode\":\"paytree\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+fi
 
 sleep $SEEP_TIME
 source envs/client.env.sh
@@ -46,6 +68,18 @@ export CLIENT_PAYWORD_MAX_K=$BENCHMARK_COUNT_VAR
 # With unit_value=1 and max_k=500000, we need at least 500000, but use 10000000 for safety
 export CLIENT_CHANNEL_AMOUNT=10000000
 
+START=$(date +%s%3N)
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
+STATUS=$?
+END=$(date +%s%3N)
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
+
+if [ $STATUS -eq 0 ]; then
+  TIMING_JSON="$TIMING_JSON,{\"mode\":\"payword\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+else
+  TIMING_JSON="$TIMING_JSON,{\"mode\":\"payword\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+fi
+
+TIMING_JSON="[$TIMING_JSON]"
+echo "$TIMING_JSON" | jq '.' > benchmark_timing.json
