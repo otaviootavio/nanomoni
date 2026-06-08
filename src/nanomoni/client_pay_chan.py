@@ -87,7 +87,7 @@ async def run_client_flow() -> None:
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, payword_unit_value
             )
-        elif client_mode == "paytree":
+        elif client_mode in ("paytree", "paytree_first_opt"):
             paytree_obj, paytree_root_b64, paytree_unit_value, paytree_max_i = (
                 paytree.init_commitment(settings, payment_count)
             )
@@ -119,6 +119,17 @@ async def run_client_flow() -> None:
                 paytree_root_b64,
                 paytree_unit_value,
                 paytree_max_i,
+            )
+        elif client_mode == "paytree_first_opt":
+            open_dto = paytree.build_open_channel_request(
+                client_private_key,
+                settings.client_public_key_der_b64,
+                vendor_pk.public_key_der_b64,
+                channel_amount,
+                paytree_root_b64,
+                paytree_unit_value,
+                paytree_max_i,
+                paytree_optimization_type=1,
             )
         else:
             open_dto = signature.build_open_channel_request(
@@ -166,14 +177,26 @@ async def run_client_flow() -> None:
         elif client_mode == "paytree":
             if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
-            # Type narrowing: mypy now knows paytree_obj is not None after the check
-            paytree_for_payments: Paytree = paytree_obj
+            paytree_for_payments = paytree_obj
             await paytree.send_payments(
                 vendor,
                 channel_id,
                 paytree_for_payments,
                 payments,
                 inter_payment_delay=delay,
+                optimization_type=0,
+            )
+        elif client_mode == "paytree_first_opt":
+            if paytree_obj is None:
+                raise RuntimeError(PAYTREE_NOT_INITIALIZED)
+            paytree_for_payments = paytree_obj
+            await paytree.send_payments(
+                vendor,
+                channel_id,
+                paytree_for_payments,
+                payments,
+                inter_payment_delay=delay,
+                optimization_type=1,
             )
         else:
             raise RuntimeError(f"Unsupported client mode: {client_mode}")

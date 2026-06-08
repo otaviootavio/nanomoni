@@ -24,6 +24,7 @@ from .merkle_tree import (
     hash_bytes,
     verify_proof_to_known_node,
 )
+from nanomoni.protocol import proof_indexes_first_opt
 
 
 def b64_to_bytes(data_b64: str) -> bytes:
@@ -100,6 +101,33 @@ def _get_merkle_proof(
     return leaf_hash, siblings
 
 
+def _get_merkle_proof_pruned(
+    tree_levels: list[list[bytes]],
+    leaf_index: int,
+    prior_leaves: list[int],
+) -> tuple[bytes, list[bytes]]:
+    """Pruned Merkle proof (leaf -> sub-root) using LCA with prior leaves.
+
+    Returns (leaf_hash, siblings) where siblings are only up to the sub-root
+    determined by proof_indexes_first_opt.
+    """
+    if not tree_levels:
+        raise ValueError("Empty tree levels")
+    depth = len(tree_levels) - 1
+    if leaf_index < 0 or leaf_index >= len(tree_levels[0]):
+        raise ValueError(
+            f"Leaf index {leaf_index} out of range [0, {len(tree_levels[0])})"
+        )
+
+    pruned_indexes = proof_indexes_first_opt(leaf_index, prior_leaves, depth)
+    leaf_hash = tree_levels[0][leaf_index]
+    siblings = [
+        _index_to_hash_from_tree(tree_levels, level, position)
+        for level, position in pruned_indexes
+    ]
+    return leaf_hash, siblings
+
+
 def _verify_merkle_proof(
     leaf_hash: bytes, siblings: list[bytes], root: bytes, leaf_index: int
 ) -> bool:
@@ -160,6 +188,24 @@ class Paytree:
             raise ValueError(f"Index i={i} out of range [0, {self.max_i}]")
 
         leaf_hash, siblings = _get_merkle_proof(self._tree_levels, i)
+        leaf_b64 = bytes_to_b64(leaf_hash)
+        siblings_b64 = [bytes_to_b64(s) for s in siblings]
+        return i, leaf_b64, siblings_b64
+
+    def payment_proof_first_opt(
+        self, i: int, prior_sent_indexes: list[int]
+    ) -> tuple[int, str, list[str]]:
+        """Generate pruned payment proof for index i (first-opt: leaf -> sub-root).
+
+        prior_sent_indexes: leaf indexes already sent in this session (order matters).
+        Returns (i, leaf_b64, siblings_b64[]) with fewer siblings when paths overlap.
+        """
+        if i < 0 or i > self.max_i:
+            raise ValueError(f"Index i={i} out of range [0, {self.max_i}]")
+
+        leaf_hash, siblings = _get_merkle_proof_pruned(
+            self._tree_levels, i, prior_sent_indexes
+        )
         leaf_b64 = bytes_to_b64(leaf_hash)
         siblings_b64 = [bytes_to_b64(s) for s in siblings]
         return i, leaf_b64, siblings_b64

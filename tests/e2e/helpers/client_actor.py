@@ -199,9 +199,13 @@ class ClientActor:
         amount: int,
         unit_value: int,
         max_i: int,
+        paytree_optimization_type: int = 0,
     ) -> tuple[OpenChannelRequestDTO, Paytree]:
         """
         Create an open channel request with an embedded PayTree commitment.
+
+        Args:
+            paytree_optimization_type: 0 = full proof per payment; 1 = first-opt (pruned).
 
         Returns:
             (OpenChannelRequestDTO, Paytree) so tests can generate proofs efficiently.
@@ -219,8 +223,10 @@ class ClientActor:
             paytree_root_b64=root_b64,
             paytree_unit_value=unit_value,
             paytree_max_i=max_i,
+            paytree_optimization_type=paytree_optimization_type,
         )
-        payload_bytes = json_to_bytes(payload.model_dump())
+        # Match issuer verification: exclude_none so omitted fields are not in signed bytes
+        payload_bytes = json_to_bytes(payload.model_dump(exclude_none=True))
         signature_b64 = sign_bytes(self.private_key, payload_bytes)
 
         return (
@@ -232,6 +238,7 @@ class ClientActor:
                 paytree_root_b64=root_b64,
                 paytree_unit_value=unit_value,
                 paytree_max_i=max_i,
+                paytree_optimization_type=paytree_optimization_type,
             ),
             paytree,
         )

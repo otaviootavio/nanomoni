@@ -10,7 +10,6 @@ and sends to verifier; verifier verifies, stores only siblings in node store
 from __future__ import annotations
 
 from nanomoni.crypto.merkle_index import (
-    get_ancestor_at_level,
     get_sibling_keys_eytzinger,
     get_sibling_position_at_level,
     key_eytzinger,
@@ -19,11 +18,11 @@ from nanomoni.crypto.merkle_tree import (
     build_merkle_proof_indexes_for_leaf_a_given_ancestor_b,
     build_merkle_tree,
     build_node_from_dependencies,
-    combine_children,
     get_proof_dependency_indexes,
     hash_bytes,
 )
 from nanomoni.protocol import (
+    infer_subroot_index_for_incoming_pruned_merkle_proof,
     proof_indexes_first_opt,
     proof_indexes_standard,
     subroot_index_standard,
@@ -251,29 +250,6 @@ def verifier_stores_secret(
     secret_store[_leaf_index_to_binary(leaf_index, depth)] = secret
 
 
-def verifier_store_computed_path(
-    store: VerifierNodeStore,
-    leaf_index: int,
-    leaf_hash: bytes,
-    siblings: list[bytes],
-    depth: int,
-) -> None:
-    """Store nodes computed along Q(a) during verification (intermediate hashes).
-
-    After verifying a leaf, the verifier has computed every node on the path
-    from the leaf to the sub-root. Storing them enlarges the set of trusted
-    nodes and improves pruning for subsequent proofs.
-    """
-    current = leaf_hash
-    current_index = leaf_index
-    for level, sibling in enumerate(siblings):
-        store[_node_key(level, current_index, depth)] = current
-        left_is_first = (current_index % 2) == 0
-        current = combine_children(current, sibling, left_is_first)
-        current_index = current_index // 2
-    store[_node_key(len(siblings), current_index, depth)] = current
-
-
 def _lookup_sibling_hashes(
     store: MerkleNodeStore,
     indexes: list[tuple[int, int]],
@@ -288,26 +264,6 @@ def _lookup_sibling_hashes(
             raise KeyError(f"missing node {k} in store")
         siblings.append(h)
     return siblings
-
-
-def infer_subroot_index_for_incoming_pruned_merkle_proof(
-    leaf_index: int,
-    siblings_count: int,
-    depth: int,
-) -> str:
-    """Infer sub-root Eytzinger index from the number of siblings actually received.
-
-    When siblings_count=0: no auth path = just hash(secret). Trusted node is
-    the leaf itself (0, leaf_index), which verifier must have (e.g. as sibling
-    from prior proof).
-    When siblings_count=k: we verify up k levels; sub-root at level k.
-    Returns the sub-root Eytzinger key (string) for store lookup.
-    """
-    if siblings_count == 0:
-        return key_eytzinger(0, leaf_index, depth)
-    trusted_level = min(siblings_count, depth)
-    trusted_pos = get_ancestor_at_level(leaf_index, trusted_level)
-    return key_eytzinger(trusted_level, trusted_pos, depth)
 
 
 def batch_get_node_hashes_or_secrets(

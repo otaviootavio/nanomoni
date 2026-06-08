@@ -190,6 +190,81 @@ VENDOR_SCRIPTS = {
         -- Minimal ack
         return {1, ''}
     """,
+    # First-opt node store: one DB shot for read (MGET) + write (MSET + ZADD).
+    # KEYS[1] = index key, KEYS[2] = read key 1, KEYS[3] = read key 2
+    # ARGV[1] = channel_id, ARGV[2] = num_updates, ARGV[3], ARGV[4] = suffix1, val1, ...
+    # Returns {read_val1 or '', read_val2 or ''}.
+    "paytree_first_opt_get_nodes_and_merge": """
+        local index_key = KEYS[1]
+        local read1 = redis.call('GET', KEYS[2])
+        local read2 = redis.call('GET', KEYS[3])
+        local channel_id = ARGV[1]
+        local n = tonumber(ARGV[2]) or 0
+        local prefix = "paytree_first_opt_node:" .. channel_id .. ":"
+        for i = 1, n do
+            local suffix = ARGV[2 + (i-1)*2 + 1]
+            local val = ARGV[2 + (i-1)*2 + 2]
+            redis.call('SET', prefix .. suffix, val)
+            redis.call('ZADD', index_key, 0, suffix)
+        end
+        return {read1 or '', read2 or ''}
+    """,
+    # First-opt node store: merge only (MSET + ZADD in one shot). Use after get when no read needed.
+    # KEYS[1] = index key, ARGV[1] = channel_id, ARGV[2] = num_pairs, ARGV[3], ARGV[4] = suffix1, val1, ...
+    "paytree_first_opt_merge_nodes": """
+        local index_key = KEYS[1]
+        local channel_id = ARGV[1]
+        local n = tonumber(ARGV[2]) or 0
+        local prefix = "paytree_first_opt_node:" .. channel_id .. ":"
+        for i = 1, n do
+            local suffix = ARGV[2 + (i-1)*2 + 1]
+            local val = ARGV[2 + (i-1)*2 + 2]
+            redis.call('SET', prefix .. suffix, val)
+            redis.call('ZADD', index_key, 0, suffix)
+        end
+        return 1
+    """,
+    # First-opt: one DB shot = merge_nodes (MSET + ZADD) + payment channel update (SET + optional ZREM/ZADD open/closed).
+    # KEYS[1] = paytree_first_opt_index:{channel_id}
+    # KEYS[2] = payment_channel:{channel_id}
+    # KEYS[3] = payment_channels:open
+    # KEYS[4] = payment_channels:closed
+    # ARGV[1]=channel_id, ARGV[2]=num_node_pairs, ARGV[3..2+2n]=node_suffix,val,..., ARGV[3+2n]=channel_json, ARGV[4+2n]=is_closed ("0"/"1"), ARGV[5+2n]=created_ts
+    "paytree_first_opt_save_nodes_and_channel": """
+        local index_key = KEYS[1]
+        local channel_key = KEYS[2]
+        local open_key = KEYS[3]
+        local closed_key = KEYS[4]
+        local channel_id = ARGV[1]
+        local n = tonumber(ARGV[2]) or 0
+        local prefix = "paytree_first_opt_node:" .. channel_id .. ":"
+        local old_is_closed = nil
+        local existing = redis.call('GET', channel_key)
+        if existing and existing ~= '' then
+            local ch = cjson.decode(existing)
+            old_is_closed = ch.is_closed
+        end
+        for i = 1, n do
+            local suffix = ARGV[2 + (i-1)*2 + 1]
+            local val = ARGV[2 + (i-1)*2 + 2]
+            redis.call('SET', prefix .. suffix, val)
+            redis.call('ZADD', index_key, 0, suffix)
+        end
+        local channel_json = ARGV[3 + n*2]
+        local new_is_closed = (ARGV[4 + n*2] == '1')
+        local created_ts = tonumber(ARGV[5 + n*2]) or 0
+        redis.call('SET', channel_key, channel_json)
+        if old_is_closed ~= nil and old_is_closed ~= new_is_closed then
+            if new_is_closed then
+                redis.call('ZREM', open_key, channel_id)
+                redis.call('ZADD', closed_key, created_ts, channel_id)
+            else
+                redis.call('ZREM', closed_key, channel_id)
+                redis.call('ZADD', open_key, created_ts, channel_id)
+            end
+        end
+        return 1
+    """,
 }
 
 # Consolidated script used for all three channel initialization scenarios

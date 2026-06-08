@@ -24,6 +24,7 @@ class PaytreeOpenChannelResponseDTO(BaseModel):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+    paytree_optimization_type: int = 0
 
 
 class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
@@ -42,6 +43,7 @@ class PaytreePaymentChannelResponseDTO(CommonSerializersMixin, BaseModel):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+    paytree_optimization_type: int = 0
 
     created_at: datetime
     closed_at: Optional[datetime] = None

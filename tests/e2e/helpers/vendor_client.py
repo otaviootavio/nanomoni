@@ -164,11 +164,22 @@ class VendorTestClient:
         assert response.status_code == 204
 
     async def receive_paytree_payment(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        optimization_type: int = 0,
+        paytree_max_i: int = 0,
     ) -> PaytreePaymentResponseDTO:
         """Submit a PayTree payment to the vendor."""
         dto = ReceivePaytreePaymentDTO(
-            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            optimization_type=optimization_type,
+            paytree_max_i=paytree_max_i,
         )
         response = await self._request(
             "POST",
@@ -180,7 +191,14 @@ class VendorTestClient:
         return PaytreePaymentResponseDTO.model_validate(response.json())
 
     async def receive_paytree_payment_raw(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        optimization_type: int = 0,
+        paytree_max_i: int = 0,
     ) -> AiohttpResponse:
         """
         Submit a PayTree payment to the vendor without raising on error status.
@@ -188,7 +206,11 @@ class VendorTestClient:
         Returns the raw HTTP response for error case testing.
         """
         dto = ReceivePaytreePaymentDTO(
-            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            optimization_type=optimization_type,
+            paytree_max_i=paytree_max_i,
         )
         return await self._request(
             "POST",

@@ -17,6 +17,17 @@ class ReceivePaytreePaymentDTO(BaseModel):
     siblings_b64: list[str] = Field(
         ..., description="List of base64-encoded sibling hashes"
     )
+    optimization_type: int = Field(
+        default=0,
+        ge=0,
+        le=1,
+        description="0=standard (full proof), 1=first-opt (pruned proof)",
+    )
+    paytree_max_i: int = Field(
+        default=0,
+        ge=0,
+        description="Required for first-opt: max leaf index from channel (to compute node keys)",
+    )
 
 
 class PaytreePaymentResponseDTO(CommonSerializersMixin, BaseModel):

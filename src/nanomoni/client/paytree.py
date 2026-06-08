@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from asyncio import sleep
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
@@ -67,6 +67,7 @@ def build_open_payload(
     paytree_root_b64: str,
     paytree_unit_value: int,
     paytree_max_i: int,
+    paytree_optimization_type: Optional[int] = None,
 ) -> PaytreeOpenChannelRequestPayload:
     """Build the open channel payload for PayTree mode.
 
@@ -77,6 +78,7 @@ def build_open_payload(
         paytree_root_b64: PayTree commitment root in base64
         paytree_unit_value: Unit value for each payment step
         paytree_max_i: Maximum i value (channel capacity in steps)
+        paytree_optimization_type: 0 or None = no optimization; fixed at channel open.
 
     Returns:
         The PayTree open channel request payload.
@@ -88,6 +90,7 @@ def build_open_payload(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
+        paytree_optimization_type=paytree_optimization_type,
     )
 
 
@@ -99,6 +102,7 @@ def build_open_channel_request(
     paytree_root_b64: str,
     paytree_unit_value: int,
     paytree_max_i: int,
+    paytree_optimization_type: Optional[int] = None,
 ) -> OpenChannelRequestDTO:
     """Build and sign open channel request DTO for PayTree mode.
 
@@ -110,6 +114,7 @@ def build_open_channel_request(
         paytree_root_b64: PayTree commitment root in base64
         paytree_unit_value: Unit value for each payment step
         paytree_max_i: Maximum i value (channel capacity in steps)
+        paytree_optimization_type: 0 or None = no optimization; fixed at channel open.
 
     Returns:
         Signed OpenChannelRequestDTO with flat fields.
@@ -121,8 +126,10 @@ def build_open_channel_request(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
+        paytree_optimization_type=paytree_optimization_type,
     )
-    payload_bytes = json_to_bytes(payload.model_dump())
+    # Match issuer verification: exclude_none so omitted fields are not in signed bytes
+    payload_bytes = json_to_bytes(payload.model_dump(exclude_none=True))
     signature_b64 = sign_bytes(client_private_key, payload_bytes)
 
     return OpenChannelRequestDTO(
@@ -133,6 +140,7 @@ def build_open_channel_request(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
+        paytree_optimization_type=paytree_optimization_type,
     )
 
 
@@ -142,6 +150,7 @@ async def send_payments(
     paytree: Paytree,
     payments: list[int],
     inter_payment_delay: float = 0.0,
+    optimization_type: int = 0,
 ) -> None:
     """Send PayTree payments to the vendor, generating proofs on-demand.
 
@@ -161,7 +170,9 @@ async def send_payments(
         paytree: The PayTree instance
         payments: List of i index values (monotonic sequence)
         inter_payment_delay: seconds to ``sleep`` between consecutive payments
+        optimization_type: 0 = full proof per payment; 1 = pruned proof (first-opt)
     """
+    prior_sent_indexes: list[int] = []
     start = perf_counter()
     for n, i in enumerate(payments):
         if inter_payment_delay > 0:
@@ -175,10 +186,20 @@ async def send_payments(
                 # back-to-back to "catch up", which would burst well above the
                 # configured rate and contaminate steady-state measurements.
                 start = now - n * inter_payment_delay
-        i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
+        if optimization_type == 1:
+            i_val, leaf_b64, siblings_b64 = paytree.payment_proof_first_opt(
+                i, prior_sent_indexes
+            )
+            prior_sent_indexes.append(i)
+        else:
+            i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
         await vendor.send_paytree_payment(
             channel_id,
             ReceivePaytreePaymentDTO(
-                i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                i=i_val,
+                leaf_b64=leaf_b64,
+                siblings_b64=siblings_b64,
+                optimization_type=optimization_type,
+                paytree_max_i=paytree.max_i,
             ),
         )

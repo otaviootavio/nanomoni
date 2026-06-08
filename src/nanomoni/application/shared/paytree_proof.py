@@ -3,7 +3,36 @@
 from __future__ import annotations
 
 from nanomoni.crypto.paytree import b64_to_bytes
-from nanomoni.protocol import subroot_index_standard, verify_proof_with_leaf_hash
+from nanomoni.protocol import (
+    subroot_index_standard,
+    verify_proof_with_leaf_hash,
+)
+
+
+def verify_paytree_proof_first_opt(
+    *,
+    i: int,
+    leaf_b64: str,
+    siblings_b64: list[str],
+    subroot_b64: str,
+    subroot_index: str,
+    depth: int,
+) -> bool:
+    """Verify a first-opt pruned proof (leaf -> sub-root) using the protocol layer."""
+    try:
+        leaf_hash = b64_to_bytes(leaf_b64)
+        siblings = [b64_to_bytes(s) for s in siblings_b64]
+        subroot = b64_to_bytes(subroot_b64)
+    except Exception:
+        return False
+    return verify_proof_with_leaf_hash(
+        leaf_hash=leaf_hash,
+        leaf_index=i,
+        siblings=siblings,
+        subroot_node=subroot,
+        subroot_index=subroot_index,
+        depth=depth,
+    )
 
 
 def verify_paytree_proof_standard(

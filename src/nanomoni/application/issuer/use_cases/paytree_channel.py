@@ -72,6 +72,13 @@ class PaytreeChannelService:
         ):
             raise ValueError("PayTree fields are required for PayTree channel opening")
 
+        optimization_type = (
+            0
+            if dto.paytree_optimization_type is None
+            else dto.paytree_optimization_type
+        )
+        # Optimization is between client and vendor; issuer accepts 0 or 1 and treats channel as standard (full proof at settlement).
+
         # Verify client signature over the flat DTO fields
         # Reconstruct canonical JSON from DTO fields (excluding signature)
         payload_bytes = dto_to_canonical_json_bytes(dto)
@@ -140,6 +147,7 @@ class PaytreeChannelService:
             paytree_root_b64=dto.paytree_root_b64,
             paytree_unit_value=dto.paytree_unit_value,
             paytree_max_i=dto.paytree_max_i,
+            paytree_optimization_type=optimization_type,
         )
         created = await self.channel_repo.create(channel)
         if not isinstance(created, PaytreePaymentChannel):
@@ -172,6 +180,7 @@ class PaytreeChannelService:
             paytree_root_b64=created.paytree_root_b64,
             paytree_unit_value=created.paytree_unit_value,
             paytree_max_i=created.paytree_max_i,
+            paytree_optimization_type=created.paytree_optimization_type,
         )
 
     async def settle_channel(

@@ -93,11 +93,22 @@ class UseCaseVendorClient:
         await self.payword_payment_service.settle_channel(channel_id, dto)
 
     async def receive_paytree_payment(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        optimization_type: int = 0,
+        paytree_max_i: int = 0,
     ) -> PaytreePaymentResponseDTO:
         """Submit a PayTree payment to the vendor."""
         dto = ReceivePaytreePaymentDTO(
-            i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            optimization_type=optimization_type,
+            paytree_max_i=paytree_max_i,
         )
         return await self.paytree_payment_service.receive_paytree_payment(
             channel_id, dto
@@ -152,7 +163,14 @@ class UseCaseVendorClient:
             )
 
     async def receive_paytree_payment_raw(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        optimization_type: int = 0,
+        paytree_max_i: int = 0,
     ) -> UseCaseResponse:
         """
         Submit a PayTree payment to the vendor without raising on error.
@@ -161,7 +179,11 @@ class UseCaseVendorClient:
         """
         try:
             dto = ReceivePaytreePaymentDTO(
-                i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+                i=i,
+                leaf_b64=leaf_b64,
+                siblings_b64=siblings_b64,
+                optimization_type=optimization_type,
+                paytree_max_i=paytree_max_i,
             )
             result = await self.paytree_payment_service.receive_paytree_payment(
                 channel_id, dto

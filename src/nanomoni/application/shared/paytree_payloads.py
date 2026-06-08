@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -23,6 +25,7 @@ class PaytreeOpenChannelRequestPayload(BaseModel):
         ge=0,
         description="Maximum allowed index (inclusive, tree has max_i+1 leaves)",
     )
+    paytree_optimization_type: Optional[int] = None
 
 
 class PaytreeSettlementPayload(BaseModel):

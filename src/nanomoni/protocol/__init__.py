@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from .paytree_first_opt import proof_indexes_first_opt
+from .paytree_first_opt import (
+    infer_subroot_index_for_incoming_pruned_merkle_proof,
+    proof_indexes_first_opt,
+)
 from .paytree_standard import (
     proof_indexes_standard,
     subroot_index_standard,
@@ -11,6 +14,7 @@ from .paytree_standard import (
 )
 
 __all__ = [
+    "infer_subroot_index_for_incoming_pruned_merkle_proof",
     "proof_indexes_first_opt",
     "proof_indexes_standard",
     "subroot_index_standard",

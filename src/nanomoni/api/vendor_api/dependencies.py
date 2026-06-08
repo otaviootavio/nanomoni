@@ -23,6 +23,10 @@ from ...domain.vendor.payment_channel_repository import (
     PaywordRepository,
     SignatureRepository,
 )
+from ...domain.vendor.paytree_first_opt_repository import PaytreeFirstOptNodeRepository
+from ...infrastructure.vendor.paytree_first_opt_repository_impl import (
+    PaytreeFirstOptNodeRepositoryImpl,
+)
 from ...infrastructure.vendor.paytree_repository_impl import PaytreeRepositoryImpl
 from ...infrastructure.vendor.payword_repository_impl import PaywordRepositoryImpl
 from ...infrastructure.vendor.signature_repository_impl import SignatureRepositoryImpl
@@ -73,6 +77,11 @@ def get_payword_repository() -> PaywordRepository:
 def get_paytree_repository() -> PaytreeRepository:
     """Get PayTree payment channel repository."""
     return PaytreeRepositoryImpl(get_key_value_store_dependency())
+
+
+def get_paytree_first_opt_node_repository() -> PaytreeFirstOptNodeRepository:
+    """Get PayTree first-opt node store repository."""
+    return PaytreeFirstOptNodeRepositoryImpl(get_key_value_store_dependency())
 
 
 async def get_user_service() -> UserService:
@@ -139,5 +148,6 @@ async def get_paytree_payment_service(request: Request) -> PaytreePaymentService
         payment_channel_repository=get_paytree_repository(),
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
+        paytree_first_opt_node_repository=get_paytree_first_opt_node_repository(),
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )

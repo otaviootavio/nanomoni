@@ -57,3 +57,4 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+    paytree_optimization_type: int = 0

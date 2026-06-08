@@ -17,6 +17,7 @@ ClientMode = Literal[
     "signature",
     "payword",
     "paytree",
+    "paytree_first_opt",
 ]
 
 
@@ -26,9 +27,10 @@ def validate_mode(mode: str) -> ClientMode:
         "signature",
         "payword",
         "paytree",
+        "paytree_first_opt",
     }:
         raise RuntimeError(
-            "client_payment_mode must be 'signature', 'payword', or 'paytree'"
+            "client_payment_mode must be 'signature', 'payword', 'paytree', or 'paytree_first_opt'"
         )
     return mode  # type: ignore[return-value]
 
@@ -46,7 +48,7 @@ async def open_channel_for_mode(
     if mode == "payword":
         payword_channel = await issuer.open_payword_payment_channel(open_dto)
         return payword_channel.channel_id
-    elif mode == "paytree":
+    elif mode in ("paytree", "paytree_first_opt"):
         paytree_channel = await issuer.open_paytree_payment_channel(open_dto)
         return paytree_channel.channel_id
     else:
@@ -63,7 +65,7 @@ async def request_settle_for_mode(
     close_dto = CloseChannelDTO(channel_id=channel_id)
     if mode == "payword":
         await vendor.request_settle_channel_payword(close_dto)
-    elif mode == "paytree":
+    elif mode in ("paytree", "paytree_first_opt"):
         await vendor.request_settle_channel_paytree(close_dto)
     else:
         await vendor.request_settle_channel(close_dto)
@@ -84,7 +86,7 @@ async def wait_until_closed(
         if mode == "payword":
             if (await issuer.get_payword_payment_channel(get_dto)).is_closed:
                 break
-        elif mode == "paytree":
+        elif mode in ("paytree", "paytree_first_opt"):
             if (await issuer.get_paytree_payment_channel(get_dto)).is_closed:
                 break
         else:
@@ -103,7 +105,7 @@ def compute_final_cumulative_owed_amount(
     """Compute the final owed amount based on the mode and payment sequence.
 
     Args:
-        mode: The payment mode ("signature", "payword", or "paytree")
+        mode: The payment mode ("signature", "payword", "paytree", or "paytree_first_opt")
         payments: List of payment values (cumulative_owed_amount for signature, k/i for payword/paytree)
         unit_value: Unit value for payword/paytree modes (required for those modes)
 
@@ -115,7 +117,7 @@ def compute_final_cumulative_owed_amount(
 
     if mode == "signature":
         return payments[-1]
-    elif mode in {"payword", "paytree"}:
+    elif mode in {"payword", "paytree", "paytree_first_opt"}:
         if unit_value is None:
             raise ValueError(f"unit_value is required for {mode} mode")
         return payments[-1] * unit_value

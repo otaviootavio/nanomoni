@@ -196,6 +196,21 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_root_b64: str
     paytree_unit_value: int
     paytree_max_i: int
+    paytree_optimization_type: int = 0
     last_leaf_index: int = -1
     last_leaf_b64: Optional[str] = None
     last_paytree_created_at: Optional[datetime] = None
+
+
+class PaytreeFirstOptChannelNodes(BaseModel):
+    """Sparse node store for one PayTree first-opt channel (Eytzinger key -> hash_b64).
+
+    Used only for optimization_type=1. Holds root and path nodes from verified
+    pruned proofs; level-0 entries are leaf hashes.
+    """
+
+    channel_id: str = Field(..., description="Channel this store belongs to")
+    nodes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Eytzinger node_key -> node hash in base64",
+    )

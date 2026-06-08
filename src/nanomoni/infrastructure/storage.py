@@ -50,6 +50,11 @@ class KeyValueStore(ABC):
         pass
 
     @abstractmethod
+    async def mset(self, mapping: Mapping[str, str]) -> None:
+        """Set multiple key-value pairs in one round-trip."""
+        pass
+
+    @abstractmethod
     async def delete(self, key: str) -> int:
         pass
 
@@ -130,6 +135,12 @@ class RedisKeyValueStore(KeyValueStore):
     async def set(self, key: str, value: str) -> None:
         async with self._db_client.get_connection() as conn:
             await conn.set(key, value)
+
+    async def mset(self, mapping: Mapping[str, str]) -> None:
+        if not mapping:
+            return
+        async with self._db_client.get_connection() as conn:
+            await conn.mset(mapping)
 
     async def delete(self, key: str) -> int:
         async with self._db_client.get_connection() as conn:
