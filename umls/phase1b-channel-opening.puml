@@ -5,23 +5,23 @@ autonumber
 
 hide footbox
 
-actor "Client" as Client
-participant "Vendor" as Vendor
-participant "Issuer API" as Issuer
-database "Issuer DB\n(Redis)" as IssuerDB
+actor "Cliente" as Client
+participant "Vendedor" as Vendor
+participant "API do Emissor" as Issuer
+database "BD do Emissor\n(Redis)" as IssuerDB
 
-Client -> Vendor: Get vendor public key
-Vendor --> Client: Vendor public key
-Client -> Client: Prepare channel opening request
+Client -> Vendor: Obter chave pública do vendedor
+Vendor --> Client: Chave pública do vendedor
+Client -> Client: Preparar requisição de abertura de canal
 
-Client -> Issuer: OpenChannelRequest
+Client -> Issuer: Requisição de abertura de canal
 activate Issuer
 
-Issuer -> Issuer: Verify request
-Issuer -> IssuerDB: Lock funds and create channel
+Issuer -> Issuer: Verificar requisição
+Issuer -> IssuerDB: Bloquear fundos e criar canal
 IssuerDB --> Issuer: OK
 
-Issuer --> Client: Channel opened
+Issuer --> Client: Canal aberto
 deactivate Issuer
 
 @enduml

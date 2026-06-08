@@ -1,0 +1,114 @@
+# Python Code Change Guidelines
+
+## DOs ✅
+
+### Environment Setup
+- **DO** always activate the Python environment before making changes
+- **DO** verify the environment is activated before running commands
+- **DO** use the project's poetry virtual environment
+
+### Testing Requirements
+- **DO** run tests after every code change
+- **DO** ensure all tests pass before committing changes
+- **DO** run the full test suite: `poetry run pytest tests/use_cases`
+- **DO** fix any failing tests before proceeding
+
+### Code Changes
+- **DO** make incremental changes and test frequently
+- **DO** verify your changes work as expected
+- **DO** check for linting errors after changes
+- **DO** ensure type hints are correct
+
+## DON'Ts ❌
+
+### Environment
+- **DON'T** make changes without activating the Python environment first
+- **DON'T** assume the environment is activated - always verify
+- **DON'T** use system Python instead of the project's virtual environment
+
+### Testing
+- **DON'T** skip running tests after making changes
+- **DON'T** commit code that breaks existing tests
+- **DON'T** ignore test failures
+- **DON'T** make multiple unrelated changes without testing in between
+
+## Required Workflow
+
+### Step 1: Activate Environment
+```bash
+source /home/otavio/.cache/pypoetry/virtualenvs/nanomoni-_lQjpNEx-py3.9/bin/activate
+```
+
+### Step 2: Make Code Changes
+Edit your files as needed.
+
+### Step 3: Run Tests (MANDATORY)
+```bash
+poetry run pytest tests/use_cases
+```
+
+### Step 4: Verify Results
+- All tests must pass
+- Fix any failures before proceeding
+- Address any linting or type errors
+
+## Complete Workflow Example
+
+```bash
+# 1. Activate Python environment (REQUIRED)
+source /home/otavio/.cache/pypoetry/virtualenvs/nanomoni-_lQjpNEx-py3.9/bin/activate
+
+# 2. Verify environment is active
+which python
+# Should show: /home/otavio/.cache/pypoetry/virtualenvs/nanomoni-_lQjpNEx-py3.9/bin/python
+
+# 3. Make your code changes
+# Edit files as needed...
+
+# 4. Run tests (MANDATORY after every change)
+poetry run pytest tests/use_cases
+
+# 5. If tests pass, proceed with git workflow
+# If tests fail, fix issues and re-run tests
+
+# 6. Once tests pass, stage and commit (following git-flow guidelines)
+git status
+git add <specific-files>
+git commit -m "Your commit message"
+```
+
+## Best Practices
+
+1. **Always activate first**: Never skip the environment activation step
+2. **Test frequently**: Run tests after each logical change, not just at the end
+3. **Fix before proceeding**: Don't accumulate test failures - fix them immediately
+4. **Verify environment**: Check that you're using the correct Python interpreter
+5. **Incremental changes**: Make small, testable changes rather than large refactors
+6. **Test isolation**: Ensure your changes don't break existing functionality
+
+## Quick Reference
+
+```bash
+# Activate environment
+source /home/otavio/.cache/pypoetry/virtualenvs/nanomoni-_lQjpNEx-py3.9/bin/activate
+
+# Run tests (required after every change)
+poetry run pytest tests/use_cases
+
+# Run with verbose output
+poetry run pytest tests/use_cases -v
+
+# Run specific test file
+poetry run pytest tests/use_cases/path/to/test_file.py
+
+# Run with coverage
+poetry run pytest tests/use_cases --cov
+```
+
+## Notes
+
+- The virtual environment path is project-specific and may change if the environment is recreated
+- If the environment path changes, update this document accordingly
+- These guidelines ensure code quality and prevent regressions
+- Always combine with git-flow guidelines when committing changes
+- The `.cursor` folder is for IDE-specific configuration and guidelines

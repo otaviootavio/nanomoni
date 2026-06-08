@@ -2,6 +2,15 @@
 
 ## Quickstart (pyenv + Poetry)
 
+#### PAREI AQUI
+
+
+1. Repositorio deveria ser merkle_tree_nodes_repository ao inves de estar relacionado com a primeira otimização
+2. Talvez reduzir o tamanho do serviço para o paytree, está muito gordo
+2.1 reduzir = adotar composição de classes
+
+###
+
 ### Prerequisites
 
 - [pyenv](https://github.com/pyenv/pyenv) installed
@@ -167,10 +176,10 @@ E2E tests are true end-to-end tests that exercise the full system via HTTP. They
 ```sh
 # 1. Start required services
 source ./envs/issuer.env.sh
-docker compose up -d issuer redis-issuer
+docker compose up issuer redis-issuer
 
 source ./envs/vendor.env.sh
-docker compose up -d vendor redis-vendor
+docker compose up vendor redis-vendor
 
 # 2. Wait for services to be ready, then run tests
 poetry run pytest -m e2e tests/e2e

@@ -5,35 +5,35 @@ autonumber
 
 hide footbox
 
-actor "Client" as Client
-participant "Vendor API" as Vendor
-database "Vendor DB\n(Redis)" as VendorDB
+actor "Cliente" as Client
+participant "API do Vendedor" as Vendor
+database "BD do Vendedor\n(Redis)" as VendorDB
 
-Client -> Vendor: Request Channel Closure
+Client -> Vendor: Requisitar fechamento do canal
 activate Vendor
 
-Vendor -> VendorDB: Fetch channel and payment
+Vendor -> VendorDB: Buscar canal e pagamento
 VendorDB --> Vendor
 
-Vendor -> Vendor: Prepare settlement request
+Vendor -> Vendor: Preparar requisição de liquidação
 
-Vendor -> Issuer: Send Settlement Request
+Vendor -> Issuer: Enviar requisição de liquidação
 activate Issuer
 
-Issuer -> IssuerDB: Get channel
+Issuer -> IssuerDB: Obter canal
 IssuerDB --> Issuer: 
 
-Issuer -> Issuer: Verify request
+Issuer -> Issuer: Verificar requisição
 
-Issuer -> IssuerDB: Update Accounts
+Issuer -> IssuerDB: Atualizar contas
 IssuerDB --> Issuer: 
-Issuer -> IssuerDB: Update channel as closed
+Issuer -> IssuerDB: Atualizar canal como fechado
 IssuerDB --> Issuer: 
 
 Issuer --> Vendor:
 deactivate Issuer
 
-Vendor -> VendorDB: Update channel as closed
+Vendor -> VendorDB: Atualizar canal como fechado
 VendorDB --> Vendor: 
 Vendor --> Client
 deactivate Vendor

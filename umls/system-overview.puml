@@ -13,53 +13,46 @@ skinparam ArrowThickness 2
 
 hide footbox
 
-actor "**Client**" as Client #FFE6B3
-participant "**Vendor**" as Vendor #E6F3E6
-participant "**Issuer**" as Issuer #FFE6E6
+actor "**Cliente**" as Client #FFE6B3
+participant "**Vendedor**" as Vendor #E6F3E6
+participant "**Emissor**" as Issuer #FFE6E6
 
-legend right
-  **Roles**
-  Client → Consumer
-  Vendor → Service Provider
-  Issuer → Trusted Authority
-endlegend
-
-note over Client, Issuer: **1. Registration**
-Client -> Issuer: RegistrationRequest
+note over Client, Issuer: **1. Cadastro**
+Client -> Issuer: Requisição de cadastro
 activate Issuer
-Issuer -> Issuer: ValidateRequest
-Issuer --> Client: Account created
+Issuer -> Issuer: Validar requisição
+Issuer --> Client: Conta criada
 deactivate Issuer
 
-note over Client, Issuer: **2. Channel Opening**
-Client -> Issuer: OpenChannelRequest
+note over Client, Issuer: **2. Abertura de Canal**
+Client -> Issuer: Requisição de abertura de canal
 activate Issuer
-Issuer -> Issuer: ValidateRequest
-Issuer -> Issuer: LockFunds
-Issuer --> Client: Channel opened
+Issuer -> Issuer: Validar requisição
+Issuer -> Issuer: Bloquear fundos
+Issuer --> Client: Canal aberto
 deactivate Issuer
 
 
-note over Client, Vendor: **3. Payment Streaming**
-Client -> Vendor: Start payment stream
+note over Client, Vendor: **3. Fluxo de Pagamentos**
+Client -> Vendor: Iniciar fluxo de pagamentos
 activate Vendor
 
-loop 9,999 times
-  Client -> Vendor: Submit payment
-  Vendor --> Client: Payment accepted
+loop 9.999 vezes
+  Client -> Vendor: Enviar pagamento
+  Vendor --> Client: Pagamento aceito
 end
 
 deactivate Vendor
 
 
-note over Vendor, Issuer: **4. Channel Settlement**
-Vendor -> Issuer: Initiate settlement
+note over Vendor, Issuer: **4. Liquidação do Canal**
+Vendor -> Issuer: Iniciar liquidação
 activate Issuer
-Issuer -> Issuer: Validate settlement
-Issuer -> Issuer: Transfer funds
-Issuer --> Vendor: Settlement complete
+Issuer -> Issuer: Validar liquidação
+Issuer -> Issuer: Transferir fundos
+Issuer --> Vendor: Liquidação concluída
 deactivate Issuer
 
-Vendor --> Client: Channel closed
+Vendor --> Client: Canal fechado
 
 @enduml

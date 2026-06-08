@@ -1,0 +1,13 @@
+---
+description: Padrão do protocolo PayTree: enviar segredo, não hash
+globs: ["**/protocol/**", "**/paytree*", "**/test_*walkthrough*"]
+---
+
+# PayTree Protocol: Leaf Value
+
+**Padrão adotado:** Enviar o **segredo** (preimagem) da folha, não o hash.
+
+- Prover envia: `secret` + `siblings`
+- Verifier recebe `secret`, calcula `leaf_hash = hash_bytes(secret)` e verifica
+
+Ver detalhes em `docs/protocol-conventions.md`.
