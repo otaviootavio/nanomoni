@@ -17,18 +17,13 @@ from ....application.vendor.use_cases.paytree_second_opt_payment import (
     PaytreeSecondOptPaymentService,
 )
 from ..dependencies import get_paytree_second_opt_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/channels/paytree_second_opt",
     tags=["channels", "paytree_second_opt"],
-)
-
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]
-    + [float(x) for x in range(15, 55, 5)]
-    + [float("inf")]
 )
 
 paytree_second_opt_payment_requests_total = Counter(

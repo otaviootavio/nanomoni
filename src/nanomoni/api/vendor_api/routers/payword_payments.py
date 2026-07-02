@@ -14,15 +14,10 @@ from ....application.vendor.payword_dtos import (
 )
 from ....application.vendor.use_cases.payword_payment import PaywordPaymentService
 from ..dependencies import get_payword_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
 
 router = APIRouter(prefix="/channels/payword", tags=["channels", "payword"])
 
-
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]  # 0.5ms..10ms (0.5ms resolution)
-    + [float(x) for x in range(15, 55, 5)]  # 15, 20, 25, ..., 50ms (5ms resolution)
-    + [float("inf")]
-)
 
 payword_payment_requests_total = Counter(
     "payword_payment_requests_total",

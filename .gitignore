@@ -220,4 +220,7 @@ __marimo__/
 # Run metadata
 runs_metadata.json
 
+benchmark_timing.json
+plots/
+
 **.db

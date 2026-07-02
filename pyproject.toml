@@ -6,7 +6,7 @@ authors = [
     {name = "otaviootavio",email = "otaviovacari@usp.br"}
 ]
 readme = "README.md"
-requires-python = ">=3.9,<3.10.0"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic (>=2.11.7,<3.0.0)",
     "fastapi (>=0.116.1,<0.117.0)",
@@ -22,14 +22,21 @@ dependencies = [
     "mypy (>=1.18.2,<2.0.0)",
     "prometheus-client (>=0.23.1,<0.24.0)",
     "pytest-asyncio (<1.0.0)",
-    "aiohttp (>=3.13.3,<4.0.0)"
+    "aiohttp (>=3.13.3,<4.0.0)",
+    "numpy (>=1.24.0)",
+    "matplotlib (>=3.5.0)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)"
 ]
 
 [tool.poetry]
-packages = [{include = "nanomoni", from = "src"}]
+packages = [
+    {include = "nanomoni", from = "src"},
+    {include = "bench_plotter", from = "bench-plotter/src"}
+]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 mypy_path = "src"
 explicit_package_bases = true
 files = ["src/nanomoni"]
