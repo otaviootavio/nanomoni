@@ -10,7 +10,7 @@ def process_payword_dashboard(
 ) -> None:
     """
     Process payword payment mode dashboard queries and test intervals to generate plots.
-    
+
     Args:
         test_intervals_path: Path to test intervals JSON
         output_dir: Directory to save plots
@@ -18,14 +18,14 @@ def process_payword_dashboard(
     """
     # Import here to avoid circular imports
     from bench_plotter.dashboard_queries import get_dashboard_panels
-    
+
     # Get payword-specific panels
     panels_spec = get_dashboard_panels(mode="payword")
-    
+
     # Process with payword panels
     process_dashboard(
         test_intervals_path=test_intervals_path,
         output_dir=output_dir,
         num_points=num_points,
-        panels_spec=panels_spec
+        panels_spec=panels_spec,
     )

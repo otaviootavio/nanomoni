@@ -5,14 +5,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from bench_plotter.generate_plots import clean_plots_directory, main
 
 
 class TestCleanPlotsDirectory:
-
-    def test_clean_existing_directory(self):
+    def test_clean_existing_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             (temp_path / "plot1.png").touch()
@@ -26,7 +24,7 @@ class TestCleanPlotsDirectory:
             assert "plot1.png" not in remaining
             assert "plot2.png" not in remaining
 
-    def test_clean_nonexistent_directory(self):
+    def test_clean_nonexistent_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             new_dir = Path(temp_dir) / "new_directory"
             clean_plots_directory(new_dir)
@@ -35,8 +33,7 @@ class TestCleanPlotsDirectory:
 
 
 class TestMainFunction:
-
-    def test_main_calls_generate_all_modes_defaults(self):
+    def test_main_calls_generate_all_modes_defaults(self) -> None:
         with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
             with patch("sys.argv", ["generate_plots"]):
                 main()
@@ -46,7 +43,7 @@ class TestMainFunction:
                 num_points=100,
             )
 
-    def test_main_passes_custom_output(self):
+    def test_main_passes_custom_output(self) -> None:
         with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
             with patch("sys.argv", ["generate_plots", "--output", "my_plots"]):
                 main()
@@ -56,7 +53,7 @@ class TestMainFunction:
                 num_points=100,
             )
 
-    def test_main_passes_custom_interpol(self):
+    def test_main_passes_custom_interpol(self) -> None:
         with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
             with patch("sys.argv", ["generate_plots", "--interpol", "200"]):
                 main()
@@ -66,7 +63,7 @@ class TestMainFunction:
                 num_points=200,
             )
 
-    def test_main_passes_explicit_intervals_path(self):
+    def test_main_passes_explicit_intervals_path(self) -> None:
         with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
             with patch("sys.argv", ["generate_plots", "/some/path/timing.json"]):
                 main()

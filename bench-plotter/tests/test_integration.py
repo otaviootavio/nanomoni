@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -11,8 +12,7 @@ from bench_plotter.generate_plots import generate_all_modes, main
 
 
 class TestGenerateAllModesIntegration:
-
-    def _write(self, path, data):
+    def _write(self, path: str, data: Any) -> None:
         with open(path, "w") as f:
             json.dump(data, f)
 
@@ -29,7 +29,7 @@ class TestGenerateAllModesIntegration:
         },
     ]
 
-    def test_generate_all_modes_calls_process_all_modes(self):
+    def test_generate_all_modes_calls_process_all_modes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             intervals_path = os.path.join(tmp, "timing.json")
             self._write(intervals_path, self.INTERVALS)
@@ -44,7 +44,7 @@ class TestGenerateAllModesIntegration:
                 kwargs = mock_proc.call_args[1]
                 assert kwargs["num_points"] == 50
 
-    def test_generate_all_modes_creates_output_dir(self):
+    def test_generate_all_modes_creates_output_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             intervals_path = os.path.join(tmp, "timing.json")
             output_dir = os.path.join(tmp, "plots")
@@ -55,17 +55,19 @@ class TestGenerateAllModesIntegration:
 
             assert os.path.exists(output_dir)
 
-    def test_generate_all_modes_exits_on_missing_file(self):
+    def test_generate_all_modes_exits_on_missing_file(self) -> None:
         with pytest.raises(SystemExit):
             generate_all_modes(intervals_path="/nonexistent/timing.json")
 
-    def test_main_integration(self):
+    def test_main_integration(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             intervals_path = os.path.join(tmp, "timing.json")
             self._write(intervals_path, self.INTERVALS)
 
             with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-                with patch("sys.argv", ["generate_plots", intervals_path, "--output", tmp]):
+                with patch(
+                    "sys.argv", ["generate_plots", intervals_path, "--output", tmp]
+                ):
                     main()
                 mock_gen.assert_called_once_with(
                     intervals_path=intervals_path,

@@ -153,7 +153,9 @@ def matrix_to_chartjs(matrix_result: list[dict[str, Any]]) -> dict[str, Any]:
     return {"labels": label_strings, "datasets": datasets, "timestamps": labels_sorted}
 
 
-def matrix_to_per_series_charts(matrix_result: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def matrix_to_per_series_charts(
+    matrix_result: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """One chart per series so each metric keeps its own vertical scale (readable vs one cramped chart)."""
     charts: list[dict[str, Any]] = []
     palette = [
@@ -177,7 +179,9 @@ def matrix_to_per_series_charts(matrix_result: list[dict[str, Any]]) -> list[dic
     for idx, item in enumerate(matrix_result):
         metric = item.get("metric") or {}
         name = metric.get("__name__", "series")
-        label_parts = [f'{k}="{v}"' for k, v in sorted(metric.items()) if k != "__name__"]
+        label_parts = [
+            f'{k}="{v}"' for k, v in sorted(metric.items()) if k != "__name__"
+        ]
         subtitle = ", ".join(label_parts) if label_parts else "(no labels)"
         values = item.get("values") or []
         labels: list[str] = []

@@ -29,7 +29,7 @@ def process_all_modes(
 ) -> None:
     """
     Process all payment modes together, generating plots for each.
-    
+
     Args:
         test_intervals_path: Path to test intervals JSON
         output_dir: Directory to save plots
@@ -37,35 +37,35 @@ def process_all_modes(
     """
     # Import here to avoid circular imports
     from bench_plotter.dashboard_queries import get_dashboard_panels
-    
+
     # Get all panels (common + all payment modes)
     panels_spec = get_dashboard_panels(mode="all")
-    
+
     # Process with all panels
     process_dashboard(
         test_intervals_path=test_intervals_path,
         output_dir=output_dir,
         num_points=num_points,
-        panels_spec=panels_spec
+        panels_spec=panels_spec,
     )
 
 
 __all__ = [
-    'process_dashboard',
-    'process_signature_dashboard',
-    'process_payword_dashboard',
-    'process_paytree_dashboard',
-    'process_all_modes',
-    'create_windowed_plot',
-    'create_windowed_plot_multi',
-    'create_histogram_plot',
-    'create_mean_std_plot',
-    'create_overlaid_histogram_plot',
-    'normalize_time_series_data',
-    'process_histogram_data',
-    'is_histogram_query',
-    'calculate_sampling_frequency',
-    'calculate_windowed_averages',
-    'calculate_optimal_window_size',
-    'load_json_data',
+    "process_dashboard",
+    "process_signature_dashboard",
+    "process_payword_dashboard",
+    "process_paytree_dashboard",
+    "process_all_modes",
+    "create_windowed_plot",
+    "create_windowed_plot_multi",
+    "create_histogram_plot",
+    "create_mean_std_plot",
+    "create_overlaid_histogram_plot",
+    "normalize_time_series_data",
+    "process_histogram_data",
+    "is_histogram_query",
+    "calculate_sampling_frequency",
+    "calculate_windowed_averages",
+    "calculate_optimal_window_size",
+    "load_json_data",
 ]
