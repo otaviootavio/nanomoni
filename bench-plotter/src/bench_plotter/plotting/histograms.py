@@ -7,6 +7,44 @@ from typing import Any, List, Dict, Tuple
 import matplotlib.pyplot as plt
 
 
+def cumulative_to_per_bucket(
+    bucket_labels: List[str],
+    cumulative_values: List[float],
+    drop_inf: bool = True,
+) -> Tuple[List[str], List[float]]:
+    """
+    Convert sorted cumulative Prometheus bucket counts to per-bucket counts.
+
+    Each per-bucket count is the difference from the previous cumulative value,
+    clamped at zero: cumulative buckets can appear to decrease when a counter
+    resets or samples arrive slightly out of order, and negative frequencies are
+    never meaningful.
+
+    Args:
+        bucket_labels: Sorted bucket labels (ascending, "+Inf" last if present)
+        cumulative_values: Cumulative counts aligned with ``bucket_labels``
+        drop_inf: If True, drop a trailing "+Inf" bucket (the running total)
+
+    Returns:
+        Tuple of (labels, per_bucket_values)
+    """
+    labels = list(bucket_labels)
+    per_bucket_values: List[float] = []
+    for i, v in enumerate(cumulative_values):
+        if i == 0:
+            per_bucket_values.append(max(0.0, float(v)))
+        else:
+            per_bucket_values.append(
+                max(0.0, float(v) - float(cumulative_values[i - 1]))
+            )
+
+    if drop_inf and labels and labels[-1] == "+Inf":
+        labels = labels[:-1]
+        per_bucket_values = per_bucket_values[:-1]
+
+    return labels, per_bucket_values
+
+
 def process_histogram_data(
     runs_data: List[Dict[str, Any]],
 ) -> tuple[List[str], List[float]]:
@@ -52,22 +90,7 @@ def process_histogram_data(
         # bucket_dict contains cumulative counts per Prometheus histogram semantics.
         # Convert cumulative counts to per-bucket (non-cumulative) counts by differencing.
         raw_values = [item[1] for item in sorted_buckets]
-
-        # If last label is +Inf, it's the total; we will drop it from plotted buckets
-        drop_last_inf = labels and labels[-1] == "+Inf"
-
-        per_bucket_values: List[float] = []
-        for i, v in enumerate(raw_values):
-            if i == 0:
-                per_bucket_values.append(float(v))
-            else:
-                per_bucket_values.append(float(v) - float(raw_values[i - 1]))
-
-        if drop_last_inf:
-            labels = labels[:-1]
-            per_bucket_values = per_bucket_values[:-1]
-
-        return labels, per_bucket_values
+        return cumulative_to_per_bucket(labels, raw_values)
 
     return [], []
 

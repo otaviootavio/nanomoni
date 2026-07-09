@@ -1,1 +1,1 @@
-"""Test package for SigmaProm statistical analysis."""
+"""Test package for bench-plotter."""

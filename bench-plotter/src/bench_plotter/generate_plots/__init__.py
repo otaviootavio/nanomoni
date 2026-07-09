@@ -87,11 +87,11 @@ def main() -> None:
 
 
 __all__ = [
-    "clean_plots_directory",
     "auto_detect_intervals",
-    "main_signature",
-    "main_payword",
-    "main_paytree",
+    "clean_plots_directory",
     "generate_all_modes",
     "main",
+    "main_paytree",
+    "main_payword",
+    "main_signature",
 ]

@@ -18,6 +18,7 @@ from .time_series import (
 from .histograms import (
     is_histogram_query,
     create_overlaid_histogram_plot,
+    cumulative_to_per_bucket,
 )
 from .query_utils import query_with_fallbacks
 
@@ -175,11 +176,13 @@ def fetch_prometheus_data(
     failed_fetches = []
 
     for interval_idx, interval in enumerate(test_intervals):
-        start_time = interval.get("prometheus_timestamps", {}).get("start_ms") / 1000
-        end_time = interval.get("prometheus_timestamps", {}).get("finish_ms") / 1000
-
-        if not start_time or not end_time:
+        timestamps = interval.get("prometheus_timestamps", {}) or {}
+        start_ms = timestamps.get("start_ms")
+        finish_ms = timestamps.get("finish_ms")
+        if not start_ms or not finish_ms:
             continue
+        start_time = start_ms / 1000
+        end_time = finish_ms / 1000
 
         try:
             result = query_with_fallbacks(
@@ -260,11 +263,13 @@ def process_histogram_data_for_intervals(
     all_histogram_data = {}
 
     for interval_idx, interval in enumerate(test_intervals):
-        start_time = interval.get("prometheus_timestamps", {}).get("start_ms") / 1000
-        end_time = interval.get("prometheus_timestamps", {}).get("finish_ms") / 1000
-
-        if not start_time or not end_time:
+        timestamps = interval.get("prometheus_timestamps", {}) or {}
+        start_ms = timestamps.get("start_ms")
+        finish_ms = timestamps.get("finish_ms")
+        if not start_ms or not finish_ms:
             continue
+        start_time = start_ms / 1000
+        end_time = finish_ms / 1000
 
         interval_mode = interval.get("mode", f"interval_{interval_idx + 1}")
 
@@ -324,18 +329,9 @@ def process_histogram_data_for_intervals(
             if sorted_buckets:
                 bucket_labels = [item[0] for item in sorted_buckets]
                 raw_values = [item[1] for item in sorted_buckets]
-
-                per_bucket_values = []
-                for i, v in enumerate(raw_values):
-                    if i == 0:
-                        per_bucket_values.append(float(v))
-                    else:
-                        per_bucket_values.append(float(v) - float(raw_values[i - 1]))
-
-                if bucket_labels and bucket_labels[-1] == "+Inf":
-                    bucket_labels = bucket_labels[:-1]
-                    per_bucket_values = per_bucket_values[:-1]
-
+                bucket_labels, per_bucket_values = cumulative_to_per_bucket(
+                    bucket_labels, raw_values
+                )
                 all_histogram_data[interval_mode] = (bucket_labels, per_bucket_values)
 
         except Exception as e:
@@ -388,7 +384,7 @@ def is_tps_panel(panel_title: str, legend_format: str, expr: str) -> bool:
     )
 
 
-def create_tps_plot(
+def _plot_overlaid_series(
     runs_data: List[Dict[str, Any]],
     panel_title: str,
     legend_format: str,
@@ -399,7 +395,11 @@ def create_tps_plot(
     plot_title: str | None = None,
 ) -> None:
     """
-    Create a TPS plot with overlaid series.
+    Build one overlaid multi-series windowed plot from ``runs_data``.
+
+    Each series is labelled by its interval mode and given an auto-calculated
+    window size. Series that are entirely zero are dropped unless every series
+    is zero (in which case all are kept so the plot is not empty).
 
     Args:
         runs_data: List of series data
@@ -458,6 +458,29 @@ def create_tps_plot(
         title=plot_title,
         output_path=str(output_path),
         y_axis_label=y_axis_label,
+    )
+
+
+def create_tps_plot(
+    runs_data: List[Dict[str, Any]],
+    panel_title: str,
+    legend_format: str,
+    section_dir: Path,
+    safe_panel_title: str,
+    safe_legend: str,
+    output_path: str | None = None,
+    plot_title: str | None = None,
+) -> None:
+    """Create a TPS plot with overlaid series (see ``_plot_overlaid_series``)."""
+    _plot_overlaid_series(
+        runs_data,
+        panel_title,
+        legend_format,
+        section_dir,
+        safe_panel_title,
+        safe_legend,
+        output_path,
+        plot_title,
     )
 
 
@@ -471,66 +494,16 @@ def create_multi_series_plot(
     output_path: str | None = None,
     plot_title: str | None = None,
 ) -> None:
-    """
-    Create a multi-series plot for different modes.
-
-    Args:
-        runs_data: List of series data
-        panel_title: Panel title
-        legend_format: Legend format string
-        section_dir: Directory for the section
-        safe_panel_title: Sanitized panel title for filename
-        safe_legend: Sanitized legend for filename
-        output_path: Optional output path (if None, generates from safe_panel_title and safe_legend)
-        plot_title: Optional plot title (if None, generates from panel_title and legend_format)
-    """
-    temp_series = []
-    for series_data in runs_data:
-        interval_mode = series_data.get("interval_mode", "unknown")
-        label = interval_mode
-        timestamps = series_data.get("timestamps", [])
-        values = series_data.get("values", [])
-        try:
-            ws = calculate_optimal_window_size(timestamps) if timestamps else None
-        except Exception:
-            ws = None
-
-        temp_series.append(
-            {
-                "timestamps": timestamps,
-                "values": values,
-                "label": label,
-                "window_seconds": ws,
-            }
-        )
-
-    any_nonzero = any(
-        any((v is not None and float(v) != 0) for v in s.get("values", []))
-        for s in temp_series
-    )
-
-    if any_nonzero:
-        series_list = [
-            s
-            for s in temp_series
-            if any((v is not None and float(v) != 0) for v in s.get("values", []))
-        ]
-    else:
-        series_list = temp_series
-
-    if output_path is None:
-        output_path = str(section_dir / f"{safe_panel_title}_{safe_legend}.png")
-    if plot_title is None:
-        plot_title = f"{panel_title} - {legend_format}"
-
-    # Extract unit from title for y-axis label
-    y_axis_label = extract_unit_from_title(plot_title)
-
-    create_windowed_plot_multi(
-        series_list=series_list,
-        title=plot_title,
-        output_path=str(output_path),
-        y_axis_label=y_axis_label,
+    """Create a multi-series plot for different modes (see ``_plot_overlaid_series``)."""
+    _plot_overlaid_series(
+        runs_data,
+        panel_title,
+        legend_format,
+        section_dir,
+        safe_panel_title,
+        safe_legend,
+        output_path,
+        plot_title,
     )
 
 
@@ -572,21 +545,21 @@ def create_single_series_plots(
         interval_mode = test_intervals[interval_idx].get("mode", f"interval_{i + 1}")
         mode_suffix = f"_{interval_mode}"
 
+        # Build each filename from the ORIGINAL output_path (kept immutable) so
+        # mode suffixes don't compound across series.
         if output_path is None:
-            output_path = str(
+            iter_output_path = str(
                 section_dir / f"{safe_panel_title}_{safe_legend}{mode_suffix}.png"
             )
         else:
-            # If output_path is provided, add mode suffix
-            output_path = str(
-                Path(output_path).parent / f"{Path(output_path).stem}{mode_suffix}.png"
-            )
+            base = Path(output_path)
+            iter_output_path = str(base.parent / f"{base.stem}{mode_suffix}.png")
 
         create_windowed_plot(
             timestamps=series_data["timestamps"],
             values=series_data["values"],
             title=f"{plot_title} ({interval_mode})",
-            output_path=output_path,
+            output_path=iter_output_path,
             window_seconds=window_seconds,
             y_axis_label=y_axis_label,
         )
@@ -760,7 +733,7 @@ def process_dashboard(
                 safe_legend = sanitize_filename(legend_format)
                 filename_suffix = f"_{safe_legend}"
 
-            if runs_data and not is_histogram_query(expr, panel_title, legend_format):
+            if runs_data:
                 # Detect TPS-like panels and force overlay across modes
                 if is_tps_panel(panel_title, legend_format, expr):
                     output_path = str(

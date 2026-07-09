@@ -74,7 +74,7 @@ def query_with_fallbacks(
 
     # 2) Try removing job label (broaden query)
     q_no_job = re.sub(r"\bjob\s*=\s*\"[^\"]*\"\s*,?", "", q_sanitized)
-    if q_no_job != q:
+    if q_no_job != q_sanitized:
         payload = run_query(q_no_job)
         res = (
             payload.get("data", {}).get("result", [])
@@ -125,8 +125,8 @@ def query_with_fallbacks(
             return payload
 
     # 3) Try switching seconds/milliseconds in bucket names
-    q_swap_bucket = q.replace("seconds_bucket", "milliseconds_bucket")
-    if q_swap_bucket != q:
+    q_swap_bucket = q_sanitized.replace("seconds_bucket", "milliseconds_bucket")
+    if q_swap_bucket != q_sanitized:
         payload = run_query(q_swap_bucket)
         res = (
             payload.get("data", {}).get("result", [])
@@ -136,8 +136,8 @@ def query_with_fallbacks(
         if res:
             return payload
 
-    q_swap_bucket2 = q.replace("milliseconds_bucket", "seconds_bucket")
-    if q_swap_bucket2 != q:
+    q_swap_bucket2 = q_sanitized.replace("milliseconds_bucket", "seconds_bucket")
+    if q_swap_bucket2 != q_sanitized:
         payload = run_query(q_swap_bucket2)
         res = (
             payload.get("data", {}).get("result", [])
@@ -148,8 +148,8 @@ def query_with_fallbacks(
             return payload
 
     # 4) Try increasing rate window
-    q_rate_5 = re.sub(r"\[1m\]", "[5m]", q)
-    if q_rate_5 != q:
+    q_rate_5 = re.sub(r"\[1m\]", "[5m]", q_sanitized)
+    if q_rate_5 != q_sanitized:
         payload = run_query(q_rate_5)
         res = (
             payload.get("data", {}).get("result", [])
@@ -159,8 +159,8 @@ def query_with_fallbacks(
         if res:
             return payload
 
-    q_rate_15 = re.sub(r"\[1m\]", "[15m]", q)
-    if q_rate_15 != q:
+    q_rate_15 = re.sub(r"\[1m\]", "[15m]", q_sanitized)
+    if q_rate_15 != q_sanitized:
         payload = run_query(q_rate_15)
         res = (
             payload.get("data", {}).get("result", [])

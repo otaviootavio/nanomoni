@@ -36,6 +36,10 @@ def calculate_windowed_averages(
     """Calculate windowed averages for time series data."""
     if not timestamps or not values or len(timestamps) != len(values):
         return [], []
+    # A non-positive window never advances current_start and would loop forever.
+    if window_seconds <= 0:
+        print(f"Invalid window_seconds ({window_seconds}); must be > 0")
+        return [], []
 
     df = pd.DataFrame({"timestamp": timestamps, "value": values})
     df = df.dropna(subset=["value"])

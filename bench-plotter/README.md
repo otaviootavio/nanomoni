@@ -8,7 +8,7 @@ Post-benchmark analysis tool for nanomoni. Queries Prometheus for metric data ov
 
 ## Installation
 
-Requires Python >=3.10. Uses its own venv separate from nanomoni (different Python version constraint).
+Requires Python >=3.9. Uses its own venv separate from nanomoni.
 
 ```bash
 cd bench-plotter
@@ -17,16 +17,19 @@ poetry install
 
 ## Usage
 
+`generate_plots` is a package; run it as a module (`bench_plotter.generate_plots`)
+so its `__main__` entry point is used.
+
 From the nanomoni root:
 
 ```bash
-bench-plotter/.venv/bin/python bench-plotter/src/bench_plotter/generate_plots.py
+PYTHONPATH=bench-plotter/src bench-plotter/.venv/bin/python -m bench_plotter.generate_plots
 ```
 
 Or from inside `bench-plotter/`:
 
 ```bash
-.venv/bin/python src/bench_plotter/generate_plots.py
+PYTHONPATH=src .venv/bin/python -m bench_plotter.generate_plots
 ```
 
 **Options:**
@@ -75,8 +78,8 @@ Each subfolder mirrors a Grafana dashboard section. PNGs are 300 DPI.
 ```
 bench-plotter/
 ├── src/bench_plotter/
-│   ├── generate_plots.py          # CLI entry point
-│   ├── generate_plots/            # Per-mode plot orchestration
+│   ├── generate_plots/            # CLI entry point + per-mode plot orchestration
+│   │   ├── __main__.py            # `python -m bench_plotter.generate_plots`
 │   │   ├── signature.py
 │   │   ├── payword.py
 │   │   └── paytree.py

@@ -4,8 +4,8 @@ IFS=$'\n\t'
 
 # export BENCHMARK_COUNT_VAR=1048576
 export BENCHMARK_COUNT_VAR=8192
-export SLEEP_TIME=100
-export SLEEP_GAP=10
+export SLEEP_TIME=${SLEEP_TIME:-100}
+export SLEEP_GAP=${SLEEP_GAP:-10}
 
 # optional inter‑payment delay (seconds) used by benchmark client
 export CLIENT_INTER_PAYMENT_DELAY_S=${CLIENT_INTER_PAYMENT_DELAY_S:-0}
@@ -27,8 +27,10 @@ export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
 
 START=$(date +%s%3N)
 sleep $SLEEP_GAP
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-STATUS=$?
+# Capture the client exit status without letting `set -e` abort the script,
+# so the cleanup below always runs and timing JSON is always recorded.
+STATUS=0
+docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
 sleep $SLEEP_GAP
@@ -51,8 +53,10 @@ export CLIENT_CHANNEL_AMOUNT=10000000
 
 START=$(date +%s%3N)
 sleep $SLEEP_GAP
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-STATUS=$?
+# Capture the client exit status without letting `set -e` abort the script,
+# so the cleanup below always runs and timing JSON is always recorded.
+STATUS=0
+docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
 sleep $SLEEP_GAP
@@ -75,8 +79,10 @@ export CLIENT_CHANNEL_AMOUNT=10000000
 
 START=$(date +%s%3N)
 sleep $SLEEP_GAP
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-STATUS=$?
+# Capture the client exit status without letting `set -e` abort the script,
+# so the cleanup below always runs and timing JSON is always recorded.
+STATUS=0
+docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
 sleep $SLEEP_GAP
