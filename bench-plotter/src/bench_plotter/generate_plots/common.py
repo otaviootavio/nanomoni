@@ -44,6 +44,20 @@ def auto_detect_intervals(project_root: Path) -> Path:
     sys.exit(1)
 
 
+def positive_int(value: str) -> int:
+    """argparse ``type`` validator: a strictly-positive integer.
+
+    ``int(value)`` failures (non-integers) are reported by argparse
+    automatically; here we additionally reject zero and negatives so bad
+    ``--interpol`` values fail fast with a clear CLI error instead of
+    propagating into the plotting logic.
+    """
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {ivalue}")
+    return ivalue
+
+
 def run_mode_cli(
     mode_label: str,
     processor: Callable[..., None],
@@ -76,7 +90,7 @@ def run_mode_cli(
     )
     parser.add_argument(
         "--interpol",
-        type=int,
+        type=positive_int,
         default=100,
         help="Number of interpolation points for time series normalization (default: 100)",
     )

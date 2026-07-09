@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from .common import clean_plots_directory, auto_detect_intervals
+from .common import clean_plots_directory, auto_detect_intervals, positive_int
 from .signature import main as main_signature
 from .payword import main as main_payword
 from .paytree import main as main_paytree
@@ -76,7 +76,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--interpol",
-        type=int,
+        type=positive_int,
         default=100,
         help="Number of interpolation points for time series normalization (default: 100)",
     )
