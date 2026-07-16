@@ -23,9 +23,11 @@ def range_step_for_window(total_seconds: float) -> str:
 
 
 def _step_for_range_seconds(total_seconds: float) -> str:
-    """Pick a reasonable scrape step so the chart is not overloaded."""
-    if total_seconds <= 300:
-        return "5s"
+    """Pick a query step no finer than the Prometheus scrape_interval (15s).
+
+    A step finer than the scrape interval only yields duplicated (stair-stepped)
+    points and noisy rate() output, so 15s is the floor.
+    """
     if total_seconds <= 3600:
         return "15s"
     if total_seconds <= 6 * 3600:
@@ -64,11 +66,11 @@ async def query_range(
 
 def matrix_result_is_uninteresting(matrix_result: list[dict[str, Any]]) -> bool:
     """
-    True when there is nothing useful to plot: no numeric samples, or a completely flat series
-    (all identical values — includes all zeros and any other constant).
-    Only remove if truly constant and not varying at all.
+    True only when there is nothing to plot: no numeric samples at all (empty or all-NaN).
+
+    Constant series (including all-zeros) are kept on purpose: a resource decaying to
+    and staying at zero, or a legitimately flat gauge, is exactly what we want to see.
     """
-    vals: list[float] = []
     for item in matrix_result:
         for pair in item.get("values") or []:
             if len(pair) < 2:
@@ -77,15 +79,12 @@ def matrix_result_is_uninteresting(matrix_result: list[dict[str, Any]]) -> bool:
             if raw == "NaN" or raw is None:
                 continue
             try:
-                vals.append(float(raw))
+                float(raw)
             except (TypeError, ValueError):
                 continue
-    if not vals:
-        return True
-    # Only remove if all values are exactly the same
-    if len(set(vals)) == 1:
-        return True
-    return False
+            # Found at least one numeric sample -> there is something to plot.
+            return False
+    return True
 
 
 def matrix_to_per_series_charts(

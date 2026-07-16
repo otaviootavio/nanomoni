@@ -13,7 +13,7 @@ PAYTREE_PANELS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "targets": [
             {
-                "expr": 'rate(paytree_payment_requests_total{job="vendor-api", status="success"}[30s])',
+                "expr": 'rate(paytree_payment_requests_total{job="vendor-api", status="success"}[1m])',
                 "legendFormat": "Paytree",
             },
         ],

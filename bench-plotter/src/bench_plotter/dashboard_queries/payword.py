@@ -13,7 +13,7 @@ PAYWORD_PANELS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "targets": [
             {
-                "expr": 'rate(payword_payment_requests_total{job="vendor-api", status="success"}[30s])',
+                "expr": 'rate(payword_payment_requests_total{job="vendor-api", status="success"}[1m])',
                 "legendFormat": "Payword",
             },
         ],

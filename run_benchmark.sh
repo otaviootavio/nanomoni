@@ -2,19 +2,23 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# export BENCHMARK_COUNT_VAR=1048576
-export BENCHMARK_COUNT_VAR=8192
+export BENCHMARK_COUNT_VAR=1048576
+# export BENCHMARK_COUNT_VAR=8192
 export SLEEP_TIME=${SLEEP_TIME:-100}
 export SLEEP_GAP=${SLEEP_GAP:-10}
+# In-window drain: time (s) after the client stops, before the window closes, so the
+# vendor/issuer returning to baseline is captured inside the plotted window.
+export DRAIN_TIME=${DRAIN_TIME:-90}
 
-# optional inter‑payment delay (seconds) used by benchmark client
-export CLIENT_INTER_PAYMENT_DELAY_S=${CLIENT_INTER_PAYMENT_DELAY_S:-0}
-# alternative: specify target TPS and the script will compute delay for you
+# Single load knob: target TPS ceiling. Unset/empty => no limit (max throughput).
+# The per-payment delay consumed by the client is derived from it.
 if [ -n "${BENCHMARK_TARGET_TPS:-}" ]; then
-  CLIENT_INTER_PAYMENT_DELAY_S=$(awk "BEGIN{printf \"%.6f\", 1/${BENCHMARK_TARGET_TPS}}")
-  export CLIENT_INTER_PAYMENT_DELAY_S
+  export CLIENT_INTER_PAYMENT_DELAY_S=$(awk "BEGIN{printf \"%.6f\", 1/${BENCHMARK_TARGET_TPS}}")
+else
+  export CLIENT_INTER_PAYMENT_DELAY_S=0
 fi
 
+# Build the client image so the run uses current code (incl. the TPS delay plumbing).
 docker compose build client
 
 # Timing JSON
@@ -33,7 +37,7 @@ STATUS=0
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
-sleep $SLEEP_GAP
+sleep $DRAIN_TIME
 END=$(date +%s%3N)
 
 if [ $STATUS -eq 0 ]; then
@@ -59,7 +63,7 @@ STATUS=0
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
-sleep $SLEEP_GAP
+sleep $DRAIN_TIME
 END=$(date +%s%3N)
 
 if [ $STATUS -eq 0 ]; then
@@ -85,7 +89,7 @@ STATUS=0
 docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || STATUS=$?
 docker compose stop client >/dev/null 2>&1 || true
 docker compose rm -fsv client >/dev/null 2>&1 || true
-sleep $SLEEP_GAP
+sleep $DRAIN_TIME
 END=$(date +%s%3N)
 
 if [ $STATUS -eq 0 ]; then

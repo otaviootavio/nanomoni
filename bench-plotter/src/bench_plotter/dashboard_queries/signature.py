@@ -13,7 +13,7 @@ SIGNATURE_PANELS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "targets": [
             {
-                "expr": 'rate(payment_requests_total{job="vendor-api", status="success"}[30s])',
+                "expr": 'rate(payment_requests_total{job="vendor-api", status="success"}[1m])',
                 "legendFormat": "Payment Requests",
             },
         ],

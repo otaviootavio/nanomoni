@@ -627,6 +627,23 @@ def process_dashboard(
     # Load test intervals
     test_intervals = load_json_data(test_intervals_path)
 
+    # Drop intervals the benchmark recorded as failed: plotting a failed run's
+    # window shows partial/garbage data as if it were a valid measurement.
+    # Intervals without a "status" field are kept (backward compatible).
+    if isinstance(test_intervals, list):
+        kept = [
+            iv
+            for iv in test_intervals
+            if not (isinstance(iv, dict) and iv.get("status") not in (None, "success"))
+        ]
+        skipped = len(test_intervals) - len(kept)
+        if skipped:
+            print(f"Skipping {skipped} interval(s) with status != 'success'")
+        test_intervals = kept
+        if not test_intervals:
+            print("No successful intervals to plot")
+            return
+
     # Determine interval type
     is_single_interval, modes = determine_interval_type(test_intervals)
 

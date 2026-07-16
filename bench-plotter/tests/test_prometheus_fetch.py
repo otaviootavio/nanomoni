@@ -13,7 +13,8 @@ from bench_plotter.prometheus_fetch import (
 
 class TestRangeStepForWindow:
     def test_small_window(self) -> None:
-        assert range_step_for_window(300) == "5s"
+        # Step is floored at the 15s scrape_interval, never finer.
+        assert range_step_for_window(300) == "15s"
 
     def test_medium_window(self) -> None:
         assert range_step_for_window(3600) == "15s"
@@ -63,9 +64,10 @@ class TestMatrixResultIsUninteresting:
     def test_empty_result(self) -> None:
         assert matrix_result_is_uninteresting([]) is True
 
-    def test_flat_series(self) -> None:
+    def test_constant_series_is_kept(self) -> None:
+        # Constant series (incl. all-zeros) are kept: decay-to-zero must stay visible.
         result = [{"values": [[1, "5.0"], [2, "5.0"], [3, "5.0"]]}]
-        assert matrix_result_is_uninteresting(result) is True
+        assert matrix_result_is_uninteresting(result) is False
 
     def test_varying_series(self) -> None:
         result = [{"values": [[1, "1.0"], [2, "2.0"], [3, "3.0"]]}]
