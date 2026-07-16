@@ -13,11 +13,11 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Input",
             },
             {
-                "expr": 'sum by (name) (\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Output",
             },
         ],
@@ -28,7 +28,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }\n) / 1024 / 1024',
+                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }\n) / 1024 / 1024',
                 "legendFormat": "__auto",
             }
         ],
@@ -39,7 +39,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n)',
+                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n)',
                 "legendFormat": "__auto",
             }
         ],
@@ -74,11 +74,11 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "client_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Input",
             },
             {
-                "expr": 'sum by (name) (\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Output",
             },
         ],
@@ -89,7 +89,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "client_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }\n) / 1024 / 1024',
+                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }\n) / 1024 / 1024',
                 "legendFormat": "__auto",
             }
         ],
@@ -100,7 +100,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "client_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n)',
+                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n)',
                 "legendFormat": "__auto",
             }
         ],
@@ -113,11 +113,11 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Input",
             },
             {
-                "expr": 'sum by (name) (\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
+                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
                 "legendFormat": "Output",
             },
         ],
@@ -128,7 +128,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }\n) / 1024 / 1024',
+                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }\n) / 1024 / 1024',
                 "legendFormat": "__auto",
             }
         ],
@@ -139,7 +139,7 @@ COMMON_PANELS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "targets": [
             {
-                "expr": 'sum by (name) (\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n)',
+                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n)',
                 "legendFormat": "__auto",
             }
         ],
