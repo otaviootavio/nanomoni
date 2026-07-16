@@ -7,7 +7,6 @@ from bench_plotter.prometheus_fetch import (
     range_step_for_window,
     query_range,
     matrix_result_is_uninteresting,
-    matrix_to_chartjs,
     matrix_to_per_series_charts,
 )
 
@@ -79,30 +78,6 @@ class TestMatrixResultIsUninteresting:
     def test_mixed_values(self) -> None:
         result = [{"values": [[1, "1.0"], [2, "NaN"], [3, "2.0"]]}]
         assert matrix_result_is_uninteresting(result) is False
-
-
-class TestMatrixToChartjs:
-    def test_empty_matrix(self) -> None:
-        result = matrix_to_chartjs([])
-        assert result == {"labels": [], "datasets": [], "timestamps": []}
-
-    def test_single_series(self) -> None:
-        matrix = [{"metric": {"job": "test"}, "values": [[1000, "1.0"], [1015, "2.0"]]}]
-        result = matrix_to_chartjs(matrix)
-        assert result["labels"] == ["00:16:40", "00:16:55"]
-        assert len(result["datasets"]) == 1
-        assert result["datasets"][0]["label"] == 'job="test"'
-        assert result["datasets"][0]["data"] == [1.0, 2.0]
-        assert result["timestamps"] == [1000.0, 1015.0]
-
-    def test_multiple_series(self) -> None:
-        matrix = [
-            {"metric": {"job": "test1"}, "values": [[1000, "1.0"]]},
-            {"metric": {"job": "test2"}, "values": [[1000, "2.0"]]},
-        ]
-        result = matrix_to_chartjs(matrix)
-        assert len(result["datasets"]) == 2
-        assert result["timestamps"] == [1000.0]
 
 
 class TestMatrixToPerSeriesCharts:

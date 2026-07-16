@@ -1,6 +1,6 @@
 """Fetch time-series ranges from Prometheus HTTP API.
 
-SigmaProm uses Prometheus's native ``/api/v1/query_range``: each returned point is whatever
+Uses Prometheus's native ``/api/v1/query_range``: each returned point is whatever
 Prometheus evaluated at the given ``step`` (no moving average, no Grafana-style transforms).
 If you use PromQL like ``rate()`` or ``avg_over_time()``, *that* function defines smoothing —
 the app does not add another layer on top.
@@ -86,71 +86,6 @@ def matrix_result_is_uninteresting(matrix_result: list[dict[str, Any]]) -> bool:
     if len(set(vals)) == 1:
         return True
     return False
-
-
-def matrix_to_chartjs(matrix_result: list[dict[str, Any]]) -> dict[str, Any]:
-    """Convert Prometheus matrix to labels + datasets for Chart.js."""
-    all_ts: set[float] = set()
-    series: list[tuple[str, list[tuple[float, float | None]]]] = []
-    for item in matrix_result:
-        metric = item.get("metric") or {}
-        label_parts = [f'{k}="{v}"' for k, v in sorted(metric.items())]
-        label = ", ".join(label_parts) if label_parts else "value"
-        values = item.get("values") or []
-        pts: list[tuple[float, float | None]] = []
-        for pair in values:
-            if len(pair) >= 2:
-                ts = float(pair[0])
-                raw = pair[1]
-                try:
-                    if raw == "NaN" or raw is None:
-                        y = None
-                    else:
-                        y = float(raw)
-                except (TypeError, ValueError):
-                    y = None
-                pts.append((ts, y))
-                all_ts.add(ts)
-        series.append((label, pts))
-    labels_sorted = sorted(all_ts)
-    label_strings = [
-        datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M:%S")
-        for ts in labels_sorted
-    ]
-    datasets = []
-    palette = [
-        "#60a5fa",
-        "#4ade80",
-        "#fbbf24",
-        "#fb7185",
-        "#c084fc",
-        "#2dd4bf",
-        "#f472b6",
-        "#a3e635",
-        "#fb923c",
-        "#818cf8",
-        "#34d399",
-        "#facc15",
-        "#e879f9",
-        "#38bdf8",
-        "#4d7c0f",
-        "#be123c",
-    ]
-    for i, (label, pts) in enumerate(series):
-        m = {ts: y for ts, y in pts}
-        data = [m.get(ts) for ts in labels_sorted]
-        datasets.append(
-            {
-                "label": label[:80] + ("…" if len(label) > 80 else ""),
-                "data": data,
-                "borderColor": palette[i % len(palette)],
-                "backgroundColor": palette[i % len(palette)] + "33",
-                "fill": False,
-                "tension": 0,
-                "spanGaps": True,
-            }
-        )
-    return {"labels": label_strings, "datasets": datasets, "timestamps": labels_sorted}
 
 
 def matrix_to_per_series_charts(

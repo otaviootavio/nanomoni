@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PROMETHEUS_PORT="${1:-9090}"
-export PROMETHEUS_URL="http://127.0.0.1:${PROMETHEUS_PORT}"
-
+# The Prometheus URL is hardcoded in bench_plotter/settings.py (local default port).
 cd "$(dirname "$0")/.."
 
-echo "Using Prometheus at ${PROMETHEUS_URL}"
-poetry run python -m bench_plotter.generate_plots "${@:2}"
+poetry run python -m bench_plotter.generate_plots "$@"

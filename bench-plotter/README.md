@@ -42,13 +42,9 @@ PYTHONPATH=src .venv/bin/python -m bench_plotter.generate_plots
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set `PROMETHEUS_URL` to the Prometheus instance used during the benchmark:
-
-```
-PROMETHEUS_URL=http://127.0.0.1:9090
-```
-
-`settings.py` walks up parent directories, so a `.env` at the nanomoni root is also picked up automatically.
+The Prometheus URL is hardcoded to `http://127.0.0.1:9090` in `settings.py` — the
+benchmark always runs against a local Prometheus on the default port. To target a
+different instance, edit `prometheus_base_url()` in `src/bench_plotter/settings.py`.
 
 ## Plotting modes
 
@@ -93,13 +89,12 @@ bench-plotter/
 │   │   ├── payword.py
 │   │   └── paytree.py
 │   ├── prometheus_fetch.py        # Prometheus HTTP API client
-│   └── settings.py                # Reads PROMETHEUS_URL from .env
+│   └── settings.py                # Hardcoded Prometheus URL
 ├── benchmark_timing.json          # Latest timing snapshot (committed)
-├── .env.example
 ├── pyproject.toml
 └── tests/
 ```
 
 ## Dependencies
 
-`pandas`, `numpy`, `matplotlib`, `httpx`, `python-dotenv`
+`pandas`, `numpy`, `matplotlib`, `httpx`
