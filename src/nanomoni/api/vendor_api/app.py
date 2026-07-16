@@ -25,7 +25,8 @@ from ...infrastructure.scripts import VENDOR_SCRIPTS
 from .dependencies import get_key_value_store_dependency
 from .routers import (
     payments,
-    paytree_payments,
+    paytree_first_opt_payments,
+    paytree_std_payments,
     payword_payments,
     tasks,
     users,
@@ -85,7 +86,8 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api/v1/vendor")
     app.include_router(payments.router, prefix="/api/v1/vendor")
     app.include_router(payword_payments.router, prefix="/api/v1/vendor")
-    app.include_router(paytree_payments.router, prefix="/api/v1/vendor")
+    app.include_router(paytree_std_payments.router, prefix="/api/v1/vendor")
+    app.include_router(paytree_first_opt_payments.router, prefix="/api/v1/vendor")
 
     @app.get("/")
     async def root() -> dict[str, str]:

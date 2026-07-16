@@ -226,43 +226,74 @@ class IssuerTestClient:
         response.raise_for_status()
         return PaywordPaymentChannelResponseDTO.model_validate(response.json())
 
-    async def open_paytree_channel(
+    async def open_paytree_std_channel(
         self,
         open_channel_request: OpenChannelRequestDTO,
     ) -> PaytreeOpenChannelResponseDTO:
-        """Open a PayTree-enabled payment channel."""
+        """Open a standard PayTree payment channel."""
         response = await self._request(
             "POST",
-            f"{self.base_url}/issuer/channels/paytree",
+            f"{self.base_url}/issuer/channels/paytree/std",
             json=open_channel_request.model_dump(),
         )
-
         response.raise_for_status()
         return PaytreeOpenChannelResponseDTO.model_validate(response.json())
 
-    async def open_paytree_channel_raw(
+    async def open_paytree_std_channel_raw(
         self,
         open_channel_request: OpenChannelRequestDTO,
     ) -> AiohttpResponse:
-        """
-        Open a PayTree-enabled payment channel without raising on error status.
-
-        Returns the raw HTTP response for error case testing.
-        """
         return await self._request(
             "POST",
-            f"{self.base_url}/issuer/channels/paytree",
+            f"{self.base_url}/issuer/channels/paytree/std",
             json=open_channel_request.model_dump(),
         )
+
+    async def open_paytree_first_opt_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaytreeOpenChannelResponseDTO:
+        """Open a first-opt PayTree payment channel."""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree/first-opt",
+            json=open_channel_request.model_dump(),
+        )
+        response.raise_for_status()
+        return PaytreeOpenChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_first_opt_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> AiohttpResponse:
+        return await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree/first-opt",
+            json=open_channel_request.model_dump(),
+        )
+
+    async def get_paytree_std_channel(
+        self, channel_id: str
+    ) -> PaytreePaymentChannelResponseDTO:
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/channels/paytree/std/{channel_id}",
+        )
+        response.raise_for_status()
+        return PaytreePaymentChannelResponseDTO.model_validate(response.json())
+
+    async def get_paytree_first_opt_channel(
+        self, channel_id: str
+    ) -> PaytreePaymentChannelResponseDTO:
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/channels/paytree/first-opt/{channel_id}",
+        )
+        response.raise_for_status()
+        return PaytreePaymentChannelResponseDTO.model_validate(response.json())
 
     async def get_paytree_channel(
         self, channel_id: str
     ) -> PaytreePaymentChannelResponseDTO:
-        """Get PayTree payment channel state by channel ID."""
-        response = await self._request(
-            "GET",
-            f"{self.base_url}/issuer/channels/paytree/{channel_id}",
-        )
-
-        response.raise_for_status()
-        return PaytreePaymentChannelResponseDTO.model_validate(response.json())
+        """Get PayTree channel state (convenience alias → std URL)."""
+        return await self.get_paytree_std_channel(channel_id)

@@ -163,38 +163,23 @@ class InMemoryKeyValueStore(KeyValueStore):
         script_lower = script.lower()
         script_name_lower = (script_name or "").lower()
 
-        # Check by script name first (more reliable)
-        if script_name_lower == "save_signature_payment" or (
+        # Check by script name first (more reliable).
+        # New unified scripts must appear BEFORE the generic fallback checks.
+        if script_name_lower == "save_payment":
+            return self._execute_save_payment(keys, args)
+        elif script_name_lower == "save_channel_and_initial_payment_unified":
+            return self._execute_save_channel_and_initial_payment_unified(keys, args)
+        elif script_name_lower == "save_payment_with_nodes":
+            return self._execute_save_payment_with_nodes(keys, args)
+        elif script_name_lower == "merkle_get_nodes_and_merge":
+            return self._execute_merkle_get_nodes_and_merge(keys, args)
+        elif script_name_lower == "merkle_merge_nodes":
+            return self._execute_merkle_merge_nodes(keys, args)
+        elif script_name_lower == "save_signature_payment" or (
             "save_signature_payment" in script_lower
             and ("new_amount" in script_lower or "channel_amount" in script_lower)
         ):
             return self._execute_save_signature_payment(keys, args)
-        elif script_name_lower == "save_payword_payment" or (
-            "save_payword_payment" in script_lower and "new_k" in script_lower
-        ):
-            return self._execute_save_payword_payment(keys, args)
-        elif script_name_lower == "save_paytree_payment" or (
-            "save_paytree_payment" in script_lower and "new_i" in script_lower
-        ):
-            return self._execute_save_paytree_payment(keys, args)
-        elif script_name_lower == "save_channel_and_initial_paytree_pruned_state" or (
-            "save_channel_and_initial_paytree_pruned_state" in script_lower
-        ):
-            return self._execute_save_channel_and_initial_paytree_pruned_state(
-                keys, args
-            )
-        elif script_name_lower == "paytree_first_opt_get_nodes_and_merge" or (
-            "paytree_first_opt_get_nodes_and_merge" in script_lower
-        ):
-            return self._execute_paytree_first_opt_get_nodes_and_merge(keys, args)
-        elif script_name_lower == "paytree_first_opt_merge_nodes" or (
-            "paytree_first_opt_merge_nodes" in script_lower
-        ):
-            return self._execute_paytree_first_opt_merge_nodes(keys, args)
-        elif script_name_lower == "paytree_first_opt_save_nodes_and_channel" or (
-            "paytree_first_opt_save_nodes_and_channel" in script_lower
-        ):
-            return self._execute_paytree_first_opt_save_nodes_and_channel(keys, args)
         elif (
             "save_channel_and_initial" in script_lower or "channel_json" in script_lower
         ):
@@ -244,121 +229,6 @@ class InMemoryKeyValueStore(KeyValueStore):
         else:
             return [0, current_raw]
 
-    def _execute_save_payword_payment(
-        self, keys: List[str], args: List[str]
-    ) -> list[Any]:
-        """Execute save_payword_payment script logic."""
-        latest_key = keys[0]
-        channel_key = keys[1]
-        new_val = args[0]
-        new_k = float(args[1])
-
-        # Get channel
-        channel_raw: Optional[str] = self._data.get(channel_key)
-        if not channel_raw:
-            return [2, ""]
-
-        channel = json.loads(channel_raw)
-        max_k = float(channel.get("payword_max_k", channel.get("max_k", 0)))
-        if not max_k:
-            return [2, ""]
-
-        if new_k > max_k:
-            error_current = self._data.get(latest_key, "") or ""
-            return [3, error_current]
-
-        current_raw: Optional[str] = self._data.get(latest_key)
-        if not current_raw:
-            self._data[latest_key] = new_val
-            return [1, new_val]
-
-        current = json.loads(current_raw)
-        current_k = float(current.get("k", 0))
-
-        if new_k > current_k:
-            self._data[latest_key] = new_val
-            return [1, new_val]
-        else:
-            return [0, current_raw]
-
-    def _execute_save_paytree_payment(
-        self, keys: List[str], args: List[str]
-    ) -> list[Any]:
-        """Execute save_paytree_payment script logic."""
-        channel_key = keys[0]
-        proof_key = keys[1]
-        proof_json = args[0]
-        new_i = float(args[1])
-        new_leaf_b64 = args[2]
-        created_at_iso = args[3] if len(args) > 3 else ""
-
-        # Get channel
-        channel_raw: Optional[str] = self._data.get(channel_key)
-        if not channel_raw:
-            return [2, ""]
-
-        channel = json.loads(channel_raw)
-        max_i = float(channel.get("paytree_max_i", 0))
-        if not max_i:
-            return [2, ""]
-
-        if new_i > max_i:
-            error_current = self._data.get(proof_key, "") or ""
-            return [3, error_current]
-
-        last_i = float(channel.get("last_leaf_index", -1))
-
-        if new_i > last_i:
-            # Update channel state (pruned metadata for duplicate check without proof fetch)
-            channel["last_leaf_index"] = int(new_i)
-            channel["last_leaf_b64"] = new_leaf_b64
-            if created_at_iso:
-                channel["last_paytree_created_at"] = created_at_iso
-
-            # Save updated channel
-            self._data[channel_key] = json.dumps(channel)
-
-            # Save proof
-            self._data[proof_key] = proof_json
-
-            # Minimal ack (match Lua): return new_i only
-            return [1, str(int(new_i))]
-        else:
-            # Stale/Duplicate
-            return [0, str(int(last_i))]
-
-    def _execute_save_channel_and_initial_paytree_pruned_state(
-        self, keys: List[str], args: List[str]
-    ) -> list[Any]:
-        """Execute save_channel_and_initial_paytree_pruned_state script logic."""
-        channel_key = keys[0]
-        proof_key = keys[1]
-        channel_json = args[0]
-        proof_json = args[1]
-        created_ts = float(args[2])
-        channel_id = args[3]
-
-        if channel_key in self._data:
-            return [0, ""]
-        if proof_key in self._data:
-            return [0, ""]
-
-        self._data[channel_key] = channel_json
-        self._data[proof_key] = proof_json
-
-        self._sorted_sets.setdefault("payment_channels:all", []).append(
-            (channel_id, created_ts)
-        )
-        self._sorted_sets.setdefault("payment_channels:open", []).append(
-            (channel_id, created_ts)
-        )
-        self._sorted_sets["payment_channels:all"].sort(key=lambda x: x[1], reverse=True)
-        self._sorted_sets["payment_channels:open"].sort(
-            key=lambda x: x[1], reverse=True
-        )
-
-        return [1, ""]
-
     def _execute_save_channel_and_initial_state(
         self, keys: List[str], args: List[str]
     ) -> list[Any]:
@@ -370,40 +240,20 @@ class InMemoryKeyValueStore(KeyValueStore):
         created_ts = float(args[2])
         channel_id = args[3]
 
-        # Check if channel exists
         if channel_key in self._data:
             return [0, ""]
-
-        # Check if state exists
         if latest_key in self._data:
             return [0, ""]
 
-        # Parse channel and state to update channel metadata
-        channel = json.loads(channel_json)
-        state = json.loads(state_json)
-
-        # Update channel with initial state
-        if "i" in state and "leaf_b64" in state:
-            channel["last_leaf_index"] = state["i"]
-            channel["last_leaf_b64"] = state["leaf_b64"]
-            if "created_at" in state:
-                channel["last_paytree_created_at"] = state["created_at"]
-            channel_json = json.dumps(channel)
-
-        # Save channel
         self._data[channel_key] = channel_json
-
-        # Save state
         self._data[latest_key] = state_json
 
-        # Update indices
         self._sorted_sets.setdefault("payment_channels:all", []).append(
             (channel_id, created_ts)
         )
         self._sorted_sets.setdefault("payment_channels:open", []).append(
             (channel_id, created_ts)
         )
-        # Keep sorted
         self._sorted_sets["payment_channels:all"].sort(key=lambda x: x[1], reverse=True)
         self._sorted_sets["payment_channels:open"].sort(
             key=lambda x: x[1], reverse=True
@@ -422,16 +272,143 @@ class InMemoryKeyValueStore(KeyValueStore):
         self._data[channel_key] = channel_json
         return [1, channel_json]
 
-    def _execute_paytree_first_opt_get_nodes_and_merge(
+    def _execute_save_payment(self, keys: List[str], args: List[str]) -> list[Any]:
+        """Execute save_payment: unified CAS for PaymentChannel + PaymentState + CryptoProof."""
+        channel_key = keys[0]
+        state_key = keys[1]
+        proof_key = keys[2]
+        new_ref = int(args[0])
+        state_json = args[1]
+        proof_json = args[2]
+
+        channel_raw: Optional[str] = self._data.get(channel_key)
+        if not channel_raw:
+            return [2, ""]
+
+        channel = json.loads(channel_raw)
+        max_steps = int(channel.get("max_steps", 0))
+        if not max_steps:
+            return [2, ""]
+
+        if new_ref > max_steps:
+            cur = self._data.get(state_key, "") or ""
+            return [3, cur]
+
+        last_ref = channel.get("last_proof_reference")
+        prev = int(last_ref) if last_ref is not None else -1
+
+        if new_ref > prev:
+            channel["last_proof_reference"] = new_ref
+            self._data[channel_key] = json.dumps(channel)
+            self._data[state_key] = state_json
+            self._data[proof_key] = proof_json
+            return [1, str(new_ref)]
+        else:
+            return [0, str(prev)]
+
+    def _execute_save_channel_and_initial_payment_unified(
         self, keys: List[str], args: List[str]
     ) -> list[Any]:
-        """Execute paytree_first_opt_get_nodes_and_merge: MGET 2 keys, then MSET+ZADD updates; return [read1, read2]."""
+        """Execute save_channel_and_initial_payment_unified."""
+        channel_key = keys[0]
+        state_key = keys[1]
+        proof_key = keys[2]
+        channel_json = args[0]
+        state_json = args[1]
+        proof_json = args[2]
+        created_ts = float(args[3])
+        channel_id = args[4]
+
+        if channel_key in self._data:
+            return [0, ""]
+        if state_key in self._data:
+            return [0, ""]
+
+        self._data[channel_key] = channel_json
+        self._data[state_key] = state_json
+        self._data[proof_key] = proof_json
+
+        self._sorted_sets.setdefault("payment_channels:all", []).append(
+            (channel_id, created_ts)
+        )
+        self._sorted_sets.setdefault("payment_channels:open", []).append(
+            (channel_id, created_ts)
+        )
+        self._sorted_sets["payment_channels:all"].sort(key=lambda x: x[1], reverse=True)
+        self._sorted_sets["payment_channels:open"].sort(
+            key=lambda x: x[1], reverse=True
+        )
+
+        return [1, state_json]
+
+    def _execute_save_payment_with_nodes(
+        self, keys: List[str], args: List[str]
+    ) -> list[Any]:
+        """Execute save_payment_with_nodes: nodes + channel + state + proof atomically."""
+        index_key = keys[0]
+        channel_key = keys[1]
+        state_key = keys[2]
+        proof_key = keys[3]
+        open_key = keys[4]
+        closed_key = keys[5]
+        channel_id = args[0]
+        n = int(args[1]) if len(args) > 1 else 0
+        prefix = f"merkle_node:{channel_id}:"
+
+        old_is_closed = None
+        existing = self._data.get(channel_key)
+        if existing:
+            ch = json.loads(existing)
+            old_is_closed = ch.get("is_closed")
+
+        for i in range(n):
+            suffix = args[2 + i * 2]
+            val = args[2 + i * 2 + 1]
+            full_key = prefix + suffix
+            self._data[full_key] = val
+            if index_key not in self._sorted_sets:
+                self._sorted_sets[index_key] = []
+            self._sorted_sets[index_key] = [
+                (m, s) for m, s in self._sorted_sets[index_key] if m != suffix
+            ]
+            self._sorted_sets[index_key].append((suffix, 0.0))
+            self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
+
+        base = 2 + n * 2
+        new_ref = int(args[base]) if len(args) > base else 0
+        state_json = args[base + 1]
+        proof_json = args[base + 2]
+        channel_json = args[base + 3]
+        new_is_closed = args[base + 4] == "1"
+        created_ts = float(args[base + 5]) if len(args) > base + 5 else 0.0
+
+        self._data[channel_key] = channel_json
+        self._data[state_key] = state_json
+        self._data[proof_key] = proof_json
+
+        if old_is_closed is not None and old_is_closed != new_is_closed:
+            for key in (open_key, closed_key):
+                if key not in self._sorted_sets:
+                    self._sorted_sets[key] = []
+                self._sorted_sets[key] = [
+                    (m, s) for m, s in self._sorted_sets[key] if m != channel_id
+                ]
+            target_key = closed_key if new_is_closed else open_key
+            self._sorted_sets[target_key].append((channel_id, created_ts))
+            self._sorted_sets[target_key].sort(key=lambda x: x[1], reverse=True)
+
+        return [1, str(new_ref)]
+
+    def _execute_merkle_get_nodes_and_merge(
+        self, keys: List[str], args: List[str]
+    ) -> list[Any]:
+        """Execute merkle_get_nodes_and_merge: MGET 2 keys, then MSET+ZADD with merkle_node: prefix."""
         index_key = keys[0]
         read_key_1 = keys[1]
         read_key_2 = keys[2]
         channel_id = args[0]
         n = int(args[1]) if len(args) > 1 else 0
-        prefix = f"paytree_first_opt_node:{channel_id}:"
+        prefix = f"merkle_node:{channel_id}:"
         read1 = self._data.get(read_key_1) or ""
         read2 = self._data.get(read_key_2) or ""
         for i in range(n):
@@ -448,14 +425,12 @@ class InMemoryKeyValueStore(KeyValueStore):
             self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
         return [read1, read2]
 
-    def _execute_paytree_first_opt_merge_nodes(
-        self, keys: List[str], args: List[str]
-    ) -> Any:
-        """Execute paytree_first_opt_merge_nodes: MSET + ZADD in one shot."""
+    def _execute_merkle_merge_nodes(self, keys: List[str], args: List[str]) -> Any:
+        """Execute merkle_merge_nodes: MSET + ZADD with merkle_node: prefix."""
         index_key = keys[0]
         channel_id = args[0]
         n = int(args[1]) if len(args) > 1 else 0
-        prefix = f"paytree_first_opt_node:{channel_id}:"
+        prefix = f"merkle_node:{channel_id}:"
         for i in range(n):
             suffix = args[2 + i * 2]
             val = args[2 + i * 2 + 1]
@@ -468,50 +443,6 @@ class InMemoryKeyValueStore(KeyValueStore):
             ]
             self._sorted_sets[index_key].append((suffix, 0.0))
             self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
-        return 1
-
-    def _execute_paytree_first_opt_save_nodes_and_channel(
-        self, keys: List[str], args: List[str]
-    ) -> Any:
-        """Execute paytree_first_opt_save_nodes_and_channel: merge_nodes + channel SET + open/closed sets."""
-        index_key = keys[0]
-        channel_key = keys[1]
-        open_key = keys[2]
-        closed_key = keys[3]
-        channel_id = args[0]
-        n = int(args[1]) if len(args) > 1 else 0
-        prefix = f"paytree_first_opt_node:{channel_id}:"
-        old_is_closed = None
-        existing = self._data.get(channel_key)
-        if existing:
-            ch = json.loads(existing)
-            old_is_closed = ch.get("is_closed")
-        for i in range(n):
-            suffix = args[2 + i * 2]
-            val = args[2 + i * 2 + 1]
-            full_key = prefix + suffix
-            self._data[full_key] = val
-            if index_key not in self._sorted_sets:
-                self._sorted_sets[index_key] = []
-            self._sorted_sets[index_key] = [
-                (m, s) for m, s in self._sorted_sets[index_key] if m != suffix
-            ]
-            self._sorted_sets[index_key].append((suffix, 0.0))
-            self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
-        channel_json = args[2 + n * 2]
-        new_is_closed = args[3 + n * 2] == "1"
-        created_ts = float(args[4 + n * 2]) if len(args) > 4 + n * 2 else 0.0
-        self._data[channel_key] = channel_json
-        if old_is_closed is not None and old_is_closed != new_is_closed:
-            for key in (open_key, closed_key):
-                if key not in self._sorted_sets:
-                    self._sorted_sets[key] = []
-                self._sorted_sets[key] = [
-                    (m, s) for m, s in self._sorted_sets[key] if m != channel_id
-                ]
-            target_key = closed_key if new_is_closed else open_key
-            self._sorted_sets[target_key].append((channel_id, created_ts))
-            self._sorted_sets[target_key].sort(key=lambda x: x[1], reverse=True)
         return 1
 
     def clear(self) -> None:

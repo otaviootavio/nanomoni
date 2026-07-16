@@ -55,14 +55,27 @@ class TestIssuerClient:
         ] = None
         self._settle_payword_channel_response: Optional[CloseChannelResponseDTO] = None
 
-        # PayTree responses
-        self._open_paytree_channel_response: Optional[PaytreeOpenChannelResponseDTO] = (
-            None
-        )
-        self._get_paytree_channel_response: Optional[
+        # PayTree std responses
+        self._open_paytree_std_channel_response: Optional[
+            PaytreeOpenChannelResponseDTO
+        ] = None
+        self._get_paytree_std_channel_response: Optional[
             PaytreePaymentChannelResponseDTO
         ] = None
-        self._settle_paytree_channel_response: Optional[CloseChannelResponseDTO] = None
+        self._settle_paytree_std_channel_response: Optional[CloseChannelResponseDTO] = (
+            None
+        )
+
+        # PayTree first-opt responses
+        self._open_paytree_first_opt_channel_response: Optional[
+            PaytreeOpenChannelResponseDTO
+        ] = None
+        self._get_paytree_first_opt_channel_response: Optional[
+            PaytreePaymentChannelResponseDTO
+        ] = None
+        self._settle_paytree_first_opt_channel_response: Optional[
+            CloseChannelResponseDTO
+        ] = None
 
         # Error configuration
         self._should_raise: Optional[Exception] = None
@@ -107,23 +120,35 @@ class TestIssuerClient:
         """Set the response for settle_payword_payment_channel() calls."""
         self._settle_payword_channel_response = response
 
-    def set_open_paytree_channel_response(
+    def set_open_paytree_std_channel_response(
         self, response: PaytreeOpenChannelResponseDTO
     ) -> None:
-        """Set the response for open_paytree_payment_channel() calls."""
-        self._open_paytree_channel_response = response
+        self._open_paytree_std_channel_response = response
 
-    def set_get_paytree_channel_response(
+    def set_get_paytree_std_channel_response(
         self, response: PaytreePaymentChannelResponseDTO
     ) -> None:
-        """Set the response for get_paytree_payment_channel() calls."""
-        self._get_paytree_channel_response = response
+        self._get_paytree_std_channel_response = response
 
-    def set_settle_paytree_channel_response(
+    def set_settle_paytree_std_channel_response(
         self, response: CloseChannelResponseDTO
     ) -> None:
-        """Set the response for settle_paytree_payment_channel() calls."""
-        self._settle_paytree_channel_response = response
+        self._settle_paytree_std_channel_response = response
+
+    def set_open_paytree_first_opt_channel_response(
+        self, response: PaytreeOpenChannelResponseDTO
+    ) -> None:
+        self._open_paytree_first_opt_channel_response = response
+
+    def set_get_paytree_first_opt_channel_response(
+        self, response: PaytreePaymentChannelResponseDTO
+    ) -> None:
+        self._get_paytree_first_opt_channel_response = response
+
+    def set_settle_paytree_first_opt_channel_response(
+        self, response: CloseChannelResponseDTO
+    ) -> None:
+        self._settle_paytree_first_opt_channel_response = response
 
     def set_error(self, error: Exception) -> None:
         """Configure the client to raise an error on the next call."""
@@ -243,48 +268,91 @@ class TestIssuerClient:
             raise ValueError("settle_payword_channel_response not configured")
         return self._settle_payword_channel_response
 
-    async def open_paytree_payment_channel(
+    async def open_paytree_std_payment_channel(
         self, dto: OpenChannelRequestDTO
     ) -> PaytreeOpenChannelResponseDTO:
-        """Open a PayTree payment channel."""
-        self.calls.append(("open_paytree_payment_channel", {"dto": dto}))
+        self.calls.append(("open_paytree_std_payment_channel", {"dto": dto}))
         if self._should_raise:
             error = self._should_raise
             self._should_raise = None
             raise error
-        if self._open_paytree_channel_response is None:
-            raise ValueError("open_paytree_channel_response not configured")
-        return self._open_paytree_channel_response
+        if self._open_paytree_std_channel_response is None:
+            raise ValueError("open_paytree_std_channel_response not configured")
+        return self._open_paytree_std_channel_response
 
-    async def get_paytree_payment_channel(
+    async def get_paytree_std_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaytreePaymentChannelResponseDTO:
-        """Get a PayTree payment channel."""
-        self.calls.append(("get_paytree_payment_channel", {"dto": dto}))
+        self.calls.append(("get_paytree_std_payment_channel", {"dto": dto}))
         if self._should_raise:
             error = self._should_raise
             self._should_raise = None
             raise error
-        if self._get_paytree_channel_response is None:
-            raise ValueError("get_paytree_channel_response not configured")
-        return self._get_paytree_channel_response
+        if self._get_paytree_std_channel_response is None:
+            raise ValueError("get_paytree_std_channel_response not configured")
+        return self._get_paytree_std_channel_response
 
-    async def settle_paytree_payment_channel(
+    async def settle_paytree_std_payment_channel(
         self,
         channel_id: str,
         dto: PaytreeSettlementRequestDTO,
     ) -> CloseChannelResponseDTO:
-        """Settle a PayTree payment channel."""
         self.calls.append(
-            ("settle_paytree_payment_channel", {"channel_id": channel_id, "dto": dto})
+            (
+                "settle_paytree_std_payment_channel",
+                {"channel_id": channel_id, "dto": dto},
+            )
         )
         if self._should_raise:
             error = self._should_raise
             self._should_raise = None
             raise error
-        if self._settle_paytree_channel_response is None:
-            raise ValueError("settle_paytree_channel_response not configured")
-        return self._settle_paytree_channel_response
+        if self._settle_paytree_std_channel_response is None:
+            raise ValueError("settle_paytree_std_channel_response not configured")
+        return self._settle_paytree_std_channel_response
+
+    async def open_paytree_first_opt_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeOpenChannelResponseDTO:
+        self.calls.append(("open_paytree_first_opt_payment_channel", {"dto": dto}))
+        if self._should_raise:
+            error = self._should_raise
+            self._should_raise = None
+            raise error
+        if self._open_paytree_first_opt_channel_response is None:
+            raise ValueError("open_paytree_first_opt_channel_response not configured")
+        return self._open_paytree_first_opt_channel_response
+
+    async def get_paytree_first_opt_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaytreePaymentChannelResponseDTO:
+        self.calls.append(("get_paytree_first_opt_payment_channel", {"dto": dto}))
+        if self._should_raise:
+            error = self._should_raise
+            self._should_raise = None
+            raise error
+        if self._get_paytree_first_opt_channel_response is None:
+            raise ValueError("get_paytree_first_opt_channel_response not configured")
+        return self._get_paytree_first_opt_channel_response
+
+    async def settle_paytree_first_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: PaytreeSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        self.calls.append(
+            (
+                "settle_paytree_first_opt_payment_channel",
+                {"channel_id": channel_id, "dto": dto},
+            )
+        )
+        if self._should_raise:
+            error = self._should_raise
+            self._should_raise = None
+            raise error
+        if self._settle_paytree_first_opt_channel_response is None:
+            raise ValueError("settle_paytree_first_opt_channel_response not configured")
+        return self._settle_paytree_first_opt_channel_response
 
     async def aclose(self) -> None:
         """Close the client (no-op for test client)."""

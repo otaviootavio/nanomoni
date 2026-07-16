@@ -7,9 +7,8 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ...domain.vendor.entities import (
+    PaymentChannel,
     PaymentChannelBase,
-    PaytreePaymentChannel,
-    PaywordPaymentChannel,
     SignaturePaymentChannel,
     SignatureState,
 )
@@ -27,10 +26,8 @@ class PaymentChannelRepositoryBaseImpl(PaymentChannelRepositoryBase):
 
     def _deserialize_channel(self, raw: str) -> PaymentChannelBase:
         data = json.loads(raw)
-        if data.get("payword_root_b64"):
-            return PaywordPaymentChannel.model_validate(data)
-        if data.get("paytree_root_b64"):
-            return PaytreePaymentChannel.model_validate(data)
+        if data.get("scheme") in ("payword", "paytree"):
+            return PaymentChannel.model_validate(data)
         return SignaturePaymentChannel.model_validate(data)
 
     async def save_channel(

@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-e2e-services.sh",
+            "timeout": 10,
+            "statusMessage": "Checking E2E services..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/wait-for-reload.sh",
+            "timeout": 20,
+            "statusMessage": "Waiting for uvicorn reload..."
+          }
+        ]
+      }
+    ]
+  }
+}

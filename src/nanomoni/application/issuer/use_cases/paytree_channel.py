@@ -46,10 +46,13 @@ class PaytreeChannelService:
         account_repo: AccountRepository,
         channel_repo: PaymentChannelRepository,
         issuer_private_key: ec.EllipticCurvePrivateKey,
+        *,
+        optimization_type: int = 0,
     ):
         self.account_repo = account_repo
         self.channel_repo = channel_repo
         self.issuer_private_key = issuer_private_key
+        self.optimization_type = optimization_type
 
     @staticmethod
     def _compute_channel_id(
@@ -72,12 +75,7 @@ class PaytreeChannelService:
         ):
             raise ValueError("PayTree fields are required for PayTree channel opening")
 
-        optimization_type = (
-            0
-            if dto.paytree_optimization_type is None
-            else dto.paytree_optimization_type
-        )
-        # Optimization is between client and vendor; issuer accepts 0 or 1 and treats channel as standard (full proof at settlement).
+        optimization_type = self.optimization_type
 
         # Verify client signature over the flat DTO fields
         # Reconstruct canonical JSON from DTO fields (excluding signature)

@@ -6,11 +6,10 @@ It enables dependency injection and makes services testable by allowing mock imp
 
 from __future__ import annotations
 
-from typing import Protocol, Type, Optional, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, Type, Optional, Callable
 from types import TracebackType
 
 if TYPE_CHECKING:
-    # Avoid circular imports by only importing types during type checking
     from ...application.issuer.dtos import (
         RegistrationRequestDTO,
         RegistrationResponseDTO,
@@ -158,49 +157,37 @@ class IssuerClientProtocol(Protocol):
         """
         ...
 
-    # PayTree Payment Channels
+    # PayTree Std Payment Channels
 
-    async def open_paytree_payment_channel(
+    async def open_paytree_std_payment_channel(
         self, dto: "OpenChannelRequestDTO"
-    ) -> "PaytreeOpenChannelResponseDTO":
-        """Open a PayTree (Merkle tree) payment channel.
+    ) -> "PaytreeOpenChannelResponseDTO": ...
 
-        Args:
-            dto: Open channel request with client-signed envelope
-
-        Returns:
-            PayTree open channel response with channel and PayTree commitment details
-        """
-        ...
-
-    async def get_paytree_payment_channel(
+    async def get_paytree_std_payment_channel(
         self, dto: "GetPaymentChannelRequestDTO"
-    ) -> "PaytreePaymentChannelResponseDTO":
-        """Get a PayTree payment channel by ID.
+    ) -> "PaytreePaymentChannelResponseDTO": ...
 
-        Args:
-            dto: Get channel request with channel ID
-
-        Returns:
-            PayTree payment channel response with full channel and PayTree details
-        """
-        ...
-
-    async def settle_paytree_payment_channel(
+    async def settle_paytree_std_payment_channel(
         self,
         channel_id: str,
         dto: "PaytreeSettlementRequestDTO",
-    ) -> "CloseChannelResponseDTO":
-        """Settle a PayTree payment channel.
+    ) -> "CloseChannelResponseDTO": ...
 
-        Args:
-            channel_id: ID of the channel to settle
-            dto: PayTree settlement request with leaf, siblings, and vendor signature
+    # PayTree First-Opt Payment Channels
 
-        Returns:
-            Close channel response with updated balances
-        """
-        ...
+    async def open_paytree_first_opt_payment_channel(
+        self, dto: "OpenChannelRequestDTO"
+    ) -> "PaytreeOpenChannelResponseDTO": ...
+
+    async def get_paytree_first_opt_payment_channel(
+        self, dto: "GetPaymentChannelRequestDTO"
+    ) -> "PaytreePaymentChannelResponseDTO": ...
+
+    async def settle_paytree_first_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: "PaytreeSettlementRequestDTO",
+    ) -> "CloseChannelResponseDTO": ...
 
     # Context Manager Support
 

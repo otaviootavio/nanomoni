@@ -56,7 +56,7 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
         max_i=max_i,
         paytree_optimization_type=1,
     )
-    channel_response = await issuer_client.open_paytree_channel(open_request)
+    channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
     channel_id = channel_response.channel_id
     assert channel_response.amount == channel_amount
     assert channel_response.paytree_root_b64 is not None
@@ -77,12 +77,11 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
             i, prior_sent_indexes
         )
         prior_sent_indexes.append(i)
-        resp = await vendor_client.receive_paytree_payment(
+        resp = await vendor_client.receive_paytree_first_opt_payment(
             channel_id,
             i=i_val,
             leaf_b64=leaf_b64,
             siblings_b64=siblings_b64,
-            optimization_type=1,
             paytree_max_i=max_i,
         )
         assert resp.channel_id == channel_id
@@ -90,7 +89,7 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
         assert resp.cumulative_owed_amount == i * unit_value
 
     # Vendor settles and closes via PayTree (rebuild from first-opt store)
-    await vendor_client.request_channel_settlement_paytree(channel_id)
+    await vendor_client.request_channel_settlement_paytree_first_opt(channel_id)
 
     # Assert balances after settlement
     final_cumulative_owed_amount = indices[-1] * unit_value
@@ -103,7 +102,7 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
         vendor_initial_balance + final_cumulative_owed_amount
     )
 
-    channel_state = await issuer_client.get_paytree_channel(channel_id)
+    channel_state = await issuer_client.get_paytree_first_opt_channel(channel_id)
     assert channel_state.is_closed is True
     assert channel_state.balance == indices[-1] * unit_value
     assert channel_state.paytree_root_b64 is not None

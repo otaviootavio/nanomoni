@@ -178,25 +178,23 @@ async def run_client_flow() -> None:
             if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             paytree_for_payments = paytree_obj
-            await paytree.send_payments(
+            await paytree.send_std_payments(
                 vendor,
                 channel_id,
                 paytree_for_payments,
                 payments,
                 inter_payment_delay=delay,
-                optimization_type=0,
             )
         elif client_mode == "paytree_first_opt":
             if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             paytree_for_payments = paytree_obj
-            await paytree.send_payments(
+            await paytree.send_first_opt_payments(
                 vendor,
                 channel_id,
                 paytree_for_payments,
                 payments,
                 inter_payment_delay=delay,
-                optimization_type=1,
             )
         else:
             raise RuntimeError(f"Unsupported client mode: {client_mode}")

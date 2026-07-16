@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_serializer, EmailStr
 
 from ..shared.serializers import CommonSerializersMixin, DatetimeSerializerMixin
+from ..shared.proof_reference import PaymentScheme
 
 
 _sentinel = object()
@@ -134,27 +135,6 @@ class SignatureState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class PaywordState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayWord payment state (monotonic counter + token)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    k: int = Field(..., ge=0, description="Monotonic PayWord counter")
-    token_b64: str = Field(..., description="Base64 token for this k (preimage)")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class PaytreeState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree payment state (monotonic index + Merkle proof)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    i: int = Field(..., ge=0, description="Monotonic PayTree index")
-    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="List of base64-encoded sibling hashes"
-    )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
 class PaymentChannelBase(CommonSerializersMixin, BaseModel):
     """Base entity for a unidirectional client→vendor payment channel."""
 
@@ -182,35 +162,29 @@ class SignaturePaymentChannel(PaymentChannelBase):
         )
 
 
-class PaywordPaymentChannel(PaymentChannelBase):
-    """PayWord-enabled payment channel with hash-chain commitment."""
+class PaymentChannel(PaymentChannelBase):
+    """Unified proof-based payment channel (PayWord or PayTree).
 
-    payword_root_b64: str
-    payword_unit_value: int
-    payword_max_k: int
-
-
-class PaytreePaymentChannel(PaymentChannelBase):
-    """PayTree-enabled payment channel with Merkle tree commitment."""
-
-    paytree_root_b64: str
-    paytree_unit_value: int
-    paytree_max_i: int
-    paytree_optimization_type: int = 0
-    last_leaf_index: int = -1
-    last_leaf_b64: Optional[str] = None
-    last_paytree_created_at: Optional[datetime] = None
-
-
-class PaytreeFirstOptChannelNodes(BaseModel):
-    """Sparse node store for one PayTree first-opt channel (Eytzinger key -> hash_b64).
-
-    Used only for optimization_type=1. Holds root and path nodes from verified
-    pruned proofs; level-0 entries are leaf hashes.
+    Replaces PaywordPaymentChannel and PaytreePaymentChannel. Crypto details
+    (leaf indices, hash counters, sibling hashes) are invisible here.
     """
 
-    channel_id: str = Field(..., description="Channel this store belongs to")
-    nodes: dict[str, str] = Field(
-        default_factory=dict,
-        description="Eytzinger node_key -> node hash in base64",
-    )
+    commitment: str
+    scheme: PaymentScheme
+    max_steps: int
+    unit_value: int
+    last_proof_reference: Optional[int] = None
+
+
+class PaymentState(DatetimeSerializerMixin, BaseModel):
+    """Unified payment state for proof-based channels.
+
+    proof_fingerprint is the per-step idempotency key:
+    leaf_b64 for PayTree, token_b64 for PayWord.
+    """
+
+    channel_id: str
+    proof_reference: int
+    cumulative_owed: int
+    proof_fingerprint: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

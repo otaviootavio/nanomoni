@@ -62,6 +62,36 @@ poetry env info --path
 Open the command palette with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, type `Python: Select Interpreter` and add it.
 ---
 
+## Local Development (fast reload)
+
+Run the app natively with Poetry — no Docker rebuild cycle. Redis runs as a Docker sidecar; the app runs on the host with uvicorn `--reload` (event-driven via `watchfiles`, already included in `uvicorn[standard]`).
+
+### 1) Start Redis sidecars
+
+```sh
+docker compose up -d redis-issuer redis-vendor
+```
+
+### 2) Run issuer and vendor (separate terminals)
+
+```sh
+# Terminal 1 — issuer on :8001
+source ./envs/issuer.env.dev.sh && poetry run python -m nanomoni.issuer_main
+
+# Terminal 2 — vendor on :8000
+source ./envs/vendor.env.dev.sh && poetry run python -m nanomoni.main
+```
+
+File changes trigger an automatic reload in ~200 ms. No image rebuilds needed.
+
+### 3) Stop Redis when done
+
+```sh
+docker compose stop redis-issuer redis-vendor
+```
+
+---
+
 ## Docker Compose Setup
 
 Prereqs:

@@ -18,7 +18,8 @@ from ...application.vendor.payword_dtos import (
 )
 from ...application.vendor.paytree_dtos import (
     PaytreePaymentResponseDTO,
-    ReceivePaytreePaymentDTO,
+    ReceivePaytreeStdPaymentDTO,
+    ReceivePaytreeFirstOptPaymentDTO,
 )
 from ..http.http_client import HttpResponse
 from ..http.http_client import AsyncHttpClient
@@ -147,19 +148,36 @@ class VendorClientAsync:
         path = f"/vendor/channels/payword/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
-    async def send_paytree_payment(
+    async def send_paytree_std_payment(
         self,
         channel_id: str,
-        dto: ReceivePaytreePaymentDTO,
+        dto: ReceivePaytreeStdPaymentDTO,
     ) -> PaytreePaymentResponseDTO:
-        """Send a PayTree payment to the vendor API."""
-        path = f"/vendor/channels/paytree/{channel_id}/payments"
+        """Send a standard PayTree payment to the vendor API."""
+        path = f"/vendor/channels/paytree/std/{channel_id}/payments"
         resp = await self._post_with_payment_retries(path, json=dto.model_dump())
         return PaytreePaymentResponseDTO.model_validate(resp.json())
 
-    async def request_settle_channel_paytree(self, dto: CloseChannelDTO) -> None:
-        """Ask the vendor to settle a PayTree payment channel."""
-        path = f"/vendor/channels/paytree/{dto.channel_id}/closure-requests"
+    async def send_paytree_first_opt_payment(
+        self,
+        channel_id: str,
+        dto: ReceivePaytreeFirstOptPaymentDTO,
+    ) -> PaytreePaymentResponseDTO:
+        """Send a first-opt PayTree payment to the vendor API."""
+        path = f"/vendor/channels/paytree/first-opt/{channel_id}/payments"
+        resp = await self._post_with_payment_retries(path, json=dto.model_dump())
+        return PaytreePaymentResponseDTO.model_validate(resp.json())
+
+    async def request_settle_channel_paytree_std(self, dto: CloseChannelDTO) -> None:
+        """Ask the vendor to settle a standard PayTree payment channel."""
+        path = f"/vendor/channels/paytree/std/{dto.channel_id}/closure-requests"
+        await self._http.post(path, json=dto.model_dump())
+
+    async def request_settle_channel_paytree_first_opt(
+        self, dto: CloseChannelDTO
+    ) -> None:
+        """Ask the vendor to settle a first-opt PayTree payment channel."""
+        path = f"/vendor/channels/paytree/first-opt/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def aclose(self) -> None:

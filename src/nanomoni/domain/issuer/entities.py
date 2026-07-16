@@ -9,6 +9,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from ..shared.serializers import CommonSerializersMixin
+from ..shared.proof_reference import PaymentScheme
 
 
 class Account(CommonSerializersMixin, BaseModel):
@@ -58,3 +59,16 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_unit_value: int
     paytree_max_i: int
     paytree_optimization_type: int = 0
+
+
+class IssuerPaymentChannel(PaymentChannelBase):
+    """Unified proof-based payment channel on the issuer side.
+
+    Replaces PaywordPaymentChannel and PaytreePaymentChannel. The issuer
+    does not track per-payment state (no last_proof_reference).
+    """
+
+    commitment: str
+    scheme: PaymentScheme
+    max_steps: int
+    unit_value: int

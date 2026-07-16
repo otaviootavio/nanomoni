@@ -1,4 +1,4 @@
-"""PayTree channel API routes (Issuer)."""
+"""PayTree standard channel API routes (Issuer)."""
 
 from __future__ import annotations
 
@@ -15,20 +15,20 @@ from ....application.issuer.paytree_dtos import (
     PaytreeSettlementRequestDTO,
 )
 from ....application.issuer.use_cases.paytree_channel import PaytreeChannelService
-from ..dependencies import get_paytree_channel_service
+from ..dependencies import get_paytree_std_channel_service
 
 
-router = APIRouter(tags=["channels", "paytree"])
+router = APIRouter(prefix="/channels/paytree/std", tags=["channels", "paytree-std"])
 
 
 @router.post(
-    "/channels/paytree",
+    "",
     response_model=PaytreeOpenChannelResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
-async def open_paytree_channel(
+async def open_paytree_std_channel(
     payload: OpenChannelRequestDTO,
-    service: PaytreeChannelService = Depends(get_paytree_channel_service),
+    service: PaytreeChannelService = Depends(get_paytree_std_channel_service),
 ) -> PaytreeOpenChannelResponseDTO:
     try:
         return await service.open_channel(payload)
@@ -37,14 +37,14 @@ async def open_paytree_channel(
 
 
 @router.post(
-    "/channels/paytree/{channel_id}/settlements",
+    "/{channel_id}/settlements",
     response_model=CloseChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
-async def settle_paytree_channel(
+async def settle_paytree_std_channel(
     channel_id: str,
     payload: PaytreeSettlementRequestDTO,
-    service: PaytreeChannelService = Depends(get_paytree_channel_service),
+    service: PaytreeChannelService = Depends(get_paytree_std_channel_service),
 ) -> CloseChannelResponseDTO:
     try:
         return await service.settle_channel(channel_id, payload)
@@ -53,19 +53,16 @@ async def settle_paytree_channel(
 
 
 @router.get(
-    "/channels/paytree/{channel_id}",
+    "/{channel_id}",
     response_model=PaytreePaymentChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
-async def get_paytree_channel(
+async def get_paytree_std_channel(
     channel_id: str,
-    service: PaytreeChannelService = Depends(get_paytree_channel_service),
+    service: PaytreeChannelService = Depends(get_paytree_std_channel_service),
 ) -> PaytreePaymentChannelResponseDTO:
     payload = GetPaymentChannelRequestDTO(channel_id=channel_id)
     try:
         return await service.get_channel(payload)
     except ValueError as err:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(err),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err))

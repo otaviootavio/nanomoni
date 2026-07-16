@@ -5,13 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nanomoni.domain.vendor.payment_channel_repository import (
-    PaytreeRepository,
-    PaywordRepository,
+    PaymentRepository,
     SignatureRepository,
 )
 from nanomoni.infrastructure.scripts import VENDOR_SCRIPTS, ISSUER_SCRIPTS
-from nanomoni.infrastructure.vendor.paytree_repository_impl import PaytreeRepositoryImpl
-from nanomoni.infrastructure.vendor.payword_repository_impl import PaywordRepositoryImpl
+from nanomoni.infrastructure.vendor.payment_repository_impl import PaymentRepositoryImpl
 from nanomoni.infrastructure.vendor.signature_repository_impl import (
     SignatureRepositoryImpl,
 )
@@ -41,11 +39,10 @@ async def _register_issuer_scripts(store: InMemoryKeyValueStore) -> None:
 
 @dataclass
 class VendorPaymentRepositories:
-    """Container of separate vendor payment channel repositories sharing one store."""
+    """Container of vendor payment repositories sharing one store."""
 
     signature: SignatureRepository
-    payword: PaywordRepository
-    paytree: PaytreeRepository
+    payment: PaymentRepository
     store: InMemoryKeyValueStore
 
     def clear(self) -> None:
@@ -58,8 +55,7 @@ def create_vendor_payment_repositories() -> VendorPaymentRepositories:
     store = InMemoryKeyValueStore()
     return VendorPaymentRepositories(
         signature=SignatureRepositoryImpl(store),
-        payword=PaywordRepositoryImpl(store),
-        paytree=PaytreeRepositoryImpl(store),
+        payment=PaymentRepositoryImpl(store),
         store=store,
     )
 
