@@ -57,12 +57,12 @@ def query_with_fallbacks(
     """
 
     def run_query(qs: str) -> Dict[str, Any]:
-        try:
-            return asyncio.run(
-                query_range_func(query=qs, start_unix=start_time, end_unix=end_time)
-            )
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
+        # Let query failures propagate to fetch_prometheus_data so genuine errors
+        # are recorded as failed_fetches instead of being swallowed and treated
+        # as an empty (no-data) result by the fallback logic below.
+        return asyncio.run(
+            query_range_func(query=qs, start_unix=start_time, end_unix=end_time)
+        )
 
     q_sanitized = sanitize_query(q)
 
