@@ -28,10 +28,4 @@ RUN poetry install
 
 RUN chmod +x scripts/client-entrypoint.sh
 
-# Run as a dedicated non-root user; grant it ownership of the writable app dir.
-RUN groupadd --system appuser \
-    && useradd --system --gid appuser --home-dir /app appuser \
-    && chown -R appuser:appuser /app
-USER appuser
-
-ENTRYPOINT ["bash", "scripts/client-entrypoint.sh"]
+ENTRYPOINT ["bash", "scripts/client-entrypoint.sh"] 
