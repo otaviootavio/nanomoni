@@ -24,6 +24,10 @@ docker compose build client
 # Timing JSON
 TIMING_JSON=""
 
+# Aggregate exit status: becomes non-zero if any benchmark mode fails, while
+# still allowing subsequent modes to run.
+OVERALL_STATUS=0
+
 # Signature
 source envs/client.env.sh
 export CLIENT_PAYMENT_MODE="signature"
@@ -44,6 +48,7 @@ if [ $STATUS -eq 0 ]; then
   TIMING_JSON="$TIMING_JSON{\"mode\":\"signature\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
 else
   TIMING_JSON="$TIMING_JSON{\"mode\":\"signature\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+  OVERALL_STATUS=1
 fi
 
 sleep $SLEEP_TIME
@@ -70,6 +75,7 @@ if [ $STATUS -eq 0 ]; then
   TIMING_JSON="$TIMING_JSON,{\"mode\":\"paytree\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
 else
   TIMING_JSON="$TIMING_JSON,{\"mode\":\"paytree\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+  OVERALL_STATUS=1
 fi
 
 sleep $SLEEP_TIME
@@ -96,7 +102,11 @@ if [ $STATUS -eq 0 ]; then
   TIMING_JSON="$TIMING_JSON,{\"mode\":\"payword\",\"status\":\"success\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
 else
   TIMING_JSON="$TIMING_JSON,{\"mode\":\"payword\",\"status\":\"failed\",\"prometheus_timestamps\":{\"start_ms\":$START,\"finish_ms\":$END}}"
+  OVERALL_STATUS=1
 fi
 
 TIMING_JSON="[$TIMING_JSON]"
 echo "$TIMING_JSON" | jq '.' > benchmark_timing.json
+
+# Propagate a non-zero exit code if any benchmark mode failed.
+exit $OVERALL_STATUS

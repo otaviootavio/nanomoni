@@ -16,6 +16,26 @@ import httpx
 
 from bench_plotter.settings import prometheus_base_url
 
+# Shared color palette for per-series charts.
+PALETTE = [
+    "#60a5fa",
+    "#4ade80",
+    "#fbbf24",
+    "#fb7185",
+    "#c084fc",
+    "#2dd4bf",
+    "#f472b6",
+    "#a3e635",
+    "#fb923c",
+    "#818cf8",
+    "#34d399",
+    "#facc15",
+    "#e879f9",
+    "#38bdf8",
+    "#4d7c0f",
+    "#be123c",
+]
+
 
 def range_step_for_window(total_seconds: float) -> str:
     """Prometheus ``step`` parameter for query_range (resolution of returned points)."""
@@ -56,8 +76,14 @@ async def query_range(
     url = urljoin(base + "/", "api/v1/query_range")
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(url, params=params)
-        r.raise_for_status()
-        payload = r.json()
+        # Parse the body first so descriptive Prometheus JSON errors (returned
+        # with 4xx statuses) are preserved instead of being masked by a generic
+        # HTTP error. Fall back to raise_for_status only if the body is not JSON.
+        try:
+            payload = r.json()
+        except Exception:
+            r.raise_for_status()
+            raise
     if payload.get("status") != "success":
         err = payload.get("error") or payload.get("errorType") or "unknown error"
         raise ValueError(f"Prometheus query failed: {err}")
@@ -92,24 +118,6 @@ def matrix_to_per_series_charts(
 ) -> list[dict[str, Any]]:
     """One chart per series so each metric keeps its own vertical scale (readable vs one cramped chart)."""
     charts: list[dict[str, Any]] = []
-    palette = [
-        "#60a5fa",
-        "#4ade80",
-        "#fbbf24",
-        "#fb7185",
-        "#c084fc",
-        "#2dd4bf",
-        "#f472b6",
-        "#a3e635",
-        "#fb923c",
-        "#818cf8",
-        "#34d399",
-        "#facc15",
-        "#e879f9",
-        "#38bdf8",
-        "#4d7c0f",
-        "#be123c",
-    ]
     for idx, item in enumerate(matrix_result):
         metric = item.get("metric") or {}
         name = metric.get("__name__", "series")
@@ -145,7 +153,7 @@ def matrix_to_per_series_charts(
                 "labels": labels,
                 "data": data,
                 "timestamps": ts_list,
-                "color": palette[idx % len(palette)],
+                "color": PALETTE[idx % len(PALETTE)],
                 "point_count": len(data),
             }
         )
@@ -166,8 +174,11 @@ async def label_values(
     url = urljoin(base + "/", f"api/v1/label/{label_name}/values")
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(url, params=params)
-        r.raise_for_status()
-        payload = r.json()
+        try:
+            payload = r.json()
+        except Exception:
+            r.raise_for_status()
+            raise
     if payload.get("status") != "success":
         err = payload.get("error") or "unknown error"
         raise ValueError(f"Prometheus label API failed: {err}")
@@ -179,14 +190,26 @@ async def instant_query(
     *,
     query: str,
     base_url: str | None = None,
+    time: float | None = None,
 ) -> dict[str, Any]:
-    """Run an instant query (e.g. scalar check that Prometheus has data)."""
+    """Run an instant query (e.g. scalar check that Prometheus has data).
+
+    When ``time`` is given, the query is evaluated at that Unix timestamp so
+    historical benchmark intervals are read from the past rather than from
+    Prometheus's current state.
+    """
     base = (base_url or prometheus_base_url()).rstrip("/")
     url = urljoin(base + "/", "api/v1/query")
+    params = {"query": query}
+    if time is not None:
+        params["time"] = str(time)
     async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(url, params={"query": query})
-        r.raise_for_status()
-        payload = r.json()
+        r = await client.get(url, params=params)
+        try:
+            payload = r.json()
+        except Exception:
+            r.raise_for_status()
+            raise
     if payload.get("status") != "success":
         err = payload.get("error") or payload.get("errorType") or "unknown error"
         raise ValueError(f"Prometheus instant query failed: {err}")

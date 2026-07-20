@@ -192,13 +192,37 @@ def create_windowed_plot_multi(
             continue
 
         start_time = float(timestamps[0])
-        elapsed = [float(ts) - start_time for ts in timestamps]
         color = colors[idx % len(colors)]
         linestyle = linestyles[idx % len(linestyles)]
+
+        # Apply windowed averaging when a window size is available so the plotted
+        # line matches the "(Xs window)" label; fall back to raw samples otherwise.
+        plot_elapsed: List[float] = []
+        plot_values: List[float] = []
+        if ws is not None and float(ws) > 0:
+            window_centers, window_averages = calculate_windowed_averages(
+                timestamps, values, float(ws)
+            )
+            if window_centers:
+                plot_elapsed = [
+                    float(wc.timestamp()) - start_time for wc in window_centers
+                ]
+                plot_values = window_averages
+        if not plot_elapsed:
+            plot_elapsed = [float(ts) - start_time for ts in timestamps]
+            plot_values = values
+
         ax.plot(
-            elapsed, values, color=color, linewidth=2, linestyle=linestyle, label=label
+            plot_elapsed,
+            plot_values,
+            color=color,
+            linewidth=2,
+            linestyle=linestyle,
+            label=label,
         )
-        max_value = max(max_value, max(valid_values))
+        valid_plot_values = [v for v in plot_values if v is not None]
+        if valid_plot_values:
+            max_value = max(max_value, max(valid_plot_values))
     ax.set_xlabel("Time (s)", fontsize=14)
     ax.set_ylabel(y_axis_label, fontsize=14)
     ax.set_title(title, fontsize=16)

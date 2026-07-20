@@ -56,24 +56,26 @@ def get_dashboard_panels(
     if panels_spec is not None:
         return panels_spec
 
+    # Only fall back on an actual import failure of the canonical module. Config
+    # or execution errors raised by get_dashboard_panels itself must propagate
+    # rather than being masked by the legacy fallback.
     try:
         from bench_plotter.dashboard_queries import (
             get_dashboard_panels as _load_panels,
         )
-
-        return _load_panels()
-    except Exception:
+    except ImportError:
         try:
             from dashboard_queries import (  # type: ignore[import-not-found]
                 get_dashboard_panels as _load_panels_legacy,
             )
-
-            return _load_panels_legacy()
         except ImportError:
             print(
                 "Error: dashboard_queries.py not found. Please create it from your dashboard configuration."
             )
             return []
+        return _load_panels_legacy()
+
+    return _load_panels()
 
 
 def determine_interval_type(
@@ -170,7 +172,11 @@ def fetch_prometheus_data(
     Returns:
         Tuple of (runs_data, failed_fetches)
     """
-    from bench_plotter.prometheus_fetch import query_range, matrix_to_per_series_charts
+    from bench_plotter.prometheus_fetch import (
+        query_range,
+        instant_query,
+        matrix_to_per_series_charts,
+    )
 
     runs_data = []
     failed_fetches = []
@@ -190,9 +196,7 @@ def fetch_prometheus_data(
                 start_time=start_time,
                 end_time=end_time,
                 query_range_func=query_range,
-                instant_query_func=lambda query: asyncio.run(
-                    query_range(query=query, start_unix=start_time, end_unix=end_time)
-                ),
+                instant_query_func=instant_query,
             )
 
             payload_result = (
@@ -274,8 +278,10 @@ def process_histogram_data_for_intervals(
         interval_mode = interval.get("mode", f"interval_{interval_idx + 1}")
 
         try:
-            # Try instant query first
-            result = asyncio.run(instant_query(query=expr))
+            # Try instant query first, evaluated at the end of the benchmark
+            # interval so we read the historical cumulative buckets rather than
+            # Prometheus's current state.
+            result = asyncio.run(instant_query(query=expr, time=end_time))
 
             vector_result = result.get("data", {}).get("result", [])
 
@@ -541,8 +547,15 @@ def create_single_series_plots(
     y_axis_label = extract_unit_from_title(plot_title)
 
     for i, series_data in enumerate(runs_data):
-        interval_idx = min(i, len(test_intervals) - 1)
-        interval_mode = test_intervals[interval_idx].get("mode", f"interval_{i + 1}")
+        # Prefer the interval mode recorded on the series by fetch_prometheus_data;
+        # runs_data may hold several series per interval, so indexing test_intervals
+        # by position is unreliable.
+        interval_mode = series_data.get("interval_mode")
+        if not interval_mode:
+            interval_idx = min(i, len(test_intervals) - 1)
+            interval_mode = test_intervals[interval_idx].get(
+                "mode", f"interval_{i + 1}"
+            )
         mode_suffix = f"_{interval_mode}"
 
         # Build each filename from the ORIGINAL output_path (kept immutable) so
@@ -962,9 +975,12 @@ def process_dashboard(
                         )
                         failed_fetches.extend(interval_failures)
 
-                        # Add legend_format as payment mode for labeling
+                        # Derive the payment mode from the expression so series
+                        # within the same quantile group are distinguished by mode
+                        # (legend formats can collide across payment modes).
+                        payment_mode = extract_payment_mode_from_expr(expr)
                         for run_data in runs_data:
-                            run_data["payment_mode"] = legend_format
+                            run_data["payment_mode"] = payment_mode
 
                         combined_runs_data.extend(runs_data)
 
@@ -1041,9 +1057,12 @@ def process_dashboard(
                         )
                         failed_fetches.extend(interval_failures)
 
-                        # Add legend_format as payment mode for labeling
+                        # Derive the payment mode from the expression so series
+                        # within the same quantile group are distinguished by mode
+                        # (legend formats can collide across payment modes).
+                        payment_mode = extract_payment_mode_from_expr(expr)
                         for run_data in runs_data:
-                            run_data["payment_mode"] = legend_format
+                            run_data["payment_mode"] = payment_mode
 
                         combined_runs_data.extend(runs_data)
 

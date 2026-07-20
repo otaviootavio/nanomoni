@@ -17,7 +17,9 @@ class TestPrometheusBaseUrl:
 
     def test_ignores_env_override(self) -> None:
         """PROMETHEUS_URL in the environment is intentionally ignored."""
-        with patch.dict(os.environ, {"PROMETHEUS_URL": "http://prometheus.example.com:8080"}):
+        with patch.dict(
+            os.environ, {"PROMETHEUS_URL": "http://prometheus.example.com:8080"}
+        ):
             assert prometheus_base_url() == "http://127.0.0.1:9090"
 
 
