@@ -1,4 +1,4 @@
-"""Tests for generate_plots module."""
+"""Tests for the generate_plots CLI wrapper and directory helpers."""
 
 import os
 import tempfile
@@ -33,42 +33,44 @@ class TestCleanPlotsDirectory:
 
 
 class TestMainFunction:
-    def test_main_calls_generate_all_modes_defaults(self) -> None:
-        with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-            with patch("sys.argv", ["generate_plots"]):
-                main()
-            mock_gen.assert_called_once_with(
-                intervals_path=None,
-                output_dir="plots",
-                num_points=100,
-            )
+    """``main`` parses args and delegates to ``generate_plots_from_benchmark``.
 
-    def test_main_passes_custom_output(self) -> None:
-        with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-            with patch("sys.argv", ["generate_plots", "--output", "my_plots"]):
-                main()
-            mock_gen.assert_called_once_with(
-                intervals_path=None,
-                output_dir="my_plots",
-                num_points=100,
-            )
+    The pipeline is imported lazily inside ``main`` (to keep ``--help`` cheap),
+    so it is patched at its definition site in the pipeline package.
+    """
 
-    def test_main_passes_custom_interpol(self) -> None:
-        with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-            with patch("sys.argv", ["generate_plots", "--interpol", "200"]):
-                main()
-            mock_gen.assert_called_once_with(
-                intervals_path=None,
-                output_dir="plots",
-                num_points=200,
-            )
+    def _run_main(self, argv, intervals_content):
+        with tempfile.TemporaryDirectory() as tmp:
+            intervals_path = Path(tmp) / "timing.json"
+            intervals_path.write_text(intervals_content)
+            output = str(Path(tmp) / "plots")
+            full_argv = ["generate_plots", str(intervals_path)] + argv + [
+                "--output",
+                output,
+            ]
+            with patch(
+                "bench_plotter.pipeline.generate_plots_from_benchmark"
+            ) as mock_gen:
+                with patch("sys.argv", full_argv):
+                    main()
+            return mock_gen
 
-    def test_main_passes_explicit_intervals_path(self) -> None:
-        with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-            with patch("sys.argv", ["generate_plots", "/some/path/timing.json"]):
-                main()
-            mock_gen.assert_called_once_with(
-                intervals_path="/some/path/timing.json",
-                output_dir="plots",
-                num_points=100,
-            )
+    def test_main_defaults(self) -> None:
+        mock_gen = self._run_main([], "[]")
+        mock_gen.assert_called_once()
+        kwargs = mock_gen.call_args[1]
+        assert kwargs["num_points"] == 100
+        assert kwargs["parallel"] is True
+        assert kwargs["workers"] is None
+
+    def test_main_custom_interpol(self) -> None:
+        mock_gen = self._run_main(["--interpol", "200"], "[]")
+        assert mock_gen.call_args[1]["num_points"] == 200
+
+    def test_main_no_parallel(self) -> None:
+        mock_gen = self._run_main(["--no-parallel"], "[]")
+        assert mock_gen.call_args[1]["parallel"] is False
+
+    def test_main_workers(self) -> None:
+        mock_gen = self._run_main(["--workers", "4"], "[]")
+        assert mock_gen.call_args[1]["workers"] == 4

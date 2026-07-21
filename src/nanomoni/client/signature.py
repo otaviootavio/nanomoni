@@ -145,4 +145,10 @@ async def send_payments(
             now = perf_counter()
             if target > now:
                 await sleep(target - now)
+            elif now - target > inter_payment_delay:
+                # Fell behind by more than one slot (e.g. a stalled request) -
+                # resync the schedule instead of letting later iterations fire
+                # back-to-back to "catch up", which would burst well above the
+                # configured rate and contaminate steady-state measurements.
+                start = now - n * inter_payment_delay
         await vendor.send_off_chain_payment(channel_id, pay_dto)

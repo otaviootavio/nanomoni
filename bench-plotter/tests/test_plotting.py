@@ -11,11 +11,9 @@ matplotlib.use("Agg")  # Use non-interactive backend for tests
 import numpy as np
 import pytest
 
-from bench_plotter.plotting import (
-    create_mean_std_plot,
-    load_json_data,
-    normalize_time_series_data,
-)
+from bench_plotter.io_utils import load_json_data
+from bench_plotter.plotting.timeseries_renderers import create_mean_std_plot
+from bench_plotter.plotting.windowing import normalize_time_series_data
 
 
 class TestLoadJsonData:

@@ -1,76 +1,92 @@
-"""Integration tests for the complete workflow."""
+"""Integration tests for the full pipeline wiring.
+
+These drive ``generate_plots_from_benchmark`` with the fetch stage stubbed
+(canned Prometheus payloads) and the draw stage captured, so they exercise
+plan -> transform -> draw wiring and the produced output-path set without a live
+Prometheus or real rendering.
+"""
 
 import json
 import os
 import tempfile
-from typing import Any
+from typing import Any, Dict, List
 from unittest.mock import patch
 
 import pytest
 
-from bench_plotter.generate_plots import generate_all_modes, main
+from bench_plotter.generate_plots import main
+from bench_plotter.pipeline import generate_plots_from_benchmark
 
 
-class TestGenerateAllModesIntegration:
-    def _write(self, path: str, data: Any) -> None:
-        with open(path, "w") as f:
-            json.dump(data, f)
+PAYWORD_ONLY = [
+    {
+        "mode": "payword",
+        "status": "success",
+        "prometheus_timestamps": {"start_ms": 1000000, "finish_ms": 1000600},
+    }
+]
 
-    INTERVALS = [
-        {
-            "mode": "signature",
-            "status": "success",
-            "prometheus_timestamps": {"start_ms": 1000000, "finish_ms": 1000600},
-        },
-        {
-            "mode": "paytree",
-            "status": "success",
-            "prometheus_timestamps": {"start_ms": 1000600, "finish_ms": 1001200},
-        },
-    ]
 
-    def test_generate_all_modes_calls_process_all_modes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            intervals_path = os.path.join(tmp, "timing.json")
-            self._write(intervals_path, self.INTERVALS)
+def _canned_range_payload() -> Dict[str, Any]:
+    """A flat, non-zero range series that survives steady-state filtering."""
+    values = [[1000.0 + i * 15, "1.0"] for i in range(10)]
+    return {"data": {"result": [{"metric": {"__name__": "m"}, "values": values}]}}
 
-            with patch("bench_plotter.plotting.process_all_modes") as mock_proc:
-                generate_all_modes(
-                    intervals_path=intervals_path,
-                    output_dir=os.path.join(tmp, "plots"),
-                    num_points=50,
-                )
-                mock_proc.assert_called_once()
-                kwargs = mock_proc.call_args[1]
-                assert kwargs["num_points"] == 50
 
-    def test_generate_all_modes_creates_output_dir(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            intervals_path = os.path.join(tmp, "timing.json")
-            output_dir = os.path.join(tmp, "plots")
-            self._write(intervals_path, self.INTERVALS)
+def _stub_fetch(jobs):
+    cache = {spec: _canned_range_payload() for job in jobs for spec in job.specs}
+    return cache, []
 
-            with patch("bench_plotter.plotting.process_all_modes"):
-                generate_all_modes(intervals_path=intervals_path, output_dir=output_dir)
 
-            assert os.path.exists(output_dir)
+def _run_capturing_draw(intervals: List[Dict[str, Any]]):
+    """Run the pipeline; return the set of output paths handed to the draw stage."""
+    captured: List[str] = []
 
-    def test_generate_all_modes_exits_on_missing_file(self) -> None:
-        with pytest.raises(SystemExit):
-            generate_all_modes(intervals_path="/nonexistent/timing.json")
+    def _capture_draw(tasks, workers=None, parallel=True):
+        captured.extend(t.output_path for t in tasks)
+        return [t.output_path for t in tasks], []
 
-    def test_main_integration(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            intervals_path = os.path.join(tmp, "timing.json")
-            self._write(intervals_path, self.INTERVALS)
+    with tempfile.TemporaryDirectory() as tmp:
+        intervals_path = os.path.join(tmp, "timing.json")
+        with open(intervals_path, "w") as f:
+            json.dump(intervals, f)
+        out = os.path.join(tmp, "plots")
+        with patch("bench_plotter.pipeline.orchestrator.fetch_all", _stub_fetch):
+            with patch("bench_plotter.pipeline.orchestrator.draw_all", _capture_draw):
+                generate_plots_from_benchmark(intervals_path, output_dir=out)
+        rel = {os.path.relpath(p, out) for p in captured}
+    return rel
 
-            with patch("bench_plotter.generate_plots.generate_all_modes") as mock_gen:
-                with patch(
-                    "sys.argv", ["generate_plots", intervals_path, "--output", tmp]
-                ):
-                    main()
-                mock_gen.assert_called_once_with(
-                    intervals_path=intervals_path,
-                    output_dir=tmp,
-                    num_points=100,
-                )
+
+class TestPipelineWiring:
+    def test_payword_only_produces_expected_paths(self) -> None:
+        paths = _run_capturing_draw(PAYWORD_ONLY)
+
+        # Resource timeseries for every service.
+        assert "vendor_resources/vendor_cpu_usage_cores.png" in paths
+        assert "issuer_resources/issuer_memory_usage_mib.png" in paths
+        assert "client_resources/client_network_kib_s_input.png" in paths
+        # Steady-state companions for vendor/client CPU + network.
+        assert "vendor_resources/vendor_cpu_usage_cores_boxplot.png" in paths
+        assert "client_resources/client_network_kib_s_output_violin.png" in paths
+        # TPS + per-quantile latency.
+        assert "tps_metrics/vendor_payment_tps_success_payword.png" in paths
+        assert (
+            "tps_metrics/vendor_payment_duration_quantiles_ms_payword_p99.png" in paths
+        )
+        # Steady-state latency suite.
+        assert "tps_metrics/vendor_payment_latency_boxplot.png" in paths
+
+        # Only payword ran, so no signature/paytree series were queried.
+        assert not any("signature" in p or "paytree" in p for p in paths)
+
+    def test_no_successful_intervals_produces_nothing(self) -> None:
+        failed = [{"mode": "payword", "status": "failed"}]
+        assert _run_capturing_draw(failed) == set()
+
+
+class TestCliMissingFile:
+    def test_main_exits_on_missing_file(self) -> None:
+        with patch("sys.argv", ["generate_plots", "/nonexistent/timing.json"]):
+            with pytest.raises(SystemExit):
+                main()

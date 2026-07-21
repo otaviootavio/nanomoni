@@ -4,11 +4,13 @@ Uses Prometheus's native ``/api/v1/query_range``: each returned point is whateve
 Prometheus evaluated at the given ``step`` (no moving average, no Grafana-style transforms).
 If you use PromQL like ``rate()`` or ``avg_over_time()``, *that* function defines smoothing —
 the app does not add another layer on top.
+
+Matrix payload decoding lives in :mod:`bench_plotter.prometheus_matrix`.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import math
 from typing import Any
 from urllib.parse import urljoin
 
@@ -22,13 +24,27 @@ def range_step_for_window(total_seconds: float) -> str:
     return _step_for_range_seconds(total_seconds)
 
 
+_SCRAPE_INTERVAL_SECONDS = 15
+# Prometheus's query_range API rejects requests whose point count would exceed
+# roughly this many points per series.
+_MAX_POINTS_PER_SERIES = 11_000
+
+
 def _step_for_range_seconds(total_seconds: float) -> str:
-    """Always query at the Prometheus scrape_interval (15s), regardless of range.
+    """Query at the Prometheus scrape_interval (15s), widening only if needed.
 
     A step finer than the scrape interval only yields duplicated (stair-stepped)
-    points and noisy rate() output, so 15s is both the floor and the ceiling.
+    points and noisy rate() output, so 15s is the floor. It's also usually the
+    ceiling: coarsening the step for large windows is unnecessary noise
+    reduction for the minutes-to-hours-long windows this tool queries. But
+    Prometheus caps the number of points a query_range call may return, so for
+    a window long enough to exceed that cap at 15s, the step is widened just
+    enough to stay under it rather than letting the query fail outright.
     """
-    return "15s"
+    if total_seconds <= _SCRAPE_INTERVAL_SECONDS * _MAX_POINTS_PER_SERIES:
+        return f"{_SCRAPE_INTERVAL_SECONDS}s"
+    step = math.ceil(total_seconds / _MAX_POINTS_PER_SERIES)
+    return f"{step}s"
 
 
 async def query_range(
@@ -62,75 +78,6 @@ async def query_range(
         err = payload.get("error") or payload.get("errorType") or "unknown error"
         raise ValueError(f"Prometheus query failed: {err}")
     return payload
-
-
-def matrix_result_is_uninteresting(matrix_result: list[dict[str, Any]]) -> bool:
-    """
-    True only when there is nothing to plot: no numeric samples at all (empty or all-NaN).
-
-    Constant series (including all-zeros) are kept on purpose: a resource decaying to
-    and staying at zero, or a legitimately flat gauge, is exactly what we want to see.
-    """
-    for item in matrix_result:
-        for pair in item.get("values") or []:
-            if len(pair) < 2:
-                continue
-            raw = pair[1]
-            if raw == "NaN" or raw is None:
-                continue
-            try:
-                float(raw)
-            except (TypeError, ValueError):
-                continue
-            # Found at least one numeric sample -> there is something to plot.
-            return False
-    return True
-
-
-def matrix_to_per_series_charts(
-    matrix_result: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """One chart per series so each metric keeps its own vertical scale (readable vs one cramped chart)."""
-    charts: list[dict[str, Any]] = []
-    for item in matrix_result:
-        metric = item.get("metric") or {}
-        name = metric.get("__name__", "series")
-        label_parts = [
-            f'{k}="{v}"' for k, v in sorted(metric.items()) if k != "__name__"
-        ]
-        subtitle = ", ".join(label_parts) if label_parts else "(no labels)"
-        values = item.get("values") or []
-        labels: list[str] = []
-        data: list[float | None] = []
-        ts_list: list[float] = []
-        for pair in values:
-            if len(pair) < 2:
-                continue
-            ts = float(pair[0])
-            ts_list.append(ts)
-            raw = pair[1]
-            try:
-                if raw == "NaN" or raw is None:
-                    data.append(None)
-                else:
-                    data.append(float(raw))
-            except (TypeError, ValueError):
-                data.append(None)
-            labels.append(
-                datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M:%S")
-            )
-        charts.append(
-            {
-                "metric_name": name,
-                "title": f"{name}",
-                "subtitle": subtitle[:200] + ("…" if len(subtitle) > 200 else ""),
-                "labels": labels,
-                "data": data,
-                "timestamps": ts_list,
-                "point_count": len(data),
-            }
-        )
-    return charts
 
 
 async def label_values(

@@ -169,6 +169,12 @@ async def send_payments(
             now = perf_counter()
             if target > now:
                 await sleep(target - now)
+            elif now - target > inter_payment_delay:
+                # Fell behind by more than one slot (e.g. a stalled request) -
+                # resync the schedule instead of letting later iterations fire
+                # back-to-back to "catch up", which would burst well above the
+                # configured rate and contaminate steady-state measurements.
+                start = now - n * inter_payment_delay
         i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
         await vendor.send_paytree_payment(
             channel_id,

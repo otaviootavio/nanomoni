@@ -4,6 +4,7 @@ IFS=$'\n\t'
 
 export BENCHMARK_COUNT_VAR=1048576
 # export BENCHMARK_COUNT_VAR=8192
+
 export SLEEP_TIME=30
 export SLEEP_GAP=30
 # In-window drain: time (s) after the client stops, before the window closes, so the
@@ -11,7 +12,7 @@ export SLEEP_GAP=30
 export DRAIN_TIME=180
 
 # Target TPS ceiling (edit here). Set to 0 for no limit (max throughput).
-BENCHMARK_TARGET_TPS=500
+BENCHMARK_TARGET_TPS=250
 
 # Derive the per-payment delay the client consumes from the target TPS.
 if [ "$BENCHMARK_TARGET_TPS" -gt 0 ]; then
@@ -29,17 +30,30 @@ OVERALL_STATUS=0
 
 # run_mode <mode>: run the already-configured client once and record its window.
 # The caller must have exported CLIENT_PAYMENT_MODE and any mode-specific vars.
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
 run_mode() {
   local mode="$1"
   local start end status=0
 
+  log "=== [$mode] starting benchmark run ==="
+
   start=$(date +%s%3N)
+  log "[$mode] pre-run gap: sleeping ${SLEEP_GAP}s"
   sleep "$SLEEP_GAP"
+
+  log "[$mode] launching client container"
   # Capture the client exit status without letting `set -e` abort the script,
   # so cleanup always runs and the timing entry is always recorded.
   docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
+  log "[$mode] client container exited with status $status"
+
   docker compose stop client >/dev/null 2>&1 || true
   docker compose rm -fsv client >/dev/null 2>&1 || true
+
+  log "[$mode] drain gap: sleeping ${DRAIN_TIME}s"
   sleep "$DRAIN_TIME"
   end=$(date +%s%3N)
 
@@ -48,6 +62,7 @@ run_mode() {
     result="failed"
     OVERALL_STATUS=1
   fi
+  log "=== [$mode] finished: $result (window ${start}ms -> ${end}ms) ==="
   TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
 }
 
@@ -78,6 +93,7 @@ run_payword() {
   run_mode "payword"
 }
 
+log "Building client image (count=$BENCHMARK_COUNT_VAR, target_tps=$BENCHMARK_TARGET_TPS)"
 # Build the client image so the run uses current code (incl. the TPS delay plumbing).
 docker compose build client
 
@@ -87,9 +103,16 @@ run_paytree
 sleep "$SLEEP_TIME"
 run_payword
 
+log "All modes complete, writing benchmark_timing.json"
 # Join the entries with commas and write the timing JSON.
 TIMING_JSON="[$(IFS=,; echo "${TIMING_ENTRIES[*]}")]"
 echo "$TIMING_JSON" | jq '.' > benchmark_timing.json
+
+if [ "$OVERALL_STATUS" -eq 0 ]; then
+  log "Benchmark run finished successfully"
+else
+  log "Benchmark run finished with failures"
+fi
 
 # Propagate a non-zero exit code if any benchmark mode failed.
 exit $OVERALL_STATUS

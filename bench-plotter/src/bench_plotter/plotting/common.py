@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -72,9 +70,3 @@ def save_figure(fig: Figure, output_path: str, *, dpi: int = 300) -> None:
     fig.tight_layout()
     fig.savefig(output_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-
-
-def load_json_data(file_path: str) -> Any:
-    """Load JSON data from file (may be a dict, list, or scalar)."""
-    with open(file_path, "r") as f:
-        return json.load(f)

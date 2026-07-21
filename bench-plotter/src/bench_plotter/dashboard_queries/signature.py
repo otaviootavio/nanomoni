@@ -3,6 +3,11 @@
 
 from typing import Any, Dict, List
 
+# Single source of truth for this mode's latency-histogram bucket metric name,
+# reused by dashboard_processor.py's steady-state latency box/ECDF/violin
+# builders instead of duplicating the string there.
+LATENCY_BUCKET_METRIC = "payment_request_duration_milliseconds_bucket"
+
 # Signature-specific TPS metrics panels
 SIGNATURE_PANELS: List[Dict[str, Any]] = [
     # Row: TPS Metrics
@@ -30,15 +35,15 @@ SIGNATURE_PANELS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "targets": [
             {
-                "expr": 'histogram_quantile(0.99, sum(rate(payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
+                "expr": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
                 "legendFormat": "Payment P99",
             },
             {
-                "expr": 'histogram_quantile(0.95, sum(rate(payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
+                "expr": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
                 "legendFormat": "Payment P95",
             },
             {
-                "expr": 'histogram_quantile(0.50, sum(rate(payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
+                "expr": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
                 "legendFormat": "Payment P50",
             },
         ],

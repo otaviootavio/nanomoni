@@ -1,18 +1,10 @@
 """Tests for windowed averaging functionality."""
 
-import os
-import tempfile
-from pathlib import Path
-import matplotlib
-
-matplotlib.use("Agg")  # Use non-interactive backend for tests
-import numpy as np
 from datetime import datetime, timezone
 
-from bench_plotter.plotting import (
-    calculate_windowed_averages,
-    create_windowed_plot,
-)
+import numpy as np
+
+from bench_plotter.plotting.windowing import calculate_windowed_averages
 
 
 class TestCalculateWindowedAverages:
@@ -103,52 +95,3 @@ class TestCalculateWindowedAverages:
         assert len(window_centers) == 1
         expected_avg = sum([0, 1, 3, 4, 5]) / 5  # All values in window
         assert abs(window_averages[0] - expected_avg) < 0.001
-
-
-class TestCreateWindowedPlot:
-    """Test windowed plot creation."""
-
-    def test_empty_data(self) -> None:
-        """Test with empty data — no file should be created."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "should_not_exist.png")
-            create_windowed_plot([], [], output_path=output_path)
-            assert not Path(output_path).exists()
-
-    def test_basic_plot_creation(self) -> None:
-        """Test basic plot creation."""
-        # Create test data
-        timestamps = [1000.0 + i for i in range(10)]
-        values = [float(i) for i in range(10)]
-
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            temp_path = f.name
-
-        try:
-            create_windowed_plot(
-                timestamps,
-                values,
-                title="Test Plot",
-                output_path=temp_path,
-                window_seconds=3,
-            )
-
-            # Verify file was created
-            assert Path(temp_path).exists()
-
-        finally:
-            if Path(temp_path).exists():
-                Path(temp_path).unlink()
-
-    def test_large_window_size(self) -> None:
-        """Test with a window larger than the data range — all points fall in one window."""
-        timestamps = [1000.0, 1001.0, 1002.0]
-        values = [1.0, 2.0, 3.0]
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "plot.png")
-            create_windowed_plot(
-                timestamps, values, output_path=output_path, window_seconds=10
-            )
-            # One window covers all data → plot is created
-            assert Path(output_path).exists()

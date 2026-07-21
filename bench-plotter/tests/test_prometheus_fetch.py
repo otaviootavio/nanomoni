@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from bench_plotter.prometheus_fetch import (
     range_step_for_window,
     query_range,
+)
+from bench_plotter.prometheus_matrix import (
     matrix_result_is_uninteresting,
     matrix_to_per_series_charts,
 )
@@ -13,7 +15,8 @@ from bench_plotter.prometheus_fetch import (
 
 class TestRangeStepForWindow:
     def test_small_window(self) -> None:
-        # Step is always the 15s scrape_interval, regardless of range size.
+        # Step is the 15s scrape_interval for any window under Prometheus's
+        # per-series point cap.
         assert range_step_for_window(300) == "15s"
 
     def test_medium_window(self) -> None:
@@ -22,8 +25,14 @@ class TestRangeStepForWindow:
     def test_large_window(self) -> None:
         assert range_step_for_window(24 * 3600) == "15s"
 
-    def test_very_large_window(self) -> None:
-        assert range_step_for_window(48 * 3600) == "15s"
+    def test_window_at_point_cap_stays_15s(self) -> None:
+        # 11_000 points * 15s == 165_000s: right at the cap, still 15s.
+        assert range_step_for_window(11_000 * 15) == "15s"
+
+    def test_window_over_point_cap_widens_step(self) -> None:
+        # Beyond the cap the step widens just enough to stay under it, rather
+        # than letting Prometheus reject the query with too many points.
+        assert range_step_for_window(48 * 3600) == "16s"
 
 
 class TestQueryRange:
