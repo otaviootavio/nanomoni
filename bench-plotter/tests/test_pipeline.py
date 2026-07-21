@@ -137,7 +137,6 @@ class TestDrawContract:
             "mean_std",
             "precomputed_box",
             "bucket_ecdf",
-            "overlaid_histogram",
         }
         assert expected_fns <= set(DRAW_REGISTRY)
 
@@ -155,8 +154,6 @@ class TestDrawContract:
         assert restored.kwargs["title"] == "t"
 
     def test_query_spec_is_hashable_and_picklable(self) -> None:
-        spec = QuerySpec("up", 1.0, 2.0, kind="instant", instant_time=2.0)
+        spec = QuerySpec("up", 1.0, 2.0, step="15s")
         assert pickle.loads(pickle.dumps(spec)) == spec
-        assert hash(spec) == hash(
-            QuerySpec("up", 1.0, 2.0, kind="instant", instant_time=2.0)
-        )
+        assert hash(spec) == hash(QuerySpec("up", 1.0, 2.0, step="15s"))

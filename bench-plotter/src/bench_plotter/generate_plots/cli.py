@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .common import auto_detect_intervals, clean_plots_directory, positive_int
+from .common import clean_plots_directory, positive_int
 
 
 def main() -> None:
@@ -21,8 +21,7 @@ def main() -> None:
     )
     parser.add_argument(
         "intervals",
-        nargs="?",
-        help="Path to the benchmark timing JSON (default: auto-detect)",
+        help="Path to the benchmark timing JSON (e.g. benchmark_timing.json)",
     )
     parser.add_argument(
         "--output", default="plots", help="Output directory (default: plots)"
@@ -46,10 +45,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    project_root = Path(__file__).parent.parent.parent.parent
-    intervals_path = (
-        Path(args.intervals) if args.intervals else auto_detect_intervals(project_root)
-    )
+    intervals_path = Path(args.intervals)
     if not intervals_path.exists():
         print(f"Error: {intervals_path} not found")
         sys.exit(1)

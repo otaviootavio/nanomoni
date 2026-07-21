@@ -12,14 +12,8 @@ export SLEEP_GAP=30
 export DRAIN_TIME=180
 
 # Target TPS ceiling (edit here). Set to 0 for no limit (max throughput).
+# The client derives the per-payment delay (1/TPS) itself
 BENCHMARK_TARGET_TPS=250
-
-# Derive the per-payment delay the client consumes from the target TPS.
-if [ "$BENCHMARK_TARGET_TPS" -gt 0 ]; then
-  export CLIENT_INTER_PAYMENT_DELAY_S=$(awk "BEGIN{printf \"%.6f\", 1/${BENCHMARK_TARGET_TPS}}")
-else
-  export CLIENT_INTER_PAYMENT_DELAY_S=0
-fi
 
 # Per-mode timing entries, joined into the timing JSON at the end.
 TIMING_ENTRIES=()
@@ -37,6 +31,10 @@ log() {
 run_mode() {
   local mode="$1"
   local start end status=0
+
+  # Exported here (after the caller sources envs/client.env.sh) so the target
+  # TPS always wins over anything the env file might set.
+  export CLIENT_TARGET_TPS=$BENCHMARK_TARGET_TPS
 
   log "=== [$mode] starting benchmark run ==="
 

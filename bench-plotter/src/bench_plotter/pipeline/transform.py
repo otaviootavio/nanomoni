@@ -16,7 +16,6 @@ from bench_plotter.plotting.windowing import calculate_optimal_window_size
 from .model import DrawTask, PlotJob, ResultCache
 from .series_runs import runs_from_series
 from .latency_transform import transform_latency_box, transform_latency_dist
-from .distribution_transform import transform_distribution
 from .steady_state_transform import transform_steady_state
 
 
@@ -92,7 +91,6 @@ _DISPATCH = {
     "overlay": _overlay_tasks,
     "mean_std": _mean_std_tasks,
     "steady_state": transform_steady_state,
-    "distribution": transform_distribution,
     "latency_box": transform_latency_box,
     "latency_dist": transform_latency_dist,
 }

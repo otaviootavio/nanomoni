@@ -8,7 +8,6 @@ from bench_plotter.prometheus_fetch import (
     query_range,
 )
 from bench_plotter.prometheus_matrix import (
-    matrix_result_is_uninteresting,
     matrix_to_per_series_charts,
 )
 
@@ -67,28 +66,6 @@ class TestQueryRange:
             asyncio.run(
                 query_range(query="invalid", start_unix=1000.0, end_unix=2000.0)
             )
-
-
-class TestMatrixResultIsUninteresting:
-    def test_empty_result(self) -> None:
-        assert matrix_result_is_uninteresting([]) is True
-
-    def test_constant_series_is_kept(self) -> None:
-        # Constant series (incl. all-zeros) are kept: decay-to-zero must stay visible.
-        result = [{"values": [[1, "5.0"], [2, "5.0"], [3, "5.0"]]}]
-        assert matrix_result_is_uninteresting(result) is False
-
-    def test_varying_series(self) -> None:
-        result = [{"values": [[1, "1.0"], [2, "2.0"], [3, "3.0"]]}]
-        assert matrix_result_is_uninteresting(result) is False
-
-    def test_nan_values(self) -> None:
-        result = [{"values": [[1, "NaN"], [2, "NaN"]]}]
-        assert matrix_result_is_uninteresting(result) is True
-
-    def test_mixed_values(self) -> None:
-        result = [{"values": [[1, "1.0"], [2, "NaN"], [3, "2.0"]]}]
-        assert matrix_result_is_uninteresting(result) is False
 
 
 class TestMatrixToPerSeriesCharts:

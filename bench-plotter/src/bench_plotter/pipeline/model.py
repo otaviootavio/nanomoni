@@ -16,26 +16,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 @dataclass(frozen=True)
 class QuerySpec:
-    """A single Prometheus query over one time window.
+    """A single Prometheus range query over one time window.
 
     Frozen and hashable so it can be a dict key: the fetch stage dedups by the
-    spec itself, so two jobs asking for the same ``(expr, window, step, kind)``
+    spec itself, so two jobs asking for the same ``(expr, window, step)``
     trigger exactly one round-trip.
-
-    ``kind`` is ``"range"`` (``query_range``) or ``"instant"`` (``instant_query``
-    evaluated at ``instant_time``, defaulting to ``end_unix``).
     """
 
     expr: str
     start_unix: float
     end_unix: float
     step: Optional[str] = None
-    kind: str = "range"
-    instant_time: Optional[float] = None
-
-    def eval_time(self) -> float:
-        """Evaluation time for an instant query (``instant_time`` or window end)."""
-        return self.instant_time if self.instant_time is not None else self.end_unix
 
 
 @dataclass
@@ -51,7 +42,6 @@ class PlotJob:
         ``overlay``       - windowed multi-series line (resource + TPS panels)
         ``mean_std``      - mean +/- std across same-mode repeat runs
         ``steady_state``  - resource box/ECDF/violin companions
-        ``distribution``  - overlaid frequency-distribution histogram
         ``latency_box``   - steady-state latency box plot (precomputed quantiles)
         ``latency_dist``  - steady-state latency ECDF + reconstructed violin
 

@@ -34,7 +34,6 @@ from bench_plotter.plotting.distribution_renderers import (
     create_precomputed_boxplot,
     create_bucket_ecdf,
 )
-from bench_plotter.plotting.histogram_renderers import create_overlaid_histogram_plot
 
 # Stable string names -> existing draw functions. The names are the contract
 # stored in ``DrawTask.fn_name``; the plan/transform stages emit these and the
@@ -48,7 +47,6 @@ DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
     "mean_std": create_mean_std_plot,
     "precomputed_box": create_precomputed_boxplot,
     "bucket_ecdf": create_bucket_ecdf,
-    "overlaid_histogram": create_overlaid_histogram_plot,
 }
 
 

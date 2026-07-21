@@ -10,29 +10,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 
-def matrix_result_is_uninteresting(matrix_result: list[dict[str, Any]]) -> bool:
-    """
-    True only when there is nothing to plot: no numeric samples at all (empty or all-NaN).
-
-    Constant series (including all-zeros) are kept on purpose: a resource decaying to
-    and staying at zero, or a legitimately flat gauge, is exactly what we want to see.
-    """
-    for item in matrix_result:
-        for pair in item.get("values") or []:
-            if len(pair) < 2:
-                continue
-            raw = pair[1]
-            if raw == "NaN" or raw is None:
-                continue
-            try:
-                float(raw)
-            except (TypeError, ValueError):
-                continue
-            # Found at least one numeric sample -> there is something to plot.
-            return False
-    return True
-
-
 def matrix_to_per_series_charts(
     matrix_result: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:

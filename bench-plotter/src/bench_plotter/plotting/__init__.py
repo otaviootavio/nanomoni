@@ -9,6 +9,5 @@ Import from the submodules directly:
 - :mod:`bench_plotter.plotting.histogram_math` — bucket reconstruction helpers
 - :mod:`bench_plotter.plotting.timeseries_renderers` — windowed / mean-std figures
 - :mod:`bench_plotter.plotting.distribution_renderers` — box / ECDF / violin figures
-- :mod:`bench_plotter.plotting.histogram_renderers` — overlaid histogram figures
 - :mod:`bench_plotter.plotting.common` — shared palette / save helpers
 """

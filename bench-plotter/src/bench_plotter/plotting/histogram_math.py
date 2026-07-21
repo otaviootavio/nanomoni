@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 
@@ -48,41 +48,3 @@ def histogram_to_samples(
         # Evenly spread inside the bucket, avoiding the exact edges.
         samples.extend(np.linspace(lower, float(upper), n + 2)[1:-1].tolist())
     return samples
-
-
-def cumulative_to_per_bucket(
-    bucket_labels: List[str],
-    cumulative_values: List[float],
-    drop_inf: bool = True,
-) -> Tuple[List[str], List[float]]:
-    """
-    Convert sorted cumulative Prometheus bucket counts to per-bucket counts.
-
-    Each per-bucket count is the difference from the previous cumulative value,
-    clamped at zero: cumulative buckets can appear to decrease when a counter
-    resets or samples arrive slightly out of order, and negative frequencies are
-    never meaningful.
-
-    Args:
-        bucket_labels: Sorted bucket labels (ascending, "+Inf" last if present)
-        cumulative_values: Cumulative counts aligned with ``bucket_labels``
-        drop_inf: If True, drop a trailing "+Inf" bucket (the running total)
-
-    Returns:
-        Tuple of (labels, per_bucket_values)
-    """
-    labels = list(bucket_labels)
-    per_bucket_values: List[float] = []
-    for i, v in enumerate(cumulative_values):
-        if i == 0:
-            per_bucket_values.append(max(0.0, float(v)))
-        else:
-            per_bucket_values.append(
-                max(0.0, float(v) - float(cumulative_values[i - 1]))
-            )
-
-    if drop_inf and labels and labels[-1] == "+Inf":
-        labels = labels[:-1]
-        per_bucket_values = per_bucket_values[:-1]
-
-    return labels, per_bucket_values

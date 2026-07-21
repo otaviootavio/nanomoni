@@ -7,11 +7,10 @@ helpers stay here for reuse and testing.
 
 from __future__ import annotations
 
-from .common import clean_plots_directory, auto_detect_intervals, positive_int
+from .common import clean_plots_directory, positive_int
 from .cli import main
 
 __all__ = [
-    "auto_detect_intervals",
     "clean_plots_directory",
     "positive_int",
     "main",

@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Iterable, List
 
-from bench_plotter.prometheus_fetch import query_range, instant_query
+from bench_plotter.prometheus_fetch import query_range
 
 from .model import FetchFailure, FetchOutcome, PlotJob, QuerySpec, ResultCache
 
@@ -37,8 +37,6 @@ def _unique_specs(jobs: Iterable[PlotJob]) -> List[QuerySpec]:
 
 async def _fetch_one(spec: QuerySpec, sem: asyncio.Semaphore) -> Dict[str, Any]:
     async with sem:
-        if spec.kind == "instant":
-            return await instant_query(query=spec.expr, time=spec.eval_time())
         return await query_range(
             query=spec.expr,
             start_unix=spec.start_unix,
@@ -61,7 +59,7 @@ async def _fetch_all_async(specs: List[QuerySpec]) -> FetchOutcome:
             failures.append(
                 {
                     "panel": spec.expr[:60],
-                    "legend": spec.kind,
+                    "legend": spec.step or "auto",
                     "query": spec.expr,
                     "interval": f"{spec.start_unix}-{spec.end_unix}",
                     "error": str(result),

@@ -24,7 +24,18 @@ class Settings(BaseModel):
     client_payword_max_k: Optional[int] = None
     client_paytree_unit_value: int = 1
     client_paytree_max_i: Optional[int] = None
-    client_inter_payment_delay_s: float = 0.0
+    # Target payments-per-second ceiling; 0 means no limit (max throughput).
+    # The per-payment delay the senders consume is derived from this in Python
+    # (see ``inter_payment_delay_s``) rather than being pre-computed in bash.
+    client_target_tps: float = 0.0
+
+    @property
+    def inter_payment_delay_s(self) -> float:
+        """Seconds to wait between consecutive payments to hit ``client_target_tps``.
+
+        Returns 0.0 (no pacing) when the target TPS is 0.
+        """
+        return 1.0 / self.client_target_tps if self.client_target_tps > 0 else 0.0
 
     @field_validator("client_private_key_pem")
     @classmethod
@@ -65,11 +76,11 @@ class Settings(BaseModel):
             raise ValueError("Issuer base URL must include a host")
         return v
 
-    @field_validator("client_inter_payment_delay_s")
+    @field_validator("client_target_tps")
     @classmethod
-    def validate_inter_payment_delay(cls, v: float) -> float:
+    def validate_target_tps(cls, v: float) -> float:
         if v < 0:
-            raise ValueError("client_inter_payment_delay_s must be non-negative")
+            raise ValueError("client_target_tps must be non-negative")
         return v
 
 
@@ -142,16 +153,16 @@ def get_settings() -> Settings:
     else:
         client_paytree_max_i = None
 
-    client_inter_payment_delay_str = os.environ.get("CLIENT_INTER_PAYMENT_DELAY_S")
-    if client_inter_payment_delay_str:
+    client_target_tps_str = os.environ.get("CLIENT_TARGET_TPS")
+    if client_target_tps_str:
         try:
-            client_inter_payment_delay_s = float(client_inter_payment_delay_str)
+            client_target_tps = float(client_target_tps_str)
         except ValueError as e:
             raise ValueError(
-                f"Invalid float for CLIENT_INTER_PAYMENT_DELAY_S: {client_inter_payment_delay_str!r}"
+                f"Invalid float for CLIENT_TARGET_TPS: {client_target_tps_str!r}"
             ) from e
     else:
-        client_inter_payment_delay_s = 0.0
+        client_target_tps = 0.0
 
     return Settings(
         client_private_key_pem=client_private_key_pem,
@@ -167,5 +178,5 @@ def get_settings() -> Settings:
         client_payword_max_k=client_payword_max_k,
         client_paytree_unit_value=client_paytree_unit_value,
         client_paytree_max_i=client_paytree_max_i,
-        client_inter_payment_delay_s=client_inter_payment_delay_s,
+        client_target_tps=client_target_tps,
     )

@@ -65,8 +65,9 @@ export CLIENT_PAYTREE_UNIT_VALUE=1
 # - set explicitly if you want a channel with capacity beyond this run
 export CLIENT_PAYTREE_MAX_I="$CLIENT_PAYMENT_COUNT"
 
-# delay between individual off‑chain payment requests (seconds); used by the
-# benchmark runner to pace traffic. leave at 0 for no wait.
-export CLIENT_INTER_PAYMENT_DELAY_S=0.025
+# target payments-per-second ceiling; used by the benchmark runner to pace
+# traffic. the client derives the per-payment delay as 1/TPS. leave at 0 for
+# no limit (max throughput).
+export CLIENT_TARGET_TPS=0
 
 export CLIENT_RAMP_DELAY_SEC=5
