@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from bench_plotter.dashboard_queries import get_dashboard_panels_for_modes
 from bench_plotter.draw_worker import DRAW_REGISTRY
-from bench_plotter.pipeline.model import DrawTask, QuerySpec
+from bench_plotter.pipeline.model import DrawTask, PlotJob, QuerySpec
 from bench_plotter.pipeline.plan import build_plan
 from bench_plotter.pipeline.fetch import _unique_specs
 
@@ -114,10 +114,14 @@ class TestFetchDedup:
         s2 = QuerySpec("up", 1.0, 2.0)  # same fields -> same key
         s3 = QuerySpec("up", 1.0, 3.0)  # different window
 
-        class _Job:
-            specs = [s1, s2, s3]
-
-        unique = _unique_specs([_Job()])
+        job = PlotJob(
+            kind="overlay",
+            title="t",
+            output_path="x.png",
+            section="s",
+            specs=[s1, s2, s3],
+        )
+        unique = _unique_specs([job])
         assert len(unique) == 2
         assert s1 in unique and s3 in unique
 
@@ -141,7 +145,10 @@ class TestDrawContract:
         task = DrawTask(
             fn_name="windowed_multi",
             output_path="/tmp/x.png",
-            kwargs={"series_list": [{"timestamps": [1.0], "values": [2.0]}], "title": "t"},
+            kwargs={
+                "series_list": [{"timestamps": [1.0], "values": [2.0]}],
+                "title": "t",
+            },
         )
         restored = pickle.loads(pickle.dumps(task))
         assert restored.fn_name == "windowed_multi"
@@ -150,4 +157,6 @@ class TestDrawContract:
     def test_query_spec_is_hashable_and_picklable(self) -> None:
         spec = QuerySpec("up", 1.0, 2.0, kind="instant", instant_time=2.0)
         assert pickle.loads(pickle.dumps(spec)) == spec
-        assert hash(spec) == hash(QuerySpec("up", 1.0, 2.0, kind="instant", instant_time=2.0))
+        assert hash(spec) == hash(
+            QuerySpec("up", 1.0, 2.0, kind="instant", instant_time=2.0)
+        )

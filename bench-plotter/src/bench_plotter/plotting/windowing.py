@@ -125,9 +125,7 @@ def steady_state_long_frame(
         if trim:
             samples = steady_state_samples(series.get("values", []))
         else:
-            samples = [
-                float(v) for v in series.get("values", []) if v is not None
-            ]
+            samples = [float(v) for v in series.get("values", []) if v is not None]
         if len(samples) < 3:
             continue
         label = (

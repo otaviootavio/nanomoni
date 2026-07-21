@@ -22,9 +22,7 @@ def runs_from_series(
         payload = cache.get(entry["spec"])
         if not payload:
             continue
-        charts = matrix_to_per_series_charts(
-            payload.get("data", {}).get("result", [])
-        )
+        charts = matrix_to_per_series_charts(payload.get("data", {}).get("result", []))
         for chart in charts:
             runs.append(
                 {

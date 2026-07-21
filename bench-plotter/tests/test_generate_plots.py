@@ -3,7 +3,8 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from typing import List
+from unittest.mock import MagicMock, patch
 
 
 from bench_plotter.generate_plots import clean_plots_directory, main
@@ -39,15 +40,19 @@ class TestMainFunction:
     so it is patched at its definition site in the pipeline package.
     """
 
-    def _run_main(self, argv, intervals_content):
+    def _run_main(self, argv: List[str], intervals_content: str) -> MagicMock:
         with tempfile.TemporaryDirectory() as tmp:
             intervals_path = Path(tmp) / "timing.json"
             intervals_path.write_text(intervals_content)
             output = str(Path(tmp) / "plots")
-            full_argv = ["generate_plots", str(intervals_path)] + argv + [
-                "--output",
-                output,
-            ]
+            full_argv = (
+                ["generate_plots", str(intervals_path)]
+                + argv
+                + [
+                    "--output",
+                    output,
+                ]
+            )
             with patch(
                 "bench_plotter.pipeline.generate_plots_from_benchmark"
             ) as mock_gen:

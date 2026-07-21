@@ -9,13 +9,19 @@ Prometheus or real rendering.
 import json
 import os
 import tempfile
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set
 from unittest.mock import patch
 
 import pytest
 
 from bench_plotter.generate_plots import main
 from bench_plotter.pipeline import generate_plots_from_benchmark
+from bench_plotter.pipeline.model import (
+    DrawTask,
+    FetchOutcome,
+    PlotJob,
+    ResultCache,
+)
 
 
 PAYWORD_ONLY = [
@@ -33,16 +39,22 @@ def _canned_range_payload() -> Dict[str, Any]:
     return {"data": {"result": [{"metric": {"__name__": "m"}, "values": values}]}}
 
 
-def _stub_fetch(jobs):
-    cache = {spec: _canned_range_payload() for job in jobs for spec in job.specs}
+def _stub_fetch(jobs: List[PlotJob]) -> FetchOutcome:
+    cache: ResultCache = {
+        spec: _canned_range_payload() for job in jobs for spec in job.specs
+    }
     return cache, []
 
 
-def _run_capturing_draw(intervals: List[Dict[str, Any]]):
+def _run_capturing_draw(intervals: List[Dict[str, Any]]) -> Set[str]:
     """Run the pipeline; return the set of output paths handed to the draw stage."""
     captured: List[str] = []
 
-    def _capture_draw(tasks, workers=None, parallel=True):
+    def _capture_draw(
+        tasks: List[DrawTask],
+        workers: Optional[int] = None,
+        parallel: bool = True,
+    ) -> tuple[List[str], List[dict]]:
         captured.extend(t.output_path for t in tasks)
         return [t.output_path for t in tasks], []
 

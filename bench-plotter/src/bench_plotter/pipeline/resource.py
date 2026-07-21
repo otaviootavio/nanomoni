@@ -76,9 +76,7 @@ def build_resource_jobs(
                             params={
                                 "series": series,
                                 "ecdf_path": str(section_dir / f"{stem}_ecdf.png"),
-                                "violin_path": str(
-                                    section_dir / f"{stem}_violin.png"
-                                ),
+                                "violin_path": str(section_dir / f"{stem}_violin.png"),
                                 "unit_label": y_label,
                             },
                         )

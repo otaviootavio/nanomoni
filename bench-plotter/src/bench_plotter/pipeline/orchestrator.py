@@ -69,9 +69,7 @@ def generate_plots_from_benchmark(
         print("No successful intervals to plot")
         return []
 
-    modes: set[str] = {
-        m for iv in intervals if (m := iv.get("mode"))
-    }
+    modes: set[str] = {m for iv in intervals if (m := iv.get("mode"))}
     panels = get_dashboard_panels_for_modes(modes)
     if not panels:
         print("No panels found for the modes present in the benchmark")

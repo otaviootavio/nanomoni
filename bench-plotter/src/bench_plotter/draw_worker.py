@@ -52,7 +52,9 @@ DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
 }
 
 
-def run_draw_task(fn_name: str, output_path: str, kwargs: Dict[str, Any]) -> Optional[str]:
+def run_draw_task(
+    fn_name: str, output_path: str, kwargs: Dict[str, Any]
+) -> Optional[str]:
     """Render one draw task; return the path if a file was written, else ``None``.
 
     Runs inside a draw-pool worker. Resolves ``fn_name`` in ``DRAW_REGISTRY``

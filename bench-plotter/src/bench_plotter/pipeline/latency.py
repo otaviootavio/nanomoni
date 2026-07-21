@@ -25,9 +25,7 @@ def _relevant_modes(panels: List[Dict[str, Any]]) -> Optional[set]:
     matching the old ``_relevant_latency_modes`` behaviour.
     """
     exprs = " ".join(
-        t.get("expr", "")
-        for p in panels
-        for t in (p.get("targets") or [])
+        t.get("expr", "") for p in panels for t in (p.get("targets") or [])
     )
     present = {
         m for m, metric in LATENCY_BUCKET_METRIC_BY_MODE.items() if metric in exprs
@@ -56,9 +54,7 @@ def build_latency_jobs(
     """Emit the latency box + distribution jobs, scoped to relevant modes."""
     relevant = _relevant_modes(panels)
     latency_intervals = [
-        iv
-        for iv in intervals
-        if relevant is None or iv.get("mode") in relevant
+        iv for iv in intervals if relevant is None or iv.get("mode") in relevant
     ]
 
     box_entries: List[Dict[str, Any]] = []
