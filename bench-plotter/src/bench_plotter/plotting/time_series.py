@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, List, Dict, Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from datetime import datetime, timezone
+
+from .common import PALETTE, save_figure
 
 
 def calculate_sampling_frequency(timestamps: List[float]) -> float:
@@ -103,10 +105,8 @@ def create_windowed_plot(
         return
     if window_seconds is None:
         window_seconds = calculate_optimal_window_size(timestamps)
-        formatted_window = f"{window_seconds:.2f}".rstrip("0").rstrip(".")
-        print(f"Auto-calculated window size: {formatted_window} seconds")
+        print(f"Auto-calculated window size: {window_seconds:.2f} seconds")
     else:
-        formatted_window = f"{float(window_seconds):.2f}".rstrip("0").rstrip(".")
         print(f"Using specified window size: {window_seconds} seconds")
     window_centers, window_averages = calculate_windowed_averages(
         timestamps, values, window_seconds
@@ -127,7 +127,7 @@ def create_windowed_plot(
         window_averages,
         "b-",
         linewidth=2,
-        label=f"{formatted_window}s Window Average",
+        label="Window Average",
     )
     ax.set_xlabel("Time (s)", fontsize=14)
     ax.set_ylabel(y_axis_label, fontsize=14)
@@ -141,12 +141,286 @@ def create_windowed_plot(
     top_limit = 1.0 if max_value <= 0 else max_value * 1.1
     ax.set_ylim(bottom=0, top=top_limit)
     ax.set_xlim(left=0)
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    save_figure(fig, output_path)
     print(f"Windowed plot saved to: {output_path}")
+
+
+def steady_state_samples(values: List[Any]) -> List[float]:
+    """Return only the stabilized (plateau) samples of a series.
+
+    The warm-up ramp and the cool-down drain are dropped by keeping the samples
+    within +/-20% of the series median. This works when the plateau dominates the
+    window (as for the vendor under sustained load): the median lands on the
+    plateau, and the ramp/drain samples fall outside the band. Returns ``[]`` when
+    there is too little data.
+    """
+    vals = [float(v) for v in values if v is not None]
+    if len(vals) < 4:
+        return []
+    ordered = sorted(vals)
+    median = ordered[len(ordered) // 2]
+    if median <= 0:
+        return []
+    return [v for v in vals if abs(v - median) <= 0.2 * median]
+
+
+def create_steady_state_boxplot(
+    series_list: List[Dict[str, Any]],
+    title: str = "Steady-state distribution",
+    output_path: str = "boxplot.png",
+    y_axis_label: str = "Value",
+) -> None:
+    """Box plot of the stabilized (plateau) samples, one box per mode.
+
+    Warm-up and cool-down are trimmed via ``steady_state_samples`` so each box
+    reflects only the post-stabilization region.
+    """
+    data: List[List[float]] = []
+    labels: List[str] = []
+    for idx, series in enumerate(series_list):
+        samples = steady_state_samples(series.get("values", []))
+        if len(samples) < 3:
+            continue
+        data.append(samples)
+        labels.append(
+            series.get("interval_mode") or series.get("label") or f"Series {idx + 1}"
+        )
+    if not data:
+        print(f"No steady-state samples for box plot: {title}")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    positions = list(range(1, len(data) + 1))
+    # Fliers are omitted: with the low variance typical of these metrics the IQR
+    # is tiny, so most points render as fliers even though they aren't anomalies.
+    # The companion ECDF/violin plots retain the full distribution and tails.
+    ax.boxplot(data, positions=positions, showmeans=True, showfliers=False)
+    ax.set_xticks(positions)
+    # Show the median value under each mode label so it never overlaps the box.
+    tick_labels = [
+        f"{label}\nmed {sorted(samples)[len(samples) // 2]:.3g}"
+        for label, samples in zip(labels, data)
+    ]
+    ax.set_xticklabels(tick_labels)
+    ax.set_ylabel(y_axis_label, fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"Box plot saved to: {output_path}")
+
+
+def create_precomputed_boxplot(
+    stats: List[Dict[str, Any]],
+    title: str = "Distribution",
+    output_path: str = "boxplot.png",
+    y_axis_label: str = "Value",
+) -> None:
+    """Render a box plot from pre-computed per-box statistics (matplotlib ``bxp``).
+
+    Each entry in ``stats`` must provide: ``label``, ``whislo``, ``q1``, ``med``,
+    ``q3``, ``whishi`` (e.g. p5/p25/p50/p75/p95). Used for distributions that come
+    from a Prometheus histogram, where individual samples are not available.
+    """
+    if not stats:
+        print(f"No stats for box plot: {title}")
+        return
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.bxp(stats, showfliers=False)
+    ax.set_xticks(list(range(1, len(stats) + 1)))
+    ax.set_xticklabels([f"{s.get('label', '')}\nmed {s['med']:.3g}" for s in stats])
+    ax.set_ylabel(y_axis_label, fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"Box plot saved to: {output_path}")
+
+
+def create_precomputed_ecdf(
+    stats: List[Dict[str, Any]],
+    title: str = "Distribution (ECDF)",
+    output_path: str = "ecdf.png",
+    value_label: str = "Value",
+) -> None:
+    """Step ECDF drawn from pre-computed quantiles, one curve per mode.
+
+    Companion to :func:`create_precomputed_boxplot` for Prometheus-histogram
+    distributions where individual samples are unavailable. Each entry in
+    ``stats`` must provide ``label`` plus ``whislo``/``q1``/``med``/``q3``/
+    ``whishi`` at the p5/p25/p50/p75/p95 quantiles; the curve steps through those
+    (value, cumulative-proportion) points so p50/p95 read straight off the axes.
+    """
+    if not stats:
+        print(f"No stats for ECDF: {title}")
+        return
+    probs = [0.05, 0.25, 0.50, 0.75, 0.95]
+    keys = ["whislo", "q1", "med", "q3", "whishi"]
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for idx, s in enumerate(stats):
+        xs = [s[k] for k in keys]
+        color = PALETTE[idx % len(PALETTE)]
+        ax.plot(
+            xs,
+            probs,
+            marker="o",
+            markersize=5,
+            linewidth=2,
+            color=color,
+            label=s.get("label", f"Series {idx + 1}"),
+        )
+    ax.set_xlabel(value_label, fontsize=14)
+    ax.set_ylabel("Cumulative proportion", fontsize=14)
+    ax.set_ylim(0, 1)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"ECDF plot saved to: {output_path}")
+
+
+def create_bucket_ecdf(
+    dists: List[Dict[str, Any]],
+    title: str = "Distribution (ECDF)",
+    output_path: str = "ecdf.png",
+    value_label: str = "Value",
+) -> None:
+    """Exact step ECDF drawn straight from Prometheus histogram buckets.
+
+    Each entry provides ``label``, ``edges`` (the ``le`` upper bounds, ascending)
+    and ``cum_fraction`` (cumulative count at each edge divided by the total
+    count). Because the fraction is the bucket count itself -- not a
+    reconstruction -- p50/p95/p99 read exactly off the curve. One step curve per
+    mode; ``steps-post`` matches Prometheus ``le`` (<=) bucket semantics.
+    """
+    valid = [d for d in dists if d.get("edges") and d.get("cum_fraction")]
+    if not valid:
+        print(f"No bucket data for ECDF: {title}")
+        return
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for idx, d in enumerate(valid):
+        color = PALETTE[idx % len(PALETTE)]
+        ax.plot(
+            d["edges"],
+            d["cum_fraction"],
+            drawstyle="steps-post",
+            linewidth=2,
+            color=color,
+            label=d.get("label", f"Series {idx + 1}"),
+        )
+    ax.set_xlabel(value_label, fontsize=14)
+    ax.set_ylabel("Cumulative proportion", fontsize=14)
+    ax.set_ylim(0, 1.02)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"ECDF plot saved to: {output_path}")
+
+
+def _steady_state_long_frame(
+    series_list: List[Dict[str, Any]],
+    trim: bool = True,
+) -> tuple[pd.DataFrame, List[str]]:
+    """Build a long-form (``mode``, ``value``) frame of samples per mode.
+
+    Shared by the ECDF and violin plots. Returns the frame plus the mode order
+    (first-seen). With ``trim`` (the default) warm-up/cool-down are dropped via
+    ``steady_state_samples``, exactly like the box plot. Pass ``trim=False`` when
+    the values are already a distribution (e.g. reconstructed from a histogram),
+    where the tails must be kept rather than clipped to +/-20% of the median.
+    """
+    rows: List[Dict[str, Any]] = []
+    order: List[str] = []
+    for idx, series in enumerate(series_list):
+        if trim:
+            samples = steady_state_samples(series.get("values", []))
+        else:
+            samples = [
+                float(v) for v in series.get("values", []) if v is not None
+            ]
+        if len(samples) < 3:
+            continue
+        label = (
+            series.get("interval_mode") or series.get("label") or f"Series {idx + 1}"
+        )
+        order.append(label)
+        rows.extend({"mode": label, "value": v} for v in samples)
+    return pd.DataFrame(rows), order
+
+
+def create_ecdf_plot(
+    series_list: List[Dict[str, Any]],
+    title: str = "Latency distribution (ECDF)",
+    output_path: str = "ecdf.png",
+    value_label: str = "Value",
+    trim: bool = True,
+) -> None:
+    """Empirical CDF of the samples, one curve per mode.
+
+    An ECDF lets a reader read p50/p95/p99 straight off the curve and exposes the
+    tail that a box plot hides. With ``trim`` (default) warm-up/cool-down are
+    dropped via ``steady_state_samples`` so each curve reflects only the plateau;
+    pass ``trim=False`` when the values are already a distribution.
+    """
+    df, order = _steady_state_long_frame(series_list, trim=trim)
+    if df.empty:
+        print(f"No steady-state samples for ECDF: {title}")
+        return
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.ecdfplot(data=df, x="value", hue="mode", hue_order=order, ax=ax)
+    ax.set_xlabel(value_label, fontsize=14)
+    ax.set_ylabel("Cumulative proportion", fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, alpha=0.3)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"ECDF plot saved to: {output_path}")
+
+
+def create_violin_plot(
+    series_list: List[Dict[str, Any]],
+    title: str = "Steady-state distribution",
+    output_path: str = "violin.png",
+    value_label: str = "Value",
+    trim: bool = True,
+) -> None:
+    """Violin plot of the samples, one violin per mode.
+
+    Shows the full sample density (including bimodality) that a box plot flattens
+    to five numbers. With ``trim`` (default) it drops warm-up/cool-down like
+    ``create_steady_state_boxplot``; pass ``trim=False`` when the values are
+    already a distribution (e.g. reconstructed from histogram buckets).
+    """
+    df, order = _steady_state_long_frame(series_list, trim=trim)
+    if df.empty:
+        print(f"No steady-state samples for violin plot: {title}")
+        return
+    fig, ax = plt.subplots(figsize=(8, 6))
+    # hue=mode + legend=False colors each violin from the categorical palette;
+    # this is the seaborn >=0.13 idiom (a bare ``palette`` is deprecated there).
+    # cut=0 keeps the density within the observed data range: these metrics
+    # (latency, CPU, network) are all >= 0, so the KDE must not bleed negative.
+    sns.violinplot(
+        data=df,
+        x="mode",
+        y="value",
+        order=order,
+        hue="mode",
+        hue_order=order,
+        legend=False,
+        cut=0,
+        ax=ax,
+    )
+    ax.set_xlabel("")
+    ax.set_ylabel(value_label, fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    save_figure(fig, output_path)
+    print(f"Violin plot saved to: {output_path}")
 
 
 def create_windowed_plot_multi(
@@ -177,13 +451,8 @@ def create_windowed_plot_multi(
                 ws = calculate_optimal_window_size(timestamps) if timestamps else None
             except Exception:
                 ws = None
-        formatted_window = None
-        if ws is not None:
-            formatted_window = f"{float(ws):.2f}".rstrip("0").rstrip(".")
         if not label:
             label = interval_mode or f"Series {idx + 1}"
-        if formatted_window:
-            label = f"{label} ({formatted_window}s window)"
         if not timestamps or not values:
             continue
 
@@ -195,8 +464,8 @@ def create_windowed_plot_multi(
         color = colors[idx % len(colors)]
         linestyle = linestyles[idx % len(linestyles)]
 
-        # Apply windowed averaging when a window size is available so the plotted
-        # line matches the "(Xs window)" label; fall back to raw samples otherwise.
+        # Apply windowed averaging when a window size is available; fall back to
+        # raw samples otherwise.
         plot_elapsed: List[float] = []
         plot_values: List[float] = []
         if ws is not None and float(ws) > 0:
@@ -232,11 +501,7 @@ def create_windowed_plot_multi(
     top_limit = 1.0 if max_value <= 0 else max_value * 1.1
     ax.set_ylim(bottom=0, top=top_limit)
     ax.set_xlim(left=0)
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    save_figure(fig, output_path)
     print(f"Windowed plot saved to: {output_path}")
 
 
@@ -345,7 +610,7 @@ def create_mean_std_plot(
     stats_df["std"] = stats_df["std"].fillna(0)
 
     # Create the plot
-    plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(12, 8))
 
     # Time as percentage
     time_percentages = stats_df["relative_time"] * 100
@@ -380,12 +645,6 @@ def create_mean_std_plot(
     plt.legend()
     plt.ylim(bottom=0)
 
-    # Create output directory if it doesn't exist
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save the plot
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    save_figure(fig, output_path)
 
     print(f"Plot saved to: {output_path}")

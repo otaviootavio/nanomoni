@@ -138,10 +138,11 @@ async def send_payments(
         inter_payment_delay: seconds to ``sleep`` between consecutive payments
     """
 
-    for pay_dto in payment_dtos:
-        begin = perf_counter()
+    start = perf_counter()
+    for n, pay_dto in enumerate(payment_dtos):
+        if inter_payment_delay > 0:
+            target = start + n * inter_payment_delay
+            now = perf_counter()
+            if target > now:
+                await sleep(target - now)
         await vendor.send_off_chain_payment(channel_id, pay_dto)
-        total = perf_counter() - begin
-
-        delay = max(0.0, inter_payment_delay - total)
-        await sleep(delay)

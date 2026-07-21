@@ -8,6 +8,10 @@ from .time_series import (
     create_windowed_plot,
     create_windowed_plot_multi,
     create_mean_std_plot,
+    create_ecdf_plot,
+    create_violin_plot,
+    create_precomputed_ecdf,
+    create_bucket_ecdf,
     normalize_time_series_data,
 )
 from .histograms import (
@@ -60,6 +64,10 @@ __all__ = [
     "create_windowed_plot_multi",
     "create_histogram_plot",
     "create_mean_std_plot",
+    "create_ecdf_plot",
+    "create_violin_plot",
+    "create_precomputed_ecdf",
+    "create_bucket_ecdf",
     "create_overlaid_histogram_plot",
     "normalize_time_series_data",
     "process_histogram_data",

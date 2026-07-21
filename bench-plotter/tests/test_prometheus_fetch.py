@@ -13,17 +13,17 @@ from bench_plotter.prometheus_fetch import (
 
 class TestRangeStepForWindow:
     def test_small_window(self) -> None:
-        # Step is floored at the 15s scrape_interval, never finer.
+        # Step is always the 15s scrape_interval, regardless of range size.
         assert range_step_for_window(300) == "15s"
 
     def test_medium_window(self) -> None:
         assert range_step_for_window(3600) == "15s"
 
     def test_large_window(self) -> None:
-        assert range_step_for_window(24 * 3600) == "5m"
+        assert range_step_for_window(24 * 3600) == "15s"
 
     def test_very_large_window(self) -> None:
-        assert range_step_for_window(48 * 3600) == "15m"
+        assert range_step_for_window(48 * 3600) == "15s"
 
 
 class TestQueryRange:

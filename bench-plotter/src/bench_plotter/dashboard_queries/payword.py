@@ -18,25 +18,6 @@ PAYWORD_PANELS: List[Dict[str, Any]] = [
             },
         ],
     },
-    {
-        "title": "Vendor Payment Duration Average (ms)",
-        "type": "timeseries",
-        "section": "tps_metrics",
-        "targets": [
-            {
-                "expr": 'histogram_quantile(0.99, sum(rate(payword_payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
-                "legendFormat": "Payword P99",
-            },
-            {
-                "expr": 'histogram_quantile(0.95, sum(rate(payword_payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
-                "legendFormat": "Payword P95",
-            },
-            {
-                "expr": 'histogram_quantile(0.50, sum(rate(payword_payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
-                "legendFormat": "Payword P50",
-            },
-        ],
-    },
     # Row: Vendor Payment Metrics (vendor-api)
     {
         "title": "Vendor Payment Metrics (vendor-api)",
@@ -59,17 +40,6 @@ PAYWORD_PANELS: List[Dict[str, Any]] = [
             {
                 "expr": 'histogram_quantile(0.50, sum(rate(payword_payment_request_duration_milliseconds_bucket{job="vendor-api", status="success"}[1m])) by (le))',
                 "legendFormat": "Payword P50",
-            },
-        ],
-    },
-    {
-        "title": "Frequency Distribution of Payment Latency (vendor-api)",
-        "type": "timeseries",
-        "section": "tps_metrics",
-        "targets": [
-            {
-                "expr": 'sum(payword_payment_request_duration_milliseconds_bucket{job="vendor-api",status="success"}) by (le)',
-                "legendFormat": "__auto",
             },
         ],
     },

@@ -12,6 +12,9 @@ from .common import load_json_data
 from .time_series import (
     create_windowed_plot,
     create_windowed_plot_multi,
+    create_steady_state_boxplot,
+    create_ecdf_plot,
+    create_violin_plot,
     create_mean_std_plot,
     calculate_optimal_window_size,
 )
@@ -20,7 +23,7 @@ from .histograms import (
     create_overlaid_histogram_plot,
     cumulative_to_per_bucket,
 )
-from .query_utils import query_with_fallbacks
+from .query_utils import sanitize_query
 
 
 def extract_unit_from_title(title: str) -> str:
@@ -174,7 +177,6 @@ def fetch_prometheus_data(
     """
     from bench_plotter.prometheus_fetch import (
         query_range,
-        instant_query,
         matrix_to_per_series_charts,
     )
 
@@ -191,12 +193,12 @@ def fetch_prometheus_data(
         end_time = finish_ms / 1000
 
         try:
-            result = query_with_fallbacks(
-                q=expr,
-                start_time=start_time,
-                end_time=end_time,
-                query_range_func=query_range,
-                instant_query_func=instant_query,
+            result = asyncio.run(
+                query_range(
+                    query=sanitize_query(expr),
+                    start_unix=start_time,
+                    end_unix=end_time,
+                )
             )
 
             payload_result = (
@@ -610,6 +612,205 @@ def report_failed_fetches(failed_fetches: List[Dict[str, Any]]) -> None:
             print(f"    Error: {error['error']}")
 
 
+def build_latency_boxplot(
+    test_intervals: List[Dict[str, Any]], output_dir: str
+) -> None:
+    """Box plot of vendor payment latency per mode from steady-state quantiles.
+
+    Latency is a Prometheus histogram, so there are no individual samples: instead
+    each box is built from histogram_quantile values (p5/p25/p50/p75/p95) taken
+    over the stabilized (plateau) region of each mode's window.
+    """
+    from bench_plotter.prometheus_fetch import query_range, matrix_to_per_series_charts
+    from .time_series import steady_state_samples, create_precomputed_boxplot
+
+    quantiles = [0.05, 0.25, 0.50, 0.75, 0.95]
+
+    stats: List[Dict[str, Any]] = []
+    for interval in test_intervals:
+        mode = interval.get("mode", "unknown")
+        metric = _LATENCY_BUCKET_METRIC.get(mode)
+        if metric is None:
+            continue
+        ts = interval.get("prometheus_timestamps", {}) or {}
+        start_ms, finish_ms = ts.get("start_ms"), ts.get("finish_ms")
+        if not start_ms or not finish_ms:
+            continue
+        start_time, end_time = start_ms / 1000, finish_ms / 1000
+
+        qmed: Dict[float, float] = {}
+        for q in quantiles:
+            expr = (
+                f"histogram_quantile({q}, sum(rate("
+                f'{metric}{{job="vendor-api", status="success"}}[1m])) by (le))'
+            )
+            try:
+                payload = asyncio.run(
+                    query_range(query=expr, start_unix=start_time, end_unix=end_time)
+                )
+            except Exception as e:
+                print(f"Latency box plot: query failed for {mode} q={q}: {e}")
+                break
+            charts = matrix_to_per_series_charts(
+                payload.get("data", {}).get("result", [])
+            )
+            samples: List[float] = []
+            for chart in charts:
+                samples = steady_state_samples(chart.get("data", []))
+                if samples:
+                    break
+            if not samples:
+                break
+            qmed[q] = sorted(samples)[len(samples) // 2]
+
+        if len(qmed) != len(quantiles):
+            continue
+        stats.append(
+            {
+                "label": mode,
+                "whislo": qmed[0.05],
+                "q1": qmed[0.25],
+                "med": qmed[0.50],
+                "q3": qmed[0.75],
+                "whishi": qmed[0.95],
+            }
+        )
+
+    if not stats:
+        print("No latency data for box plot")
+        return
+    output_path = str(
+        Path(output_dir) / "tps_metrics" / "vendor_payment_latency_boxplot.png"
+    )
+    create_precomputed_boxplot(
+        stats,
+        "Vendor Payment Latency (steady-state)",
+        output_path,
+        "Latency (ms)",
+    )
+
+
+# mode -> duration histogram bucket metric (mirrors dashboard_queries/*).
+_LATENCY_BUCKET_METRIC = {
+    "signature": "payment_request_duration_milliseconds_bucket",
+    "payword": "payword_payment_request_duration_milliseconds_bucket",
+    "paytree": "paytree_payment_request_duration_milliseconds_bucket",
+}
+
+
+def _le_sort_key(le: str) -> float:
+    """Sort ``le`` bucket labels numerically, keeping ``+Inf`` last."""
+    return float("inf") if le == "+Inf" else float(le)
+
+
+def build_latency_distribution(
+    test_intervals: List[Dict[str, Any]], output_dir: str
+) -> None:
+    """ECDF (exact) and violin (reconstructed) of vendor payment latency per mode.
+
+    Latency is a Prometheus histogram, so for each ``le`` bucket we take the
+    steady-state (plateau) rate. The cumulative count over the total *is* the
+    empirical CDF -- the ECDF is exact, p50/p95/p99 read straight off it. The
+    violin's density is reconstructed from the bucket counts (samples spread
+    across each bucket), so its shape approximates the distribution rather than
+    reproducing measured samples; the figure is titled accordingly.
+    """
+    from bench_plotter.prometheus_fetch import query_range
+    from .time_series import (
+        steady_state_samples,
+        create_bucket_ecdf,
+        create_violin_plot,
+    )
+    from .histograms import histogram_to_samples
+
+    dists: List[Dict[str, Any]] = []
+    for interval in test_intervals:
+        mode = interval.get("mode", "unknown")
+        metric = _LATENCY_BUCKET_METRIC.get(mode)
+        if metric is None:
+            continue
+        ts = interval.get("prometheus_timestamps", {}) or {}
+        start_ms, finish_ms = ts.get("start_ms"), ts.get("finish_ms")
+        if not start_ms or not finish_ms:
+            continue
+        start_time, end_time = start_ms / 1000, finish_ms / 1000
+
+        expr = (
+            f'sum(rate({metric}{{job="vendor-api", status="success"}}[1m])) by (le)'
+        )
+        try:
+            payload = asyncio.run(
+                query_range(query=expr, start_unix=start_time, end_unix=end_time)
+            )
+        except Exception as e:
+            print(f"Latency ECDF: query failed for {mode}: {e}")
+            continue
+
+        # Per-le steady-state cumulative rate (buckets are cumulative in ``le``).
+        le_value: Dict[str, float] = {}
+        for series in payload.get("data", {}).get("result", []):
+            le = (series.get("metric") or {}).get("le")
+            if le is None:
+                continue
+            raw = [
+                float(p[1])
+                for p in series.get("values", [])
+                if len(p) >= 2 and p[1] not in (None, "NaN")
+            ]
+            samples = steady_state_samples(raw)
+            if samples:
+                le_value[le] = sorted(samples)[len(samples) // 2]
+            elif raw:
+                le_value[le] = sum(raw) / len(raw)
+
+        if not le_value:
+            continue
+        total = le_value.get("+Inf")
+        if not total or total <= 0:
+            total = max(le_value.values())
+        if total <= 0:
+            continue
+
+        edges: List[float] = []
+        cum_fraction: List[float] = []
+        for le in sorted(le_value, key=_le_sort_key):
+            if le == "+Inf":
+                continue
+            edges.append(float(le))
+            cum_fraction.append(min(1.0, le_value[le] / total))
+        if edges:
+            dists.append({"label": mode, "edges": edges, "cum_fraction": cum_fraction})
+
+    if not dists:
+        print("No latency data for distribution plots")
+        return
+    tps_dir = Path(output_dir) / "tps_metrics"
+    create_bucket_ecdf(
+        dists,
+        "Vendor Payment Latency (steady-state, ECDF)",
+        str(tps_dir / "vendor_payment_latency_ecdf.png"),
+        "Latency (ms)",
+    )
+
+    # Violin from samples reconstructed off the bucket counts: an approximation
+    # of the shape, not measured samples (hence the title), so it must not be
+    # re-trimmed -- the tails are the point. trim=False keeps them.
+    violin_series = [
+        {
+            "interval_mode": d["label"],
+            "values": histogram_to_samples(d["edges"], d["cum_fraction"]),
+        }
+        for d in dists
+    ]
+    create_violin_plot(
+        violin_series,
+        "Vendor Payment Latency (steady-state, reconstructed from histogram)",
+        str(tps_dir / "vendor_payment_latency_violin.png"),
+        "Latency (ms)",
+        trim=False,
+    )
+
+
 def process_dashboard(
     test_intervals_path: str,
     output_dir: str = "plots",
@@ -818,6 +1019,42 @@ def process_dashboard(
                             output_path,
                             plot_title,
                         )
+                        # Extra steady-state box plot for the vendor/client metrics
+                        # that stabilize under sustained load (CPU, network): shows
+                        # the distribution of the plateau samples per mode, with the
+                        # warm-up ramp and cool-down drain trimmed.
+                        if current_section in (
+                            "vendor_resources",
+                            "client_resources",
+                        ) and (
+                            panel_title.startswith("Vendor CPU Usage")
+                            or panel_title.startswith("Vendor Network")
+                            or panel_title.startswith("Client CPU Usage")
+                            or panel_title.startswith("Client Network")
+                        ):
+                            unit_label = extract_unit_from_title(plot_title)
+                            stem = f"{safe_panel_title}{filename_suffix}"
+                            create_steady_state_boxplot(
+                                runs_data,
+                                f"{plot_title} (steady-state)",
+                                str(section_dir / f"{stem}_boxplot.png"),
+                                unit_label,
+                            )
+                            # Raw plateau samples are available here, so the ECDF
+                            # (tail/percentiles) and violin (full density) add
+                            # detail the five-number box plot flattens away.
+                            create_ecdf_plot(
+                                runs_data,
+                                f"{plot_title} (steady-state, ECDF)",
+                                str(section_dir / f"{stem}_ecdf.png"),
+                                unit_label,
+                            )
+                            create_violin_plot(
+                                runs_data,
+                                f"{plot_title} (steady-state)",
+                                str(section_dir / f"{stem}_violin.png"),
+                                unit_label,
+                            )
                     else:
                         output_path = str(
                             section_dir / f"{safe_panel_title}{filename_suffix}.png"
@@ -1224,6 +1461,12 @@ def process_dashboard(
                     title=plot_title,
                     output_path=output_path,
                 )
+
+    # Steady-state latency distribution: box plot (five quantiles), plus the exact
+    # ECDF and a reconstructed violin from the full histogram buckets, which
+    # expose the tail the box hides.
+    build_latency_boxplot(test_intervals, output_dir)
+    build_latency_distribution(test_intervals, output_dir)
 
     # Final warning summary
     report_failed_fetches(failed_fetches)

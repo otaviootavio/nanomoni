@@ -157,14 +157,15 @@ async def send_payments(
         payments: List of k counter values (monotonic sequence)
         inter_payment_delay: seconds to ``sleep`` between consecutive payments
     """
-    for k in payments:
-        begin = perf_counter()
+    start = perf_counter()
+    for n, k in enumerate(payments):
+        if inter_payment_delay > 0:
+            target = start + n * inter_payment_delay
+            now = perf_counter()
+            if target > now:
+                await sleep(target - now)
         token_b64 = payword.payment_proof_b64(k=k)
         await vendor.send_payword_payment(
             channel_id,
             ReceivePaywordPaymentDTO(k=k, token_b64=token_b64),
         )
-        total = perf_counter() - begin
-
-        delay = max(0.0, inter_payment_delay - total)
-        await sleep(delay)

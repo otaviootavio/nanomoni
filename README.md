@@ -58,7 +58,7 @@ Open the command palette with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, typ
 Prereqs:
 - Docker + Docker Compose v2 (`docker compose`)
 
-### 1) Start observability (optional)
+### 1) Start observability
 
 ```sh
 docker compose up -d alloy pyroscope cadvisor grafana prometheus

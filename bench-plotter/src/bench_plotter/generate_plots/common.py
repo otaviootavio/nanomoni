@@ -11,7 +11,9 @@ def clean_plots_directory(plots_dir: Path) -> None:
     """Clean the plots directory by removing all files."""
     if plots_dir.exists():
         print(f"Cleaning plots directory: {plots_dir}")
-        for file_path in plots_dir.glob("*.png"):
+        # Recurse into section subdirectories (tps_metrics/, vendor_resources/, ...)
+        # so stale plots from removed panels are not left behind.
+        for file_path in plots_dir.rglob("*.png"):
             file_path.unlink()
             print(f"Removed: {file_path}")
     else:

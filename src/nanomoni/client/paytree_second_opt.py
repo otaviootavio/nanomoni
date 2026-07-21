@@ -107,8 +107,13 @@ async def send_payments(
         ""
     )
     node_cache_b64: dict[str, str] = {}
-    for i in payments:
-        begin = perf_counter()
+    start = perf_counter()
+    for n, i in enumerate(payments):
+        if inter_payment_delay > 0:
+            target = start + n * inter_payment_delay
+            now = perf_counter()
+            if target > now:
+                await sleep(target - now)
         i_val, leaf_b64, siblings_b64, full_siblings_b64 = (
             paytree.payment_proof_with_full_siblings(i=i, node_cache_b64=node_cache_b64)
         )
@@ -131,7 +136,3 @@ async def send_payments(
             is None
         ):
             raise RuntimeError("Failed to update PayTree Second Opt node cache")
-        total = perf_counter() - begin
-
-        delay = max(0.0, inter_payment_delay - total)
-        await sleep(delay)

@@ -16,26 +16,6 @@ import httpx
 
 from bench_plotter.settings import prometheus_base_url
 
-# Shared color palette for per-series charts.
-PALETTE = [
-    "#60a5fa",
-    "#4ade80",
-    "#fbbf24",
-    "#fb7185",
-    "#c084fc",
-    "#2dd4bf",
-    "#f472b6",
-    "#a3e635",
-    "#fb923c",
-    "#818cf8",
-    "#34d399",
-    "#facc15",
-    "#e879f9",
-    "#38bdf8",
-    "#4d7c0f",
-    "#be123c",
-]
-
 
 def range_step_for_window(total_seconds: float) -> str:
     """Prometheus ``step`` parameter for query_range (resolution of returned points)."""
@@ -43,18 +23,12 @@ def range_step_for_window(total_seconds: float) -> str:
 
 
 def _step_for_range_seconds(total_seconds: float) -> str:
-    """Pick a query step no finer than the Prometheus scrape_interval (15s).
+    """Always query at the Prometheus scrape_interval (15s), regardless of range.
 
     A step finer than the scrape interval only yields duplicated (stair-stepped)
-    points and noisy rate() output, so 15s is the floor.
+    points and noisy rate() output, so 15s is both the floor and the ceiling.
     """
-    if total_seconds <= 3600:
-        return "15s"
-    if total_seconds <= 6 * 3600:
-        return "1m"
-    if total_seconds <= 24 * 3600:
-        return "5m"
-    return "15m"
+    return "15s"
 
 
 async def query_range(
@@ -118,7 +92,7 @@ def matrix_to_per_series_charts(
 ) -> list[dict[str, Any]]:
     """One chart per series so each metric keeps its own vertical scale (readable vs one cramped chart)."""
     charts: list[dict[str, Any]] = []
-    for idx, item in enumerate(matrix_result):
+    for item in matrix_result:
         metric = item.get("metric") or {}
         name = metric.get("__name__", "series")
         label_parts = [
@@ -153,7 +127,6 @@ def matrix_to_per_series_charts(
                 "labels": labels,
                 "data": data,
                 "timestamps": ts_list,
-                "color": PALETTE[idx % len(PALETTE)],
                 "point_count": len(data),
             }
         )
