@@ -54,8 +54,6 @@ def _load_successful_intervals(path: str) -> List[Dict[str, Any]]:
 def generate_plots_from_benchmark(
     test_intervals_path: str,
     output_dir: str = "plots",
-    num_points: int = 100,
-    window_seconds: int | None = None,
     workers: int | None = None,
     parallel: bool = True,
 ) -> List[str]:
@@ -76,7 +74,7 @@ def generate_plots_from_benchmark(
         return []
 
     # 1. plan
-    jobs = build_plan(intervals, charts, output_dir, num_points, window_seconds)
+    jobs = build_plan(intervals, charts, output_dir)
     print(f"Planned {len(jobs)} plot job(s) for modes: {sorted(modes)}")
 
     # 2. fetch (concurrent, de-duplicated)

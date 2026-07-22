@@ -64,13 +64,8 @@ class TestMainFunction:
         mock_gen = self._run_main([], "[]")
         mock_gen.assert_called_once()
         kwargs = mock_gen.call_args[1]
-        assert kwargs["num_points"] == 100
         assert kwargs["parallel"] is True
         assert kwargs["workers"] is None
-
-    def test_main_custom_interpol(self) -> None:
-        mock_gen = self._run_main(["--interpol", "200"], "[]")
-        assert mock_gen.call_args[1]["num_points"] == 200
 
     def test_main_no_parallel(self) -> None:
         mock_gen = self._run_main(["--no-parallel"], "[]")

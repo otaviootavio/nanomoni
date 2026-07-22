@@ -51,7 +51,6 @@ def build_tps_jobs(
                             {"spec": r["spec"], "label": r["mode"]} for r in resolved
                         ],
                         y_axis_label=y_label,
-                        window_seconds=None,
                     )
                 )
             continue
@@ -90,7 +89,6 @@ def build_tps_jobs(
                     section=section,
                     series=series,
                     y_axis_label=extract_unit_from_title(plot_title),
-                    window_seconds=None,
                 )
             )
     return jobs

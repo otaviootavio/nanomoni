@@ -133,11 +133,10 @@ class TestDrawContract:
     def test_all_registry_names_used_by_plan_resolve(self) -> None:
         # Every fn_name a job could emit must exist in the worker registry.
         expected_fns = {
-            "windowed_multi",
+            "line_multi",
             "steady_state_box",
             "ecdf",
             "violin",
-            "mean_std",
             "precomputed_box",
             "bucket_ecdf",
         }
@@ -145,7 +144,7 @@ class TestDrawContract:
 
     def test_draw_task_is_picklable(self) -> None:
         task = DrawTask(
-            fn_name="windowed_multi",
+            fn_name="line_multi",
             output_path="/tmp/x.png",
             kwargs={
                 "series_list": [{"timestamps": [1.0], "values": [2.0]}],
@@ -153,7 +152,7 @@ class TestDrawContract:
             },
         )
         restored = pickle.loads(pickle.dumps(task))
-        assert restored.fn_name == "windowed_multi"
+        assert restored.fn_name == "line_multi"
         assert restored.kwargs["title"] == "t"
 
     def test_query_spec_is_hashable_and_picklable(self) -> None:

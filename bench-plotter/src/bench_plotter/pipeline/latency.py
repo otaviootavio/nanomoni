@@ -21,12 +21,12 @@ _QUANTILES = [0.05, 0.25, 0.50, 0.75, 0.95]
 def _box_expr(metric: str, q: float) -> str:
     return (
         f"histogram_quantile({q}, sum(rate("
-        f'{metric}{{job="vendor-api", status="success"}}[1m])) by (le))'
+        f'{metric}{{job="vendor-api", status="success"}}[30s])) by (le))'
     )
 
 
 def _dist_expr(metric: str) -> str:
-    return f'sum(rate({metric}{{job="vendor-api", status="success"}}[1m])) by (le)'
+    return f'sum(rate({metric}{{job="vendor-api", status="success"}}[30s])) by (le)'
 
 
 def build_latency_jobs(

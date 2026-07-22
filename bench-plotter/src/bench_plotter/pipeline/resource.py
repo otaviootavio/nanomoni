@@ -1,4 +1,4 @@
-"""Plan stage for non-TPS resource charts (overlay / mean_std / steady-state)."""
+"""Plan stage for non-TPS resource charts (overlay / steady-state)."""
 
 from __future__ import annotations
 
@@ -23,15 +23,12 @@ def build_resource_jobs(
     charts: List[Dict[str, Any]],
     intervals: List[Dict[str, Any]],
     output_dir: str,
-    num_points: int,
-    window_seconds: int | None,
-    is_single_interval: bool,
 ) -> List[PlotJob]:
-    """Jobs for non-TPS resource charts (timeseries overlay, or mean_std).
+    """Jobs for non-TPS resource charts (timeseries overlay).
 
-    When a single-interval chart qualifies for steady-state companions, emits a
-    separate ``steady_state`` job alongside the overlay (paths first-class in the
-    plan, matching :mod:`.latency`'s multi-path pattern).
+    When a chart qualifies for steady-state companions, emits a separate
+    ``steady_state`` job alongside the overlay (paths first-class in the plan,
+    matching :mod:`.latency`'s multi-path pattern).
     """
     jobs: List[PlotJob] = []
     for chart in charts:
@@ -50,50 +47,32 @@ def build_resource_jobs(
             output_path = str(section_dir / f"{stem}.png")
             series = [{"spec": r["spec"], "label": r["mode"]} for r in resolved]
 
-            if is_single_interval:
-                jobs.append(
-                    overlay_job(
-                        title=plot_title,
-                        output_path=output_path,
-                        section=section,
-                        series=series,
-                        y_axis_label=y_label,
-                        window_seconds=window_seconds,
-                    )
+            jobs.append(
+                overlay_job(
+                    title=plot_title,
+                    output_path=output_path,
+                    section=section,
+                    series=series,
+                    y_axis_label=y_label,
                 )
-                steady = section in _STEADY_STATE_SECTIONS and title.startswith(
-                    _STEADY_STATE_PREFIXES
-                )
-                if steady:
-                    jobs.append(
-                        PlotJob(
-                            kind="steady_state",
-                            title=plot_title,
-                            output_path=str(section_dir / f"{stem}_boxplot.png"),
-                            section=section,
-                            specs=[r["spec"] for r in resolved],
-                            y_axis_label=y_label,
-                            params={
-                                "series": series,
-                                "ecdf_path": str(section_dir / f"{stem}_ecdf.png"),
-                                "violin_path": str(section_dir / f"{stem}_violin.png"),
-                                "unit_label": y_label,
-                            },
-                        )
-                    )
-            else:
-                # Repeated same-mode runs -> mean +/- std band.
+            )
+            steady = section in _STEADY_STATE_SECTIONS and title.startswith(
+                _STEADY_STATE_PREFIXES
+            )
+            if steady:
                 jobs.append(
                     PlotJob(
-                        kind="mean_std",
+                        kind="steady_state",
                         title=plot_title,
-                        output_path=output_path,
+                        output_path=str(section_dir / f"{stem}_boxplot.png"),
                         section=section,
                         specs=[r["spec"] for r in resolved],
                         y_axis_label=y_label,
                         params={
                             "series": series,
-                            "num_points": num_points,
+                            "ecdf_path": str(section_dir / f"{stem}_ecdf.png"),
+                            "violin_path": str(section_dir / f"{stem}_violin.png"),
+                            "unit_label": y_label,
                         },
                     )
                 )

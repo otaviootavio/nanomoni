@@ -6,8 +6,7 @@ matplotlib -- that is what makes the later stages parallelizable.
 
 Job kinds:
 
-    overlay       -> windowed multi-series line (resource + TPS charts)
-    mean_std      -> mean +/- std band across repeated same-mode runs
+    overlay       -> multi-series line (resource + TPS charts)
     steady_state  -> resource box/ECDF/violin companions  (see :mod:`.resource`)
     latency_box   -> steady-state latency box plot        (see :mod:`.latency`)
     latency_dist  -> steady-state latency ECDF + violin    (see :mod:`.latency`)
@@ -54,25 +53,16 @@ def build_plan(
     intervals: List[Dict[str, Any]],
     charts: List[Dict[str, Any]],
     output_dir: str,
-    num_points: int = 100,
-    window_seconds: int | None = None,
 ) -> List[PlotJob]:
     """Interpret intervals + charts into the full list of plot jobs.
 
-    ``intervals`` must already be filtered to successful runs. ``is_single_interval``
-    follows the old rule: a single interval, or several intervals of *different*
-    modes, are drawn individually/overlaid; several intervals of the *same* mode
-    become mean/std bands.
+    ``intervals`` must already be filtered to successful runs. A single interval,
+    or several intervals of different modes, are overlaid as one line per mode.
     """
-    modes = {iv.get("mode") for iv in intervals if iv.get("mode")}
-    is_single_interval = len(intervals) == 1 or len(modes) > 1
-
     non_tps, tps_by_title = _classify_charts(charts)
 
     jobs: List[PlotJob] = []
-    jobs += build_resource_jobs(
-        non_tps, intervals, output_dir, num_points, window_seconds, is_single_interval
-    )
+    jobs += build_resource_jobs(non_tps, intervals, output_dir)
     jobs += build_tps_jobs(tps_by_title, intervals, output_dir)
     jobs += build_latency_jobs(intervals, output_dir)
     return jobs

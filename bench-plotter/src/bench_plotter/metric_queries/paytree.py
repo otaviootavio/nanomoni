@@ -15,7 +15,7 @@ PAYTREE_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": 'rate(paytree_payment_requests_total{job="vendor-api", status="success"}[1m])',
+                "promql": 'rate(paytree_payment_requests_total{job="vendor-api", status="success"}[30s])',
                 "legend": "Paytree",
             },
         ],
@@ -25,15 +25,15 @@ PAYTREE_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Paytree P99",
             },
             {
-                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Paytree P95",
             },
             {
-                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Paytree P50",
             },
         ],

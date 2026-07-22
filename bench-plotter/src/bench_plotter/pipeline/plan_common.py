@@ -43,7 +43,6 @@ def overlay_job(
     section: str,
     series: List[Dict[str, Any]],
     y_axis_label: str,
-    window_seconds: int | None,
 ) -> PlotJob:
     """Build an ``overlay`` job from resolved (spec, label) series entries."""
     return PlotJob(
@@ -55,7 +54,6 @@ def overlay_job(
         y_axis_label=y_axis_label,
         params={
             "series": series,  # [{"spec": QuerySpec, "label": str}]
-            "window_seconds": window_seconds,
             "unit_label": y_axis_label,
         },
     )

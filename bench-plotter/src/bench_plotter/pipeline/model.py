@@ -39,14 +39,13 @@ class PlotJob:
     draw tasks.
 
     ``kind`` selects the transform+draw recipe:
-        ``overlay``       - windowed multi-series line (resource + TPS charts)
-        ``mean_std``      - mean +/- std across same-mode repeat runs
+        ``overlay``       - multi-series line (resource + TPS charts)
         ``steady_state``  - resource box/ECDF/violin companions
         ``latency_box``   - steady-state latency box plot (precomputed quantiles)
         ``latency_dist``  - steady-state latency ECDF + reconstructed violin
 
     ``specs`` are the queries this job needs; ``params`` carries per-kind extras
-    (section, safe filename stems, legend, mode labels, num_points, window, ...).
+    (section, safe filename stems, legend, mode labels, ...).
     """
 
     kind: str

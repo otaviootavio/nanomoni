@@ -23,10 +23,7 @@ matplotlib.use("Agg")
 import os
 from typing import Any, Callable, Dict, Optional
 
-from bench_plotter.plotting.timeseries_renderers import (
-    create_windowed_plot_multi,
-    create_mean_std_plot,
-)
+from bench_plotter.plotting.timeseries_renderers import create_multi_line_plot
 from bench_plotter.plotting.distribution_renderers import (
     create_steady_state_boxplot,
     create_ecdf_plot,
@@ -40,11 +37,10 @@ from bench_plotter.plotting.distribution_renderers import (
 # worker resolves them here. Reusing the functions verbatim keeps rendering
 # behaviour identical to the pre-refactor code.
 DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
-    "windowed_multi": create_windowed_plot_multi,
+    "line_multi": create_multi_line_plot,
     "steady_state_box": create_steady_state_boxplot,
     "ecdf": create_ecdf_plot,
     "violin": create_violin_plot,
-    "mean_std": create_mean_std_plot,
     "precomputed_box": create_precomputed_boxplot,
     "bucket_ecdf": create_bucket_ecdf,
 }

@@ -34,7 +34,6 @@ poetry run python -m bench_plotter.generate_plots benchmark_timing.json --output
 |------|---------|-------------|
 | `intervals` (positional, required) | — | Path to the benchmark timing JSON |
 | `--output` | `plots/` | Output directory for PNGs |
-| `--interpol` | `100` | Interpolation points for mean/std normalization |
 | `--workers` | all CPUs | Max parallel draw workers |
 | `--no-parallel` | off | Render figures serially (for debugging) |
 

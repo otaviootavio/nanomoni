@@ -27,12 +27,6 @@ def main() -> None:
         "--output", default="plots", help="Output directory (default: plots)"
     )
     parser.add_argument(
-        "--interpol",
-        type=positive_int,
-        default=100,
-        help="Interpolation points for mean/std normalization (default: 100)",
-    )
-    parser.add_argument(
         "--workers",
         type=positive_int,
         default=None,
@@ -62,7 +56,6 @@ def main() -> None:
     generate_plots_from_benchmark(
         test_intervals_path=str(intervals_path),
         output_dir=str(output_dir),
-        num_points=args.interpol,
         workers=args.workers,
         parallel=not args.no_parallel,
     )

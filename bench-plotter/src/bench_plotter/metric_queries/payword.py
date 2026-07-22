@@ -15,7 +15,7 @@ PAYWORD_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": 'rate(payword_payment_requests_total{job="vendor-api", status="success"}[1m])',
+                "promql": 'rate(payword_payment_requests_total{job="vendor-api", status="success"}[30s])',
                 "legend": "Payword",
             },
         ],
@@ -25,15 +25,15 @@ PAYWORD_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Payword P99",
             },
             {
-                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Payword P95",
             },
             {
-                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[1m])) by (le))',
+                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
                 "legend": "Payword P50",
             },
         ],

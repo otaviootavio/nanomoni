@@ -24,7 +24,7 @@ def positive_int(value: str) -> int:
 
     ``int(value)`` failures (non-integers) are reported by argparse
     automatically; here we additionally reject zero and negatives so bad
-    ``--interpol`` values fail fast with a clear CLI error instead of
+    ``--workers`` values fail fast with a clear CLI error instead of
     propagating into the plotting logic.
     """
     ivalue = int(value)
