@@ -2,10 +2,13 @@
 
 import os
 import pickle
+from pathlib import Path
 from typing import Any, Dict, List
 
+import pytest
+
 from bench_plotter.dashboard_queries import get_dashboard_panels_for_modes
-from bench_plotter.draw_worker import DRAW_REGISTRY
+from bench_plotter.draw_worker import DRAW_REGISTRY, run_draw_task
 from bench_plotter.pipeline.model import DrawTask, PlotJob, QuerySpec
 from bench_plotter.pipeline.plan import build_plan
 from bench_plotter.pipeline.fetch import _unique_specs
@@ -157,3 +160,32 @@ class TestDrawContract:
         spec = QuerySpec("up", 1.0, 2.0, step="15s")
         assert pickle.loads(pickle.dumps(spec)) == spec
         assert hash(spec) == hash(QuerySpec("up", 1.0, 2.0, step="15s"))
+
+
+class TestRunDrawTask:
+    def test_noop_render_removes_stale_and_returns_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A renderer that writes nothing must not report a leftover PNG as fresh.
+        stale = tmp_path / "x.png"
+        stale.write_bytes(b"old")
+
+        def _noop(output_path: str, **kwargs: Any) -> None:
+            return None
+
+        monkeypatch.setitem(DRAW_REGISTRY, "_noop", _noop)
+        assert run_draw_task("_noop", str(stale), {}) is None
+        assert not stale.exists()
+
+    def test_render_that_writes_returns_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        out = tmp_path / "y.png"
+
+        def _write(output_path: str, **kwargs: Any) -> None:
+            with open(output_path, "wb") as f:
+                f.write(b"png")
+
+        monkeypatch.setitem(DRAW_REGISTRY, "_write", _write)
+        assert run_draw_task("_write", str(out), {}) == str(out)
+        assert out.exists()

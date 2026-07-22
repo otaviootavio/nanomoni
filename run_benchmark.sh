@@ -11,8 +11,9 @@ export SLEEP_GAP=30
 # vendor/issuer returning to baseline is captured inside the plotted window.
 export DRAIN_TIME=180
 
-# Target TPS ceiling (edit here). Set to 0 for no limit (max throughput).
-# The client derives the per-payment delay (1/TPS) itself
+# Target throughput ceiling in payments/sec (edit here). 0 = no limit (max
+# throughput). This script only passes the number through as CLIENT_TARGET_TPS;
+# the client turns it into a per-payment delay (1/TPS) on its own.
 BENCHMARK_TARGET_TPS=250
 
 # Per-mode timing entries, joined into the timing JSON at the end.
@@ -32,17 +33,21 @@ run_mode() {
   local mode="$1"
   local start end status=0
 
-  # Exported here (after the caller sources envs/client.env.sh) so the target
-  # TPS always wins over anything the env file might set.
+  # The run_<mode> callers source envs/client.env.sh just before calling this,
+  # and that file may define CLIENT_TARGET_TPS. Exporting it here (after that
+  # source) makes this benchmark's target win over the env file's value.
   export CLIENT_TARGET_TPS=$BENCHMARK_TARGET_TPS
 
   log "=== [$mode] starting benchmark run ==="
 
-  start=$(date +%s%3N)
   log "[$mode] pre-run gap: sleeping ${SLEEP_GAP}s"
   sleep "$SLEEP_GAP"
 
   log "[$mode] launching client container"
+  # start_ms/finish_ms recorded here become the Prometheus query window the
+  # plotter reads. Take start after the pre-run sleep, when traffic actually
+  # begins, so the window covers the run itself and not SLEEP_GAP seconds of idle.
+  start=$(date +%s%3N)
   # Capture the client exit status without letting `set -e` abort the script,
   # so cleanup always runs and the timing entry is always recorded.
   docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?

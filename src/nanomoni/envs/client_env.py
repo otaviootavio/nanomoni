@@ -24,9 +24,9 @@ class Settings(BaseModel):
     client_payword_max_k: Optional[int] = None
     client_paytree_unit_value: int = 1
     client_paytree_max_i: Optional[int] = None
-    # Target payments-per-second ceiling; 0 means no limit (max throughput).
-    # The per-payment delay the senders consume is derived from this in Python
-    # (see ``inter_payment_delay_s``) rather than being pre-computed in bash.
+    # Target throughput ceiling in payments/sec; 0 means no limit (max
+    # throughput). Senders take a per-payment delay, derived from this by the
+    # ``inter_payment_delay_s`` property below.
     client_target_tps: float = 0.0
 
     @property

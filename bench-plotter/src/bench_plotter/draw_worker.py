@@ -65,5 +65,11 @@ def run_draw_task(
     fn = DRAW_REGISTRY.get(fn_name)
     if fn is None:
         raise KeyError(f"Unknown draw function '{fn_name}'")
+    # The written-or-None contract below is decided purely by whether the file
+    # exists after fn runs, and some renderers deliberately write nothing (a
+    # valid no-op). Delete any existing file first so an earlier render left at
+    # this path is never reported as freshly written.
+    if os.path.exists(output_path):
+        os.remove(output_path)
     fn(output_path=output_path, **kwargs)
     return output_path if os.path.exists(output_path) else None
