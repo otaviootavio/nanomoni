@@ -39,7 +39,7 @@ class PlotJob:
     draw tasks.
 
     ``kind`` selects the transform+draw recipe:
-        ``overlay``       - windowed multi-series line (resource + TPS panels)
+        ``overlay``       - windowed multi-series line (resource + TPS charts)
         ``mean_std``      - mean +/- std across same-mode repeat runs
         ``steady_state``  - resource box/ECDF/violin companions
         ``latency_box``   - steady-state latency box plot (precomputed quantiles)

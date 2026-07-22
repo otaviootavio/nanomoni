@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from bench_plotter.dashboard_queries import get_dashboard_panels_for_modes
+from bench_plotter.metric_queries import get_charts_for_modes
 from bench_plotter.draw_worker import DRAW_REGISTRY, run_draw_task
 from bench_plotter.pipeline.model import DrawTask, PlotJob, QuerySpec
 from bench_plotter.pipeline.plan import build_plan
@@ -31,8 +31,8 @@ def _intervals(modes: List[str]) -> List[Dict[str, Any]]:
 def _plan_paths(modes: List[str]) -> set:
     """All figure output paths the plan implies, expanding multi-output jobs."""
     intervals = _intervals(modes)
-    panels = get_dashboard_panels_for_modes(set(modes))
-    jobs = build_plan(intervals, panels, output_dir="plots")
+    charts = get_charts_for_modes(set(modes))
+    jobs = build_plan(intervals, charts, output_dir="plots")
     paths = set()
     for job in jobs:
         rel = os.path.relpath(job.output_path, "plots")
@@ -98,8 +98,8 @@ class TestBuildPlan:
     def test_only_present_modes_are_queried(self) -> None:
         # A payword-only plan must not reference other modes' metrics.
         intervals = _intervals(["payword"])
-        panels = get_dashboard_panels_for_modes({"payword"})
-        jobs = build_plan(intervals, panels, output_dir="plots")
+        charts = get_charts_for_modes({"payword"})
+        jobs = build_plan(intervals, charts, output_dir="plots")
         exprs = " ".join(spec.expr for job in jobs for spec in job.specs)
         assert "paytree_" not in exprs
         assert "payword_" in exprs

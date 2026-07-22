@@ -61,17 +61,17 @@ def overlay_job(
     )
 
 
-def legend_and_names(panel_title: str, legend_format: str) -> tuple[str, str, str]:
+def legend_and_names(chart_title: str, legend_format: str) -> tuple[str, str, str]:
     """Resolve (plot_title, safe_stem_with_suffix, y_axis_label) for one target.
 
     Reproduces the ``__auto`` handling: an ``__auto`` legend collapses to the
-    panel title with no filename suffix; otherwise the legend is appended.
+    chart title with no filename suffix; otherwise the legend is appended.
     """
-    safe_title = sanitize_filename(panel_title)
+    safe_title = sanitize_filename(chart_title)
     if legend_format == "__auto":
-        plot_title = panel_title
+        plot_title = chart_title
         stem = safe_title
     else:
-        plot_title = f"{panel_title} - {legend_format}"
+        plot_title = f"{chart_title} - {legend_format}"
         stem = f"{safe_title}_{sanitize_filename(legend_format)}"
     return plot_title, stem, extract_unit_from_title(plot_title)

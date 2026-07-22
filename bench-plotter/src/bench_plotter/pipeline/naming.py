@@ -1,9 +1,8 @@
-"""Naming and classification predicates used to categorize dashboard panels.
+"""Naming and classification predicates used to categorize charts.
 
 Pure string helpers with no dependency on the plan model, kept separate from
-``plan.py`` so panel *classification* (what a panel is, what it's called) is
-isolated from job *construction* (turning classified panels into query plans).
-Migrated verbatim in behaviour from the old dashboard_processor.
+``plan.py`` so chart *classification* (what a chart is, what it's called) is
+isolated from job *construction* (turning classified charts into query plans).
 """
 
 from __future__ import annotations
@@ -28,9 +27,9 @@ def sanitize_filename(name: str) -> str:
     return out.strip("_")
 
 
-def is_tps_panel(panel_title: str, legend_format: str, expr: str) -> bool:
-    """True for throughput/latency-quantile/payment panels (overlaid across modes)."""
-    title = (panel_title or "").lower()
+def is_tps_chart(chart_title: str, legend_format: str, expr: str) -> bool:
+    """True for throughput/latency-quantile/payment charts (overlaid across modes)."""
+    title = (chart_title or "").lower()
     if "distribution" in title:  # frequency distributions are histograms
         return False
     legend = (legend_format or "").lower()

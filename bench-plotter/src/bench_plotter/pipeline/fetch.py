@@ -58,8 +58,8 @@ async def _fetch_all_async(specs: List[QuerySpec]) -> FetchOutcome:
             cache[spec] = None
             failures.append(
                 {
-                    "panel": spec.expr[:60],
-                    "legend": spec.step or "auto",
+                    "query_head": spec.expr[:60],
+                    "step": spec.step or "auto",
                     "query": spec.expr,
                     "interval": f"{spec.start_unix}-{spec.end_unix}",
                     "error": str(result),

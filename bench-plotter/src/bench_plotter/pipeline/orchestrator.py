@@ -3,7 +3,7 @@
 ``generate_plots_from_benchmark`` reads ``benchmark_timing.json`` into an
 in-memory plan and drives the pipeline:
 
-    1. plan      - interpret intervals + panels into typed PlotJobs
+    1. plan      - interpret intervals + charts into typed PlotJobs
     2. fetch     - resolve every unique query concurrently (one event loop)
     3. transform - expand jobs into DrawTasks (in-process, cheap)
     4. draw      - render DrawTasks in a process pool (the parallel win)
@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 
 from typing import Any, Dict, List
 
-from bench_plotter.dashboard_queries import get_dashboard_panels_for_modes
+from bench_plotter.metric_queries import get_charts_for_modes
 from bench_plotter.io_utils import load_json_data
 
 from .plan import build_plan
@@ -70,13 +70,13 @@ def generate_plots_from_benchmark(
         return []
 
     modes: set[str] = {m for iv in intervals if (m := iv.get("mode"))}
-    panels = get_dashboard_panels_for_modes(modes)
-    if not panels:
-        print("No panels found for the modes present in the benchmark")
+    charts = get_charts_for_modes(modes)
+    if not charts:
+        print("No charts found for the modes present in the benchmark")
         return []
 
     # 1. plan
-    jobs = build_plan(intervals, panels, output_dir, num_points, window_seconds)
+    jobs = build_plan(intervals, charts, output_dir, num_points, window_seconds)
     print(f"Planned {len(jobs)} plot job(s) for modes: {sorted(modes)}")
 
     # 2. fetch (concurrent, de-duplicated)

@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from bench_plotter.dashboard_queries import LATENCY_BUCKET_METRIC_BY_MODE
+from bench_plotter.metric_queries import LATENCY_BUCKET_METRIC_BY_MODE
 
 from .model import PlotJob, QuerySpec
 

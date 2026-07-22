@@ -1,4 +1,4 @@
-"""Plan stage for non-TPS resource panels (overlay / mean_std / steady-state)."""
+"""Plan stage for non-TPS resource charts (overlay / mean_std / steady-state)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any, Dict, List
 from .model import PlotJob
 from .plan_common import legend_and_names, overlay_job, specs_for
 
-# Resource sections + panel-title prefixes that additionally get steady-state
-# box/ECDF/violin companions. Mirrors the old dashboard_processor gate.
+# Resource sections + chart-title prefixes that additionally get steady-state
+# box/ECDF/violin companions.
 _STEADY_STATE_SECTIONS = ("vendor_resources", "client_resources")
 _STEADY_STATE_PREFIXES = (
     "Vendor CPU Usage",
@@ -20,29 +20,29 @@ _STEADY_STATE_PREFIXES = (
 
 
 def build_resource_jobs(
-    panels: List[Dict[str, Any]],
+    charts: List[Dict[str, Any]],
     intervals: List[Dict[str, Any]],
     output_dir: str,
     num_points: int,
     window_seconds: int | None,
     is_single_interval: bool,
 ) -> List[PlotJob]:
-    """Jobs for non-TPS resource panels (timeseries overlay, or mean_std).
+    """Jobs for non-TPS resource charts (timeseries overlay, or mean_std).
 
-    When a single-interval panel qualifies for steady-state companions, emits a
+    When a single-interval chart qualifies for steady-state companions, emits a
     separate ``steady_state`` job alongside the overlay (paths first-class in the
     plan, matching :mod:`.latency`'s multi-path pattern).
     """
     jobs: List[PlotJob] = []
-    for panel in panels:
-        title = panel.get("title", "Panel")
-        section = panel.get("section", "general")
+    for chart in charts:
+        title = chart.get("title", "Chart")
+        section = chart.get("section", "general")
         section_dir = Path(output_dir) / section
-        for target in panel.get("targets", []):
-            expr = target.get("expr")
+        for target in chart.get("queries", []):
+            expr = target.get("promql")
             if not expr:
                 continue
-            legend_format = target.get("legendFormat", expr)
+            legend_format = target.get("legend", expr)
             plot_title, stem, y_label = legend_and_names(title, legend_format)
             resolved = specs_for(expr, intervals)
             if not resolved:

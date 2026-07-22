@@ -1,4 +1,4 @@
-"""Plan stage for TPS/quantile panels."""
+"""Plan stage for TPS/quantile charts."""
 
 from __future__ import annotations
 
@@ -20,24 +20,24 @@ def build_tps_jobs(
     intervals: List[Dict[str, Any]],
     output_dir: str,
 ) -> List[PlotJob]:
-    """Jobs for TPS/quantile panels.
+    """Jobs for TPS/quantile charts.
 
-    Single panel per title: each target is its own overlaid figure (series by
-    interval mode). Multiple panels per title (one per payment mode): combine
+    Single chart per title: each target is its own overlaid figure (series by
+    interval mode). Multiple charts per title (one per payment mode): combine
     modes, split by quantile (P99/P95/P50) when present, else one combined plot.
     """
     jobs: List[PlotJob] = []
-    for title, panels in tps_by_title.items():
-        section = panels[0].get("section", "general")
+    for title, charts in tps_by_title.items():
+        section = charts[0].get("section", "general")
         section_dir = Path(output_dir) / section
         safe_title = sanitize_filename(title)
 
-        if len(panels) == 1:
-            for target in panels[0].get("targets", []):
-                expr = target.get("expr")
+        if len(charts) == 1:
+            for target in charts[0].get("queries", []):
+                expr = target.get("promql")
                 if not expr:
                     continue
-                legend_format = target.get("legendFormat", expr)
+                legend_format = target.get("legend", expr)
                 plot_title, stem, y_label = legend_and_names(title, legend_format)
                 resolved = specs_for(expr, intervals)
                 if not resolved:
@@ -56,15 +56,15 @@ def build_tps_jobs(
                 )
             continue
 
-        # Multiple modes share this title: group targets by quantile across panels.
+        # Multiple modes share this title: group targets by quantile across charts.
         groups: Dict[str, List[str]] = {}
         has_quantiles = False
-        for panel in panels:
-            for target in panel.get("targets", []):
-                expr = target.get("expr")
+        for chart in charts:
+            for target in chart.get("queries", []):
+                expr = target.get("promql")
                 if not expr:
                     continue
-                q = quantile_label(target.get("legendFormat", ""))
+                q = quantile_label(target.get("legend", ""))
                 key = q if q else "__all__"
                 has_quantiles = has_quantiles or q is not None
                 groups.setdefault(key, []).append(expr)

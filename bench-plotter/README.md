@@ -4,41 +4,39 @@ Post-benchmark analysis tool for nanomoni. Queries Prometheus for metric data ov
 
 ## Role in nanomoni
 
-`bench-plotter` lives inside the nanomoni repo and reads `benchmark_timing.json` from the nanomoni root (auto-detected). Run it after `run_benchmark.sh` finishes to produce plots of the results.
+`bench-plotter` lives inside the nanomoni repo and plots the results of a benchmark run. `run_benchmark.sh` writes `benchmark_timing.json` (per-mode start/finish timestamps and status) to the nanomoni root; the plotter reads that file, queries Prometheus for each window, and renders the charts.
 
 ## Installation
 
-Requires Python >=3.9. Uses its own venv separate from nanomoni.
+Requires Python >=3.9. `bench_plotter` is a second package inside the nanomoni Poetry project (registered under `packages` in the root `pyproject.toml`), so it installs together with nanomoni — there is no separate venv:
 
 ```bash
-cd bench-plotter
 poetry install
 ```
 
 ## Usage
 
-`generate_plots` is a package; run it as a module (`bench_plotter.generate_plots`)
-so its `__main__` entry point is used.
-
-From the nanomoni root:
+After a run has produced `benchmark_timing.json` in the nanomoni root, the simplest path is the wrapper script (run from the root):
 
 ```bash
-PYTHONPATH=bench-plotter/src bench-plotter/.venv/bin/python -m bench_plotter.generate_plots
+scripts/plot.sh
 ```
 
-Or from inside `bench-plotter/`:
+To run the module directly with options — the timing file is a **required** argument:
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m bench_plotter.generate_plots
+poetry run python -m bench_plotter.generate_plots benchmark_timing.json --output plots
 ```
 
 **Options:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `intervals` | auto-detect | Path to timing JSON (finds `benchmark_timing.json` or `*interval*.json` in nanomoni root) |
+| `intervals` (positional, required) | — | Path to the benchmark timing JSON |
 | `--output` | `plots/` | Output directory for PNGs |
-| `--interpol` | `100` | Interpolation points for time-series normalization |
+| `--interpol` | `100` | Interpolation points for mean/std normalization |
+| `--workers` | all CPUs | Max parallel draw workers |
+| `--no-parallel` | off | Render figures serially (for debugging) |
 
 ## Configuration
 
@@ -46,15 +44,16 @@ The Prometheus URL is hardcoded to `http://127.0.0.1:9090` in `settings.py` — 
 benchmark always runs against a local Prometheus on the default port. To target a
 different instance, edit `prometheus_base_url()` in `src/bench_plotter/settings.py`.
 
-## Plotting modes
+## What gets plotted
 
-The tool chooses the plot type based on the intervals in the timing file:
+For each metric the plotter picks a representation from the intervals in the timing file:
 
-| Intervals | Mode | Output |
-|-----------|------|--------|
-| 1 interval | Windowed averaging (window = 2× sampling interval) | One PNG per metric |
-| N intervals, same mode | Mean ± std band across runs | One PNG per metric |
-| N intervals, mixed modes | Individual windowed plot per mode | `metric_signature.png`, `metric_paytree.png`, `metric_payword.png` |
+| Intervals | Representation |
+|-----------|----------------|
+| 1 interval, or several of *different* modes | Windowed line chart, one series per mode overlaid |
+| Several intervals of the *same* mode | Mean ± std band across the runs |
+
+On top of that: resource metrics (vendor/client CPU and network) get steady-state box / ECDF / violin companions; TPS and latency-quantile charts are overlaid across modes; and vendor latency gets a steady-state box plot plus an ECDF and a histogram-reconstructed violin.
 
 ## Output structure
 
@@ -63,37 +62,41 @@ plots/
 ├── client_resources/
 ├── issuer_resources/
 ├── vendor_resources/
-├── tps_metrics/
-└── logs/
+└── tps_metrics/
 ```
 
-Each subfolder mirrors a Grafana dashboard section. PNGs are 300 DPI.
+Each subfolder is a metric `section`. PNGs are 300 DPI.
 
 ## Project structure
 
 ```
-bench-plotter/
-├── src/bench_plotter/
-│   ├── generate_plots/            # CLI entry point + per-mode plot orchestration
-│   │   ├── __main__.py            # `python -m bench_plotter.generate_plots`
-│   │   ├── signature.py
-│   │   ├── payword.py
-│   │   └── paytree.py
-│   ├── plotting/                  # Matplotlib rendering
-│   │   ├── time_series.py
-│   │   ├── histograms.py
-│   │   ├── dashboard_processor.py
-│   │   └── query_utils.py
-│   ├── dashboard_queries/         # Prometheus query definitions per mode
-│   │   ├── signature.py
-│   │   ├── payword.py
-│   │   └── paytree.py
-│   ├── prometheus_fetch.py        # Prometheus HTTP API client
-│   └── settings.py                # Hardcoded Prometheus URL
-├── benchmark_timing.json          # Latest timing snapshot (committed)
-├── pyproject.toml
-└── tests/
+bench-plotter/src/bench_plotter/
+├── generate_plots/          # CLI wrapper
+│   ├── __main__.py          #   `python -m bench_plotter.generate_plots`
+│   ├── cli.py               #   argument parsing -> pipeline
+│   └── common.py            #   output-dir cleanup, arg validators
+├── pipeline/                # staged pipeline: plan -> fetch -> transform -> draw
+│   ├── orchestrator.py      #   entry point: generate_plots_from_benchmark()
+│   ├── plan.py              #   classify charts into typed PlotJobs
+│   ├── resource.py / tps.py / latency.py     #   per-kind job builders
+│   ├── fetch.py             #   concurrent, de-duplicated Prometheus queries
+│   ├── transform.py + *_transform.py         #   PlotJobs -> DrawTasks
+│   ├── draw.py              #   render DrawTasks in a process pool
+│   └── model.py             #   QuerySpec / PlotJob / DrawTask contracts
+├── metric_queries/          # PromQL query definitions per mode
+│   ├── common.py            #   shared resource charts
+│   └── signature.py / payword.py / paytree.py
+├── plotting/                # matplotlib figure builders + windowing math
+│   ├── windowing.py, histogram_math.py       #   pure data transforms
+│   └── timeseries_renderers.py, distribution_renderers.py
+├── draw_worker.py           # process-pool worker (pins the Agg backend)
+├── prometheus_fetch.py      # Prometheus HTTP client
+├── prometheus_matrix.py     # decode Prometheus matrix payloads
+├── io_utils.py              # JSON loading
+└── settings.py              # hardcoded Prometheus URL
 ```
+
+`benchmark_timing.json` is written to the nanomoni root by `run_benchmark.sh` and is gitignored.
 
 ## Dependencies
 

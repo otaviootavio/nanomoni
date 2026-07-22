@@ -1,174 +1,155 @@
 #!/usr/bin/env python3
-"""Common dashboard queries shared across all payment modes."""
+"""Common PromQL metric queries shared across all payment modes."""
 
 from typing import Any, Dict, List
 
-# Common resource panels (issuer, client, vendor) that apply to all payment modes
-COMMON_PANELS: List[Dict[str, Any]] = [
-    # Row: Issuer Resources
-    {"title": "Issuer Resources", "type": "row", "section": "issuer_resources"},
+# Common resource charts (issuer, client, vendor) that apply to all payment modes
+COMMON_CHARTS: List[Dict[str, Any]] = [
     {
         "title": "Issuer Network (KiB/s)",
-        "type": "timeseries",
         "section": "issuer_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Input",
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Input",
             },
             {
-                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Output",
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Output",
             },
         ],
     },
     {
         "title": "Issuer Memory Usage (MiB)",
-        "type": "timeseries",
         "section": "issuer_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }\n) / 1024 / 1024',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }\n) / 1024 / 1024',
+                "legend": "__auto",
             }
         ],
     },
     {
         "title": "Issuer CPU Usage (Cores)",
-        "type": "timeseries",
         "section": "issuer_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n)',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n)',
+                "legend": "__auto",
             }
         ],
     },
     {
         "title": "Issuer Redis Memory Usage (MiB)",
-        "type": "timeseries",
         "section": "issuer_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'container_memory_working_set_bytes{container_label_com_docker_compose_service="redis-issuer", image!=""} / 1024 / 1024',
-                "legendFormat": "Redis Issuer Memory",
+                "promql": 'container_memory_working_set_bytes{container_label_com_docker_compose_service="redis-issuer", image!=""} / 1024 / 1024',
+                "legend": "Redis Issuer Memory",
             }
         ],
     },
     {
         "title": "Issuer Redis CPU Usage (Cores)",
-        "type": "timeseries",
         "section": "issuer_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-issuer-1", image!=""}[1m])',
-                "legendFormat": "Redis Issuer CPU",
+                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-issuer-1", image!=""}[1m])',
+                "legend": "Redis Issuer CPU",
             }
         ],
     },
-    # Row: Client Resources
-    {"title": "Client Resources", "type": "row", "section": "client_resources"},
     {
         "title": "Client Network (KiB/s)",
-        "type": "timeseries",
         "section": "client_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Input",
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Input",
             },
             {
-                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Output",
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Output",
             },
         ],
     },
     {
         "title": "Client Memory Usage (MiB)",
-        "type": "timeseries",
         "section": "client_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }\n) / 1024 / 1024',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }\n) / 1024 / 1024',
+                "legend": "__auto",
             }
         ],
     },
     {
         "title": "Client CPU Usage (Cores)",
-        "type": "timeseries",
         "section": "client_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n)',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n)',
+                "legend": "__auto",
             }
         ],
     },
-    # Row: Vendor Resources
-    {"title": "Vendor Resources", "type": "row", "section": "vendor_resources"},
     {
         "title": "Vendor Network (KiB/s)",
-        "type": "timeseries",
         "section": "vendor_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Input",
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Input",
             },
             {
-                "expr": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
-                "legendFormat": "Output",
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
+                "legend": "Output",
             },
         ],
     },
     {
         "title": "Vendor Memory Usage (MiB)",
-        "type": "timeseries",
         "section": "vendor_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }\n) / 1024 / 1024',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  container_memory_usage_bytes{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }\n) / 1024 / 1024',
+                "legend": "__auto",
             }
         ],
     },
     {
         "title": "Vendor CPU Usage (Cores)",
-        "type": "timeseries",
         "section": "vendor_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n)',
-                "legendFormat": "__auto",
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n)',
+                "legend": "__auto",
             }
         ],
     },
     {
         "title": "Vendor Redis Memory Usage (MiB)",
-        "type": "timeseries",
         "section": "vendor_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'container_memory_working_set_bytes{container_label_com_docker_compose_service="redis-vendor", image!=""} / 1024 / 1024',
-                "legendFormat": "Redis Vendor Memory",
+                "promql": 'container_memory_working_set_bytes{container_label_com_docker_compose_service="redis-vendor", image!=""} / 1024 / 1024',
+                "legend": "Redis Vendor Memory",
             }
         ],
     },
     {
         "title": "Vendor Redis CPU Usage (Cores)",
-        "type": "timeseries",
         "section": "vendor_resources",
-        "targets": [
+        "queries": [
             {
-                "expr": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[1m])',
-                "legendFormat": "Redis Vendor CPU",
+                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[1m])',
+                "legend": "Redis Vendor CPU",
             }
         ],
     },
 ]
 
 
-def get_common_panels() -> List[Dict[str, Any]]:
-    """Return common panels shared across all payment modes."""
-    return COMMON_PANELS
+def get_common_charts() -> List[Dict[str, Any]]:
+    """Return common charts shared across all payment modes."""
+    return COMMON_CHARTS
