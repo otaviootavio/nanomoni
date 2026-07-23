@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from functools import lru_cache
 from typing import Optional
@@ -79,6 +80,8 @@ class Settings(BaseModel):
     @field_validator("client_target_tps")
     @classmethod
     def validate_target_tps(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("client_target_tps must be a finite number")
         if v < 0:
             raise ValueError("client_target_tps must be non-negative")
         return v
