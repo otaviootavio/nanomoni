@@ -110,6 +110,27 @@ class TestBuildPlan:
         assert "tps_metrics/vendor_payment_duration_quantiles_ms_p99.png" in paths
         assert "tps_metrics/vendor_payment_tps_success.png" in paths
 
+    def test_grouped_tps_series_count_matches_modes(self) -> None:
+        # Regression: each grouped-TPS quantile figure must resolve exactly one
+        # series per mode (one interval each), not mode_count x interval_count.
+        # A mode-specific expr must only be queried against its own mode's
+        # window, so 3 modes with 1 interval each -> 3 series, not 9.
+        modes = ["signature", "payword", "paytree"]
+        intervals = _intervals(modes)
+        charts = get_charts_for_modes(set(modes))
+        jobs = build_plan(intervals, charts, output_dir="plots")
+
+        for stem in (
+            "vendor_payment_duration_quantiles_ms_p99",
+            "vendor_payment_tps_success",
+        ):
+            target = f"plots/tps_metrics/{stem}.png"
+            job = next(j for j in jobs if j.output_path == target)
+            series = job.params["series"]
+            assert len(series) == len(modes)
+            assert len(job.specs) == len(modes)
+            assert sorted(s["label"] for s in series) == sorted(modes)
+
 
 class TestFetchDedup:
     def test_identical_specs_collapse(self) -> None:

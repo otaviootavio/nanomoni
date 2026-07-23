@@ -119,12 +119,12 @@ for tps in "${TPS_VALUES[@]}"; do
   sleep "$SLEEP_TIME"
 done
 
-log "All modes complete, writing benchmark_timming.json"
+log "All modes complete, writing benchmark_timing.json"
 # Join the entries with commas and write the timing JSON as an object with
 # server_run_timestamp + runs (the plotter sweep module consumes this shape).
 RUNS_JSON="[$(IFS=,; echo "${TIMING_ENTRIES[*]}")]"
 jq -n --arg ts "$RUN_TS" --argjson runs "$RUNS_JSON" \
-  '{server_run_timestamp: $ts, runs: $runs}' > benchmark_timming.json
+  '{server_run_timestamp: $ts, runs: $runs}' > benchmark_timing.json
 
 if [ "$OVERALL_STATUS" -eq 0 ]; then
   log "Benchmark run finished successfully"
@@ -133,8 +133,8 @@ else
 fi
 
 # Best-effort plot generation: do not override the benchmark exit status.
-log "Generating sweep plots from benchmark_timming.json"
-if poetry run python -m bench_plotter.sweep benchmark_timming.json; then
+log "Generating sweep plots from benchmark_timing.json"
+if poetry run python -m bench_plotter.sweep benchmark_timing.json; then
   log "Sweep plots generated successfully"
 else
   log "Sweep plot generation failed (benchmark exit status unchanged)"

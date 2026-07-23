@@ -72,7 +72,11 @@ def build_tps_jobs(
             series: List[Dict[str, Any]] = []
             for expr in exprs:
                 mode = extract_payment_mode_from_expr(expr)
-                for r in specs_for(expr, intervals):
+                # Only resolve this expr against intervals of its own mode; the
+                # expr is mode-specific, so querying other modes' windows would
+                # produce mislabeled, empty "no data" series.
+                mode_intervals = [iv for iv in intervals if iv.get("mode") == mode]
+                for r in specs_for(expr, mode_intervals):
                     series.append({"spec": r["spec"], "label": mode})
             if not series:
                 continue

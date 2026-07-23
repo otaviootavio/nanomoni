@@ -1,6 +1,6 @@
 """Orchestrate per-config timeseries plots + aggregate vs-TPS charts.
 
-Reads ``benchmark_timming.json`` (object with ``server_run_timestamp`` +
+Reads ``benchmark_timing.json`` (object with ``server_run_timestamp`` +
 ``runs``, or a legacy bare list), groups successful runs by ``(tps,
 total_requests)``, writes per-config plots under
 ``plots/<timestamp>/tps<tps>_req<total>/``, and writes the four aggregate

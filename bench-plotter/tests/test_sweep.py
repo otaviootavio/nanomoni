@@ -175,7 +175,7 @@ class TestGenerateSweepPlotsLoad:
     def test_object_shape_creates_timestamp_dir(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        timing = tmp_path / "benchmark_timming.json"
+        timing = tmp_path / "benchmark_timing.json"
         timing.write_text(
             json.dumps(
                 {

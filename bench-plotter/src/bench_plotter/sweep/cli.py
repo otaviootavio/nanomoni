@@ -13,12 +13,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Generate per-config timeseries plots and aggregate metric-vs-TPS "
-            "charts from a benchmark_timming.json (or legacy list) file"
+            "charts from a benchmark_timing.json (or legacy list) file"
         )
     )
     parser.add_argument(
         "intervals",
-        help="Path to the benchmark timing JSON (e.g. benchmark_timming.json)",
+        help="Path to the benchmark timing JSON (e.g. benchmark_timing.json)",
     )
     parser.add_argument(
         "--output",
