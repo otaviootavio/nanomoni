@@ -6,7 +6,19 @@ import argparse
 import sys
 from pathlib import Path
 
-from bench_plotter.generate_plots.common import positive_int
+
+def positive_int(value: str) -> int:
+    """argparse ``type`` validator: a strictly-positive integer.
+
+    ``int(value)`` failures (non-integers) are reported by argparse
+    automatically; here we additionally reject zero and negatives so bad
+    ``--workers`` values fail fast with a clear CLI error instead of
+    propagating into the plotting logic.
+    """
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {ivalue}")
+    return ivalue
 
 
 def main() -> None:

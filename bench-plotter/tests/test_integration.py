@@ -1,21 +1,17 @@
 """Integration tests for the full pipeline wiring.
 
-These drive ``generate_plots_from_benchmark`` with the fetch stage stubbed
+These drive ``generate_plots_from_intervals`` with the fetch stage stubbed
 (canned Prometheus payloads) and the draw stage captured, so they exercise
 plan -> transform -> draw wiring and the produced output-path set without a live
 Prometheus or real rendering.
 """
 
-import json
 import os
 import tempfile
 from typing import Any, Dict, List, Optional, Set
 from unittest.mock import patch
 
-import pytest
-
-from bench_plotter.generate_plots import main
-from bench_plotter.pipeline import generate_plots_from_benchmark
+from bench_plotter.pipeline import generate_plots_from_intervals
 from bench_plotter.pipeline.model import (
     DrawTask,
     FetchOutcome,
@@ -59,13 +55,10 @@ def _run_capturing_draw(intervals: List[Dict[str, Any]]) -> Set[str]:
         return [t.output_path for t in tasks], []
 
     with tempfile.TemporaryDirectory() as tmp:
-        intervals_path = os.path.join(tmp, "timing.json")
-        with open(intervals_path, "w") as f:
-            json.dump(intervals, f)
         out = os.path.join(tmp, "plots")
         with patch("bench_plotter.pipeline.orchestrator.fetch_all", _stub_fetch):
             with patch("bench_plotter.pipeline.orchestrator.draw_all", _capture_draw):
-                generate_plots_from_benchmark(intervals_path, output_dir=out)
+                generate_plots_from_intervals(intervals, output_dir=out)
         rel = {os.path.relpath(p, out) for p in captured}
     return rel
 
@@ -92,13 +85,5 @@ class TestPipelineWiring:
         # Only payword ran, so no signature/paytree series were queried.
         assert not any("signature" in p or "paytree" in p for p in paths)
 
-    def test_no_successful_intervals_produces_nothing(self) -> None:
-        failed = [{"mode": "payword", "status": "failed"}]
-        assert _run_capturing_draw(failed) == set()
-
-
-class TestCliMissingFile:
-    def test_main_exits_on_missing_file(self) -> None:
-        with patch("sys.argv", ["generate_plots", "/nonexistent/timing.json"]):
-            with pytest.raises(SystemExit):
-                main()
+    def test_no_intervals_produces_nothing(self) -> None:
+        assert _run_capturing_draw([]) == set()

@@ -25,7 +25,7 @@ scripts/plot.sh
 To run the module directly with options — the timing file is a **required** argument:
 
 ```bash
-poetry run python -m bench_plotter.generate_plots benchmark_timing.json --output plots
+poetry run python -m bench_plotter.sweep benchmark_timing.json --output plots
 ```
 
 **Options:**
@@ -33,7 +33,7 @@ poetry run python -m bench_plotter.generate_plots benchmark_timing.json --output
 | Flag | Default | Description |
 |------|---------|-------------|
 | `intervals` (positional, required) | — | Path to the benchmark timing JSON |
-| `--output` | `plots/` | Output directory for PNGs |
+| `--output` | `plots/` | Root output directory (a timestamped subdir is created inside) |
 | `--workers` | all CPUs | Max parallel draw workers |
 | `--no-parallel` | off | Render figures serially (for debugging) |
 
@@ -70,12 +70,12 @@ Each subfolder is a metric `section`. PNGs are 300 DPI.
 
 ```
 bench-plotter/src/bench_plotter/
-├── generate_plots/          # CLI wrapper
-│   ├── __main__.py          #   `python -m bench_plotter.generate_plots`
-│   ├── cli.py               #   argument parsing -> pipeline
-│   └── common.py            #   output-dir cleanup, arg validators
+├── sweep/                   # CLI: `python -m bench_plotter.sweep`
+│   ├── cli.py               #   argument parsing -> sweep runner
+│   ├── runner.py            #   per-config + aggregate plot orchestration
+│   └── aggregate.py         #   steady-state metric-vs-TPS charts
 ├── pipeline/                # staged pipeline: plan -> fetch -> transform -> draw
-│   ├── orchestrator.py      #   entry point: generate_plots_from_benchmark()
+│   ├── orchestrator.py      #   pipeline core: generate_plots_from_intervals()
 │   ├── plan.py              #   classify charts into typed PlotJobs
 │   ├── resource.py / tps.py / latency.py     #   per-kind job builders
 │   ├── fetch.py             #   concurrent, de-duplicated Prometheus queries

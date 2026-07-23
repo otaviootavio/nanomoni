@@ -19,11 +19,6 @@ import httpx
 from bench_plotter.settings import prometheus_base_url
 
 
-def range_step_for_window(total_seconds: float) -> str:
-    """Prometheus ``step`` parameter for query_range (resolution of returned points)."""
-    return _step_for_range_seconds(total_seconds)
-
-
 _SCRAPE_INTERVAL_SECONDS = 15
 # Prometheus's query_range API rejects requests whose point count would exceed
 # roughly this many points per series.
