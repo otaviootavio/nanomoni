@@ -269,12 +269,26 @@ class AsyncHttpClient:
     - Normalizes base URLs and paths.
     - Applies a default timeout.
     - Raises for non-successful responses.
+
+    If ``session`` is provided, this client borrows it and will not close it in
+    ``aclose`` / ``__aexit__`` (caller owns the connection pool / keep-alive).
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        *,
+        session: aiohttp.ClientSession | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = aiohttp.ClientTimeout(total=timeout)
-        self._client = aiohttp.ClientSession(timeout=self._timeout)
+        if session is not None:
+            self._client = session
+            self._owns_session = False
+        else:
+            self._client = aiohttp.ClientSession(timeout=self._timeout)
+            self._owns_session = True
 
     def _url(self, path: str) -> str:
         # Mirror HttpClient._url behavior for parity and safety.
@@ -392,7 +406,8 @@ class AsyncHttpClient:
         return response
 
     async def aclose(self) -> None:
-        await self._client.close()
+        if self._owns_session:
+            await self._client.close()
 
     async def __aenter__(self) -> "AsyncHttpClient":
         return self

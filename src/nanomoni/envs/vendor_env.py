@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
+import aiohttp
 from pydantic import BaseModel, field_validator
 from cryptography.hazmat.primitives import serialization
 
@@ -45,8 +46,16 @@ class Settings(BaseModel):
         return v
 
 
-async def register_vendor_with_issuer(settings: Settings) -> None:
-    """Register the vendor with the issuer using its public key."""
+async def register_vendor_with_issuer(
+    settings: Settings,
+    *,
+    session: aiohttp.ClientSession | None = None,
+) -> None:
+    """Register the vendor with the issuer using its public key.
+
+    Prefer passing the process-wide ``session`` so registration reuses the same
+    keep-alive pool as request-path issuer calls.
+    """
     if not settings.issuer_base_url or not settings.vendor_private_key_pem:
         print(
             "Skipping vendor registration with issuer: "
@@ -60,7 +69,9 @@ async def register_vendor_with_issuer(settings: Settings) -> None:
         reg_dto = RegistrationRequestDTO(
             client_public_key_der_b64=settings.vendor_public_key_der_b64
         )
-        async with AsyncIssuerClient(settings.issuer_base_url) as issuer_client:
+        async with AsyncIssuerClient(
+            settings.issuer_base_url, session=session
+        ) as issuer_client:
             await issuer_client.register(reg_dto)
             print("Vendor registered with issuer successfully.")
     except HttpResponseError as e:
