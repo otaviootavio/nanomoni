@@ -58,7 +58,7 @@ Open the command palette with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, typ
 Prereqs:
 - Docker + Docker Compose v2 (`docker compose`)
 
-### 1) Start observability (optional)
+### 1) Start observability
 
 ```sh
 docker compose up -d alloy pyroscope cadvisor grafana prometheus
@@ -91,9 +91,9 @@ Issuer and vendor will start their Redis dependencies via `depends_on`.
 ```sh
 docker compose build
 
-source ./envs/issuer.env.sh && docker compose up issuer
-source ./envs/vendor.env.sh && docker compose up vendor
-source ./envs/client.env.sh && docker compose up client
+source ./envs/issuer.env.sh && docker compose up issuer -d
+source ./envs/vendor.env.sh && docker compose up vendor -d
+source ./envs/client.env.sh && docker compose up client -d
 ```
 
 ## Publishing Docker images

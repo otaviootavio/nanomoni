@@ -14,15 +14,10 @@ from ....application.vendor.paytree_dtos import (
 )
 from ....application.vendor.use_cases.paytree_payment import PaytreePaymentService
 from ..dependencies import get_paytree_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
 
 router = APIRouter(prefix="/channels/paytree", tags=["channels", "paytree"])
 
-
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]  # 0.5ms..10ms (0.5ms resolution)
-    + [float(x) for x in range(15, 55, 5)]  # 15, 20, 25, ..., 50ms (5ms resolution)
-    + [float("inf")]
-)
 
 paytree_payment_requests_total = Counter(
     "paytree_payment_requests_total",

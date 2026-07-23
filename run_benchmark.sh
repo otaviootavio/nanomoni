@@ -2,50 +2,143 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# export BENCHMARK_COUNT_VAR=1048576
-export BENCHMARK_COUNT_VAR=8000
-export SEEP_TIME=5
+# Target TPS sweep. For each TPS the client sends (TPS * RUN_DURATION_SEC)
+# payments paced at 1/TPS, yielding ~RUN_DURATION_SEC seconds of traffic.
+TPS_VALUES=(16 32 64 128 256)
+RUN_DURATION_SEC=600
 
-# optional inter‑payment delay (seconds) used by benchmark client
-export CLIENT_INTER_PAYMENT_DELAY_S=${CLIENT_INTER_PAYMENT_DELAY_S:-0}
-# alternative: specify target TPS and the script will compute delay for you
-if [ -n "${BENCHMARK_TARGET_TPS:-}" ]; then
-  CLIENT_INTER_PAYMENT_DELAY_S=$(awk "BEGIN{printf \"%.6f\", 1/${BENCHMARK_TARGET_TPS}}")
-  export CLIENT_INTER_PAYMENT_DELAY_S
-fi
+export SLEEP_TIME=30
+export SLEEP_GAP=30
+# In-window drain: time (s) after the client stops, before the window closes, so the
+# vendor/issuer returning to baseline is captured inside the plotted window.
+export DRAIN_TIME=180
 
+# Timestamp of this server-side benchmark execution (root folder for plots).
+RUN_TS="$(date '+%Y%m%d_%H%M%S')"
+
+# Current TPS/count for the active sweep iteration (set inside the loop).
+BENCHMARK_TARGET_TPS=0
+BENCHMARK_COUNT_VAR=0
+
+# Per-mode timing entries, joined into the timing JSON at the end.
+TIMING_ENTRIES=()
+
+# Aggregate exit status: becomes non-zero if any benchmark mode fails, while
+# still allowing subsequent modes to run.
+OVERALL_STATUS=0
+
+# run_mode <mode>: run the already-configured client once and record its window.
+# The caller must have exported CLIENT_PAYMENT_MODE and any mode-specific vars.
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+run_mode() {
+  local mode="$1"
+  local start end status=0
+
+  # The run_<mode> callers source envs/client.env.sh just before calling this,
+  # and that file may define CLIENT_TARGET_TPS. Exporting it here (after that
+  # source) makes this benchmark's target win over the env file's value.
+  export CLIENT_TARGET_TPS=$BENCHMARK_TARGET_TPS
+
+  log "=== [$mode] starting benchmark run (tps=$BENCHMARK_TARGET_TPS, count=$BENCHMARK_COUNT_VAR) ==="
+
+  log "[$mode] pre-run gap: sleeping ${SLEEP_GAP}s"
+  sleep "$SLEEP_GAP"
+
+  log "[$mode] launching client container"
+  # start_ms/finish_ms recorded here become the Prometheus query window the
+  # plotter reads. Take start after the pre-run sleep, when traffic actually
+  # begins, so the window covers the run itself and not SLEEP_GAP seconds of idle.
+  start=$(date +%s%3N)
+  # Capture the client exit status without letting `set -e` abort the script,
+  # so cleanup always runs and the timing entry is always recorded.
+  docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
+  log "[$mode] client container exited with status $status"
+
+  docker compose stop client >/dev/null 2>&1 || true
+  docker compose rm -fsv client >/dev/null 2>&1 || true
+
+  log "[$mode] drain gap: sleeping ${DRAIN_TIME}s"
+  sleep "$DRAIN_TIME"
+  end=$(date +%s%3N)
+
+  local result="success"
+  if [ "$status" -ne 0 ]; then
+    result="failed"
+    OVERALL_STATUS=1
+  fi
+  log "=== [$mode] finished: $result (window ${start}ms -> ${end}ms) ==="
+  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
+}
+
+run_signature() {
+  source envs/client.env.sh
+  export CLIENT_PAYMENT_MODE="signature"
+  export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
+  run_mode "signature"
+}
+
+run_paytree() {
+  source envs/client.env.sh
+  export CLIENT_PAYMENT_MODE="paytree"
+  export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
+  export CLIENT_PAYTREE_MAX_I=$BENCHMARK_COUNT_VAR
+  # Ensure channel_amount >= (max_i * unit_value) with headroom for remainder.
+  export CLIENT_CHANNEL_AMOUNT=10000000
+  run_mode "paytree"
+}
+
+run_payword() {
+  source envs/client.env.sh
+  export CLIENT_PAYMENT_MODE="payword"
+  export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
+  export CLIENT_PAYWORD_MAX_K=$BENCHMARK_COUNT_VAR
+  # Ensure channel_amount >= (max_k * unit_value) with headroom for remainder.
+  export CLIENT_CHANNEL_AMOUNT=10000000
+  run_mode "payword"
+}
+
+log "Building client image (tps_values=${TPS_VALUES[*]}, duration=${RUN_DURATION_SEC}s)"
+# Build the client image so the run uses current code (incl. the TPS delay plumbing).
 docker compose build client
 
-source envs/client.env.sh
-export CLIENT_PAYMENT_MODE="signature"
-export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
+log "Server run timestamp: $RUN_TS"
 
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-docker compose stop client >/dev/null 2>&1 || true
-docker compose rm -fsv client >/dev/null 2>&1 || true
+for tps in "${TPS_VALUES[@]}"; do
+  BENCHMARK_TARGET_TPS=$tps
+  BENCHMARK_COUNT_VAR=$((tps * RUN_DURATION_SEC))
+  log "=== Sweep iteration: tps=$BENCHMARK_TARGET_TPS count=$BENCHMARK_COUNT_VAR ==="
 
-sleep $SEEP_TIME
-source envs/client.env.sh
-export CLIENT_PAYMENT_MODE="paytree"
-export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
-export CLIENT_PAYTREE_MAX_I=$BENCHMARK_COUNT_VAR
-# Ensure channel_amount >= (max_i * unit_value) with some headroom for remainder
-# With unit_value=1 and max_i=500000, we need at least 500000, but use 10000000 for safety
-export CLIENT_CHANNEL_AMOUNT=10000000
+  run_signature
+  sleep "$SLEEP_TIME"
+  run_paytree
+  sleep "$SLEEP_TIME"
+  run_payword
+  sleep "$SLEEP_TIME"
+done
 
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-docker compose stop client >/dev/null 2>&1 || true
-docker compose rm -fsv client >/dev/null 2>&1 || true
+log "All modes complete, writing benchmark_timing.json"
+# Join the entries with commas and write the timing JSON as an object with
+# server_run_timestamp + runs (the plotter sweep module consumes this shape).
+RUNS_JSON="[$(IFS=,; echo "${TIMING_ENTRIES[*]}")]"
+jq -n --arg ts "$RUN_TS" --argjson runs "$RUNS_JSON" \
+  '{server_run_timestamp: $ts, runs: $runs}' > benchmark_timing.json
 
-sleep $SEEP_TIME
-source envs/client.env.sh
-export CLIENT_PAYMENT_MODE="payword"
-export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
-export CLIENT_PAYWORD_MAX_K=$BENCHMARK_COUNT_VAR
-# Ensure channel_amount >= (max_k * unit_value) with some headroom for remainder
-# With unit_value=1 and max_k=500000, we need at least 500000, but use 10000000 for safety
-export CLIENT_CHANNEL_AMOUNT=10000000
+if [ "$OVERALL_STATUS" -eq 0 ]; then
+  log "Benchmark run finished successfully"
+else
+  log "Benchmark run finished with failures"
+fi
 
-docker compose up --no-deps --abort-on-container-exit --exit-code-from client client
-docker compose stop client >/dev/null 2>&1 || true
-docker compose rm -fsv client >/dev/null 2>&1 || true
+# Best-effort plot generation: do not override the benchmark exit status.
+log "Generating sweep plots from benchmark_timing.json"
+if poetry run python -m bench_plotter.sweep benchmark_timing.json; then
+  log "Sweep plots generated successfully"
+else
+  log "Sweep plot generation failed (benchmark exit status unchanged)"
+fi
+
+# Propagate a non-zero exit code if any benchmark mode failed.
+exit $OVERALL_STATUS

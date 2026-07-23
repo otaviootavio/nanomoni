@@ -1,0 +1,89 @@
+"""Integration tests for the full pipeline wiring.
+
+These drive ``generate_plots_from_intervals`` with the fetch stage stubbed
+(canned Prometheus payloads) and the draw stage captured, so they exercise
+plan -> transform -> draw wiring and the produced output-path set without a live
+Prometheus or real rendering.
+"""
+
+import os
+import tempfile
+from typing import Any, Dict, List, Optional, Set
+from unittest.mock import patch
+
+from bench_plotter.pipeline import generate_plots_from_intervals
+from bench_plotter.pipeline.model import (
+    DrawTask,
+    FetchOutcome,
+    PlotJob,
+    ResultCache,
+)
+
+
+PAYWORD_ONLY = [
+    {
+        "mode": "payword",
+        "status": "success",
+        "prometheus_timestamps": {"start_ms": 1000000, "finish_ms": 1000600},
+    }
+]
+
+
+def _canned_range_payload() -> Dict[str, Any]:
+    """A flat, non-zero range series that survives steady-state filtering."""
+    values = [[1000.0 + i * 15, "1.0"] for i in range(10)]
+    return {"data": {"result": [{"metric": {"__name__": "m"}, "values": values}]}}
+
+
+def _stub_fetch(jobs: List[PlotJob]) -> FetchOutcome:
+    cache: ResultCache = {
+        spec: _canned_range_payload() for job in jobs for spec in job.specs
+    }
+    return cache, []
+
+
+def _run_capturing_draw(intervals: List[Dict[str, Any]]) -> Set[str]:
+    """Run the pipeline; return the set of output paths handed to the draw stage."""
+    captured: List[str] = []
+
+    def _capture_draw(
+        tasks: List[DrawTask],
+        workers: Optional[int] = None,
+        parallel: bool = True,
+    ) -> tuple[List[str], List[dict]]:
+        captured.extend(t.output_path for t in tasks)
+        return [t.output_path for t in tasks], []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "plots")
+        with patch("bench_plotter.pipeline.orchestrator.fetch_all", _stub_fetch):
+            with patch("bench_plotter.pipeline.orchestrator.draw_all", _capture_draw):
+                generate_plots_from_intervals(intervals, output_dir=out)
+        rel = {os.path.relpath(p, out) for p in captured}
+    return rel
+
+
+class TestPipelineWiring:
+    def test_payword_only_produces_expected_paths(self) -> None:
+        paths = _run_capturing_draw(PAYWORD_ONLY)
+
+        # Resource timeseries for every service.
+        assert "vendor_resources/vendor_cpu_usage_cores.png" in paths
+        assert "issuer_resources/issuer_memory_usage_mib.png" in paths
+        assert "client_resources/client_network_kib_s_input.png" in paths
+        # Steady-state companions for vendor/client CPU + network.
+        assert "vendor_resources/vendor_cpu_usage_cores_boxplot.png" in paths
+        assert "client_resources/client_network_kib_s_output_violin.png" in paths
+        # TPS + per-quantile latency.
+        assert "tps_metrics/vendor_payment_tps_success_payword.png" in paths
+        assert (
+            "tps_metrics/vendor_payment_duration_quantiles_ms_payword_p99.png" in paths
+        )
+        # Steady-state latency suite.
+        assert "tps_metrics/vendor_payment_latency_boxplot.png" in paths
+
+        # Only payword ran, so no signature/paytree series were queried.
+        assert not any("signature" in p or "paytree" in p for p in paths)
+
+    def test_no_intervals_produces_nothing(self) -> None:
+        assert _run_capturing_draw([]) == set()

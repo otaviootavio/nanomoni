@@ -184,7 +184,7 @@ async def run_client_flow() -> None:
         balance_after_open = after_open.balance
 
         # 5) Payments
-        delay = settings.client_inter_payment_delay_s
+        delay = settings.inter_payment_delay_s
 
         if client_mode == "signature":
             payment_dtos = signature.prepare_payments(

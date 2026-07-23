@@ -217,4 +217,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Run metadata
+runs_metadata.json
+
+benchmark_timing.json
+plots/
+report/
+
 **.db

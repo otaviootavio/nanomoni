@@ -15,6 +15,7 @@ from ....application.vendor.dtos import (
 )
 from ....application.vendor.use_cases.payment import PaymentService
 from ..dependencies import get_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
 
 router = APIRouter(prefix="/channels/signature", tags=["channels", "signature"])
 
@@ -22,16 +23,6 @@ payment_requests_total = Counter(
     "payment_requests_total",
     "Total payment requests processed",
     ["status"],
-)
-
-PAYMENT_DURATION_BUCKETS = sorted(
-    set(
-        [round(0.25 * i, 2) for i in range(1, 21)]  # 0.25ms..5ms (0.25ms resolution)
-        + [
-            float(x) for x in range(5, 25, 5)
-        ]  # 5, 10, 15, 20ms (5ms resolution from 5ms..20ms)
-        + [float("inf")]
-    )
 )
 
 payment_request_duration_milliseconds = Histogram(
