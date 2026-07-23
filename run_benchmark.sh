@@ -2,8 +2,10 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-export BENCHMARK_COUNT_VAR=1048576
-# export BENCHMARK_COUNT_VAR=8192
+# Target TPS sweep. For each TPS the client sends (TPS * RUN_DURATION_SEC)
+# payments paced at 1/TPS, yielding ~RUN_DURATION_SEC seconds of traffic.
+TPS_VALUES=(16 32 64 128 256)
+RUN_DURATION_SEC=600
 
 export SLEEP_TIME=30
 export SLEEP_GAP=30
@@ -11,10 +13,12 @@ export SLEEP_GAP=30
 # vendor/issuer returning to baseline is captured inside the plotted window.
 export DRAIN_TIME=180
 
-# Target throughput ceiling in payments/sec (edit here). 0 = no limit (max
-# throughput). This script only passes the number through as CLIENT_TARGET_TPS;
-# the client turns it into a per-payment delay (1/TPS) on its own.
-BENCHMARK_TARGET_TPS=250
+# Timestamp of this server-side benchmark execution (root folder for plots).
+RUN_TS="$(date '+%Y%m%d_%H%M%S')"
+
+# Current TPS/count for the active sweep iteration (set inside the loop).
+BENCHMARK_TARGET_TPS=0
+BENCHMARK_COUNT_VAR=0
 
 # Per-mode timing entries, joined into the timing JSON at the end.
 TIMING_ENTRIES=()
@@ -38,7 +42,7 @@ run_mode() {
   # source) makes this benchmark's target win over the env file's value.
   export CLIENT_TARGET_TPS=$BENCHMARK_TARGET_TPS
 
-  log "=== [$mode] starting benchmark run ==="
+  log "=== [$mode] starting benchmark run (tps=$BENCHMARK_TARGET_TPS, count=$BENCHMARK_COUNT_VAR) ==="
 
   log "[$mode] pre-run gap: sleeping ${SLEEP_GAP}s"
   sleep "$SLEEP_GAP"
@@ -66,7 +70,7 @@ run_mode() {
     OVERALL_STATUS=1
   fi
   log "=== [$mode] finished: $result (window ${start}ms -> ${end}ms) ==="
-  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
+  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
 }
 
 run_signature() {
@@ -96,25 +100,44 @@ run_payword() {
   run_mode "payword"
 }
 
-log "Building client image (count=$BENCHMARK_COUNT_VAR, target_tps=$BENCHMARK_TARGET_TPS)"
+log "Building client image (tps_values=${TPS_VALUES[*]}, duration=${RUN_DURATION_SEC}s)"
 # Build the client image so the run uses current code (incl. the TPS delay plumbing).
 docker compose build client
 
-run_signature
-sleep "$SLEEP_TIME"
-run_paytree
-sleep "$SLEEP_TIME"
-run_payword
+log "Server run timestamp: $RUN_TS"
 
-log "All modes complete, writing benchmark_timing.json"
-# Join the entries with commas and write the timing JSON.
-TIMING_JSON="[$(IFS=,; echo "${TIMING_ENTRIES[*]}")]"
-echo "$TIMING_JSON" | jq '.' > benchmark_timing.json
+for tps in "${TPS_VALUES[@]}"; do
+  BENCHMARK_TARGET_TPS=$tps
+  BENCHMARK_COUNT_VAR=$((tps * RUN_DURATION_SEC))
+  log "=== Sweep iteration: tps=$BENCHMARK_TARGET_TPS count=$BENCHMARK_COUNT_VAR ==="
+
+  run_signature
+  sleep "$SLEEP_TIME"
+  run_paytree
+  sleep "$SLEEP_TIME"
+  run_payword
+  sleep "$SLEEP_TIME"
+done
+
+log "All modes complete, writing benchmark_timming.json"
+# Join the entries with commas and write the timing JSON as an object with
+# server_run_timestamp + runs (the plotter sweep module consumes this shape).
+RUNS_JSON="[$(IFS=,; echo "${TIMING_ENTRIES[*]}")]"
+jq -n --arg ts "$RUN_TS" --argjson runs "$RUNS_JSON" \
+  '{server_run_timestamp: $ts, runs: $runs}' > benchmark_timming.json
 
 if [ "$OVERALL_STATUS" -eq 0 ]; then
   log "Benchmark run finished successfully"
 else
   log "Benchmark run finished with failures"
+fi
+
+# Best-effort plot generation: do not override the benchmark exit status.
+log "Generating sweep plots from benchmark_timming.json"
+if poetry run python -m bench_plotter.sweep benchmark_timming.json; then
+  log "Sweep plots generated successfully"
+else
+  log "Sweep plot generation failed (benchmark exit status unchanged)"
 fi
 
 # Propagate a non-zero exit code if any benchmark mode failed.

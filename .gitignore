@@ -222,5 +222,7 @@ runs_metadata.json
 
 benchmark_timing.json
 plots/
+report/
 
 **.db
+benchmark_timming.json

@@ -91,9 +91,9 @@ Issuer and vendor will start their Redis dependencies via `depends_on`.
 ```sh
 docker compose build
 
-source ./envs/issuer.env.sh && docker compose up issuer
-source ./envs/vendor.env.sh && docker compose up vendor
-source ./envs/client.env.sh && docker compose up client
+source ./envs/issuer.env.sh && docker compose up issuer -d
+source ./envs/vendor.env.sh && docker compose up vendor -d
+source ./envs/client.env.sh && docker compose up client -d
 ```
 
 ## Publishing Docker images

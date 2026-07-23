@@ -11,6 +11,9 @@ in-memory plan and drives the pipeline:
 This module owns none of the stage logic; it only wires the stages together and
 reports the outcome, so it stays small and each stage stays independently
 testable.
+
+``generate_plots_from_intervals`` is the reusable core used by the sweep module
+to plot one (tps, total_requests) configuration at a time.
 """
 
 from __future__ import annotations
@@ -35,9 +38,13 @@ from .draw import draw_all
 def _load_successful_intervals(path: str) -> List[Dict[str, Any]]:
     """Load intervals, dropping any the benchmark recorded as non-success.
 
-    Intervals without a ``status`` field are kept (backward compatible).
+    Accepts either a bare list of intervals (legacy) or an object with a
+    ``runs`` list (sweep format). Intervals without a ``status`` field are
+    kept (backward compatible).
     """
     data = load_json_data(path)
+    if isinstance(data, dict):
+        data = data.get("runs", [])
     if not isinstance(data, list):
         return []
     kept = [
@@ -51,18 +58,17 @@ def _load_successful_intervals(path: str) -> List[Dict[str, Any]]:
     return kept
 
 
-def generate_plots_from_benchmark(
-    test_intervals_path: str,
+def generate_plots_from_intervals(
+    intervals: List[Dict[str, Any]],
     output_dir: str = "plots",
     workers: int | None = None,
     parallel: bool = True,
 ) -> List[str]:
-    """Generate all plots for a benchmark run. Returns the written PNG paths.
+    """Generate all plots for a list of successful intervals. Returns PNG paths.
 
     ``workers`` caps the draw pool (default: all CPUs); ``parallel=False`` draws
     serially for debugging.
     """
-    intervals = _load_successful_intervals(test_intervals_path)
     if not intervals:
         print("No successful intervals to plot")
         return []
@@ -90,6 +96,26 @@ def generate_plots_from_benchmark(
     _report_failures(fetch_failures, draw_failures)
     print(f"Wrote {len(written)} plot(s) to '{output_dir}'")
     return written
+
+
+def generate_plots_from_benchmark(
+    test_intervals_path: str,
+    output_dir: str = "plots",
+    workers: int | None = None,
+    parallel: bool = True,
+) -> List[str]:
+    """Generate all plots for a benchmark run. Returns the written PNG paths.
+
+    Thin wrapper over :func:`generate_plots_from_intervals` that loads and
+    filters the timing file first.
+    """
+    intervals = _load_successful_intervals(test_intervals_path)
+    return generate_plots_from_intervals(
+        intervals,
+        output_dir=output_dir,
+        workers=workers,
+        parallel=parallel,
+    )
 
 
 def _report_failures(

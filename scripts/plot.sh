@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -e
 
-poetry run python -m bench_plotter.generate_plots benchmark_timing.json
+poetry run python -m bench_plotter.sweep benchmark_timming.json

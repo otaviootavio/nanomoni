@@ -139,6 +139,7 @@ class TestDrawContract:
             "violin",
             "precomputed_box",
             "bucket_ecdf",
+            "sweep_line",
         }
         assert expected_fns <= set(DRAW_REGISTRY)
 

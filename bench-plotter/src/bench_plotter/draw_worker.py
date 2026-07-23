@@ -31,6 +31,7 @@ from bench_plotter.plotting.distribution_renderers import (
     create_precomputed_boxplot,
     create_bucket_ecdf,
 )
+from bench_plotter.plotting.sweep_renderers import create_sweep_line_plot
 
 # Stable string names -> existing draw functions. The names are the contract
 # stored in ``DrawTask.fn_name``; the plan/transform stages emit these and the
@@ -43,6 +44,7 @@ DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
     "violin": create_violin_plot,
     "precomputed_box": create_precomputed_boxplot,
     "bucket_ecdf": create_bucket_ecdf,
+    "sweep_line": create_sweep_line_plot,
 }
 
 
