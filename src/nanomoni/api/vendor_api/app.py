@@ -7,6 +7,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+import aiohttp
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -39,17 +40,26 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Register Lua scripts for EVALSHA optimization
-    store = get_key_value_store_dependency()
-    for name, script in VENDOR_SCRIPTS.items():
-        try:
-            await store.register_script(name, script)
-        except Exception:
-            logger.exception("Failed to register Redis Lua script '%s'", name)
-            # Re-raise to prevent startup with unregistered scripts
-            raise
-    await register_vendor_with_issuer(settings)
-    yield
+    # Shared issuer HTTP session (reused across requests; closed on shutdown).
+    app.state.issuer_session = aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=10.0)
+    )
+    try:
+        # Register Lua scripts for EVALSHA optimization
+        store = get_key_value_store_dependency()
+        for name, script in VENDOR_SCRIPTS.items():
+            try:
+                await store.register_script(name, script)
+            except Exception:
+                logger.exception("Failed to register Redis Lua script '%s'", name)
+                # Re-raise to prevent startup with unregistered scripts
+                raise
+        await register_vendor_with_issuer(
+            settings, session=app.state.issuer_session
+        )
+        yield
+    finally:
+        await app.state.issuer_session.close()
 
 
 def create_app() -> FastAPI:

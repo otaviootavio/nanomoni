@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Optional, Type
 from types import TracebackType
 
+import aiohttp
+
 from ...application.issuer.dtos import (
     RegistrationRequestDTO,
     RegistrationResponseDTO,
@@ -119,8 +121,14 @@ class AsyncIssuerClient:
     Mirrors `IssuerClient` but uses `AsyncHttpClient` and async methods.
     """
 
-    def __init__(self, base_url: str, timeout: float = 10.0) -> None:
-        self._http = AsyncHttpClient(base_url, timeout=timeout)
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        *,
+        session: aiohttp.ClientSession | None = None,
+    ) -> None:
+        self._http = AsyncHttpClient(base_url, timeout=timeout, session=session)
 
     async def register(self, dto: RegistrationRequestDTO) -> RegistrationResponseDTO:
         resp = await self._http.post("/issuer/accounts", json=dto.model_dump())
