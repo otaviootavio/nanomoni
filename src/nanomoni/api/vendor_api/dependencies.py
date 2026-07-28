@@ -13,6 +13,9 @@ from ...application.vendor.use_cases.paytree_std_payment import PaytreeStdPaymen
 from ...application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
 )
+from ...application.vendor.use_cases.paytree_child_pair_payment import (
+    PaytreeChildPairPaymentService,
+)
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
 from ...domain.shared import IssuerClientFactory
@@ -24,6 +27,7 @@ from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
 from ...application.shared.paytree_scheme import (
     PaytreeStdCryptoScheme,
     PaytreeFirstOptCryptoScheme,
+    PaytreeChildPairCryptoScheme,
 )
 from ...application.shared.payword_scheme import PaywordCryptoScheme
 from ...domain.vendor.payment_channel_repository import SignatureRepository
@@ -162,6 +166,27 @@ async def get_paytree_first_opt_payment_service(
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         crypto_scheme=PaytreeFirstOptCryptoScheme(),
+        node_repo=node_repo,
+        vendor_private_key_pem=settings.vendor_private_key_pem,
+    )
+
+
+async def get_paytree_child_pair_payment_service(
+    request: Request,
+) -> PaytreeChildPairPaymentService:
+    """Get PayTree child-pair payment service."""
+    settings = get_settings_dependency()
+    issuer_client_factory = _create_issuer_client_factory(
+        settings.issuer_base_url,
+        session=request.app.state.issuer_session,
+    )
+    store = get_key_value_store_dependency()
+    node_repo = MerkleNodeRepositoryImpl(store)
+    return PaytreeChildPairPaymentService(
+        payment_repository=get_payment_repository(),
+        issuer_client_factory=issuer_client_factory,
+        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
+        crypto_scheme=PaytreeChildPairCryptoScheme(),
         node_repo=node_repo,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )

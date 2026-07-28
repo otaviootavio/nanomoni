@@ -236,3 +236,55 @@ class ClientActor:
             ),
             paytree,
         )
+
+    def create_open_channel_request_paytree_child_pair(
+        self,
+        vendor_public_key_der_b64: str,
+        *,
+        amount: int,
+        unit_value: int,
+        max_i: int,
+    ) -> tuple[OpenChannelRequestDTO, Paytree]:
+        """
+        Create an open channel request for the child-pair PayTree mode.
+
+        `max_i` sizes the underlying tree (leaf count - 1), same as
+        `create_open_channel_request_paytree`. The *signed* `paytree_max_i`
+        field, however, carries the tree's `max_k` (number of internal
+        nodes) — child-pair payments are indexed by Eytzinger node index k,
+        not by leaf index — so it must be set before signing (not patched
+        onto the DTO afterwards, which would invalidate the signature).
+
+        Returns:
+            (OpenChannelRequestDTO, Paytree) so tests can generate proofs efficiently.
+        """
+        if unit_value <= 0:
+            raise ValueError("unit_value must be > 0")
+
+        paytree = Paytree.create(max_i=max_i)
+        root_b64 = paytree.commitment_root_b64
+        max_k = paytree.max_k
+
+        payload = PaytreeOpenChannelRequestPayload(
+            client_public_key_der_b64=self.public_key_der_b64,
+            vendor_public_key_der_b64=vendor_public_key_der_b64,
+            amount=amount,
+            paytree_root_b64=root_b64,
+            paytree_unit_value=unit_value,
+            paytree_max_i=max_k,
+        )
+        payload_bytes = json_to_bytes(payload.model_dump(exclude_none=True))
+        signature_b64 = sign_bytes(self.private_key, payload_bytes)
+
+        return (
+            OpenChannelRequestDTO(
+                client_public_key_der_b64=self.public_key_der_b64,
+                vendor_public_key_der_b64=vendor_public_key_der_b64,
+                amount=amount,
+                open_signature_b64=signature_b64,
+                paytree_root_b64=root_b64,
+                paytree_unit_value=unit_value,
+                paytree_max_i=max_k,
+            ),
+            paytree,
+        )

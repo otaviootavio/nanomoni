@@ -1,0 +1,115 @@
+"""PayTree child-pair payment API routes (Vendor)."""
+
+from __future__ import annotations
+
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
+from prometheus_client import Counter, Gauge, Histogram
+
+from ....application.vendor.dtos import CloseChannelDTO
+from ....application.vendor.paytree_dtos import (
+    PaytreeChildPairPaymentResponseDTO,
+    ReceivePaytreeChildPairPaymentDTO,
+)
+from ....application.vendor.use_cases.paytree_child_pair_payment import (
+    PaytreeChildPairPaymentService,
+)
+from ..dependencies import get_paytree_child_pair_payment_service
+
+router = APIRouter(
+    prefix="/channels/paytree/child-pair", tags=["channels", "paytree-child-pair"]
+)
+
+
+PAYMENT_DURATION_BUCKETS = (
+    [round(0.5 * i, 1) for i in range(1, 21)]
+    + [float(x) for x in range(15, 55, 5)]
+    + [float("inf")]
+)
+
+paytree_child_pair_payment_requests_total = Counter(
+    "paytree_child_pair_payment_requests_total",
+    "Total PayTree child-pair payment requests processed",
+    ["status"],
+)
+
+paytree_child_pair_payment_request_duration_milliseconds = Histogram(
+    "paytree_child_pair_payment_request_duration_milliseconds",
+    "Wall time to process a PayTree child-pair payment request (ms)",
+    ["status"],
+    buckets=PAYMENT_DURATION_BUCKETS,
+)
+
+paytree_child_pair_payment_requests_inprogress = Gauge(
+    "paytree_child_pair_payment_requests_inprogress",
+    "Number of PayTree child-pair payment requests currently being processed",
+    multiprocess_mode="livesum",
+)
+
+
+@router.post(
+    "/{channel_id}/payments",
+    response_model=PaytreeChildPairPaymentResponseDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+async def receive_paytree_child_pair_payment(
+    payment_data: ReceivePaytreeChildPairPaymentDTO,
+    channel_id: str = Path(..., description="Payment channel identifier"),
+    payment_service: PaytreeChildPairPaymentService = Depends(
+        get_paytree_child_pair_payment_service
+    ),
+) -> PaytreeChildPairPaymentResponseDTO:
+    start_time = time.perf_counter()
+    paytree_child_pair_payment_requests_inprogress.inc()
+    try:
+        result = await payment_service.receive_payment(channel_id, payment_data)
+        paytree_child_pair_payment_requests_total.labels(status="success").inc()
+        elapsed = (time.perf_counter() - start_time) * 1000
+        paytree_child_pair_payment_request_duration_milliseconds.labels(
+            status="success"
+        ).observe(elapsed)
+        return result
+    except ValueError as e:
+        paytree_child_pair_payment_requests_total.labels(status="client_error").inc()
+        elapsed = (time.perf_counter() - start_time) * 1000
+        paytree_child_pair_payment_request_duration_milliseconds.labels(
+            status="client_error"
+        ).observe(elapsed)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        paytree_child_pair_payment_requests_total.labels(status="server_error").inc()
+        elapsed = (time.perf_counter() - start_time) * 1000
+        paytree_child_pair_payment_request_duration_milliseconds.labels(
+            status="server_error"
+        ).observe(elapsed)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process PayTree child-pair payment: {str(e)}",
+        )
+    finally:
+        paytree_child_pair_payment_requests_inprogress.dec()
+
+
+@router.post(
+    "/{channel_id}/closure-requests",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def settle_paytree_child_pair_channel(
+    payload: CloseChannelDTO,
+    channel_id: str = Path(..., description="Payment channel identifier"),
+    payment_service: PaytreeChildPairPaymentService = Depends(
+        get_paytree_child_pair_payment_service
+    ),
+) -> Response:
+    try:
+        await payment_service.settle_channel(payload)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to close PayTree child-pair channel: {str(e)}",
+        )

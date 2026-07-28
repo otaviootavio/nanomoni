@@ -19,3 +19,4 @@ class ProofReference:
 class PaymentScheme(str, Enum):
     PAYWORD = "payword"
     PAYTREE = "paytree"
+    PAYTREE_CHILD_PAIR = "paytree_child_pair"

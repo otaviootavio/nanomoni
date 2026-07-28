@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .merkle_index import (
+    compute_tree_depth,
     get_sibling_position_at_level,
     is_left_child,
     key,
@@ -25,6 +26,7 @@ from .merkle_tree import (
     proof_indexes_first_opt,
     verify_proof_to_known_node,
 )
+from .paytree_child_pair import children_of_k, max_k_for_depth, node_hash_at_k
 
 
 def b64_to_bytes(data_b64: str) -> bytes:
@@ -209,6 +211,30 @@ class Paytree:
         leaf_b64 = bytes_to_b64(leaf_hash)
         siblings_b64 = [bytes_to_b64(s) for s in siblings]
         return i, leaf_b64, siblings_b64
+
+    @property
+    def depth(self) -> int:
+        """Tree depth (number of sibling levels from a leaf to the root)."""
+        return compute_tree_depth(self.max_i)
+
+    @property
+    def max_k(self) -> int:
+        """Largest child-pair payment index (number of internal nodes in the tree)."""
+        return max_k_for_depth(self.depth)
+
+    def payment_proof_child_pair(self, k: int) -> tuple[int, str, str]:
+        """Generate the child-pair payment proof for index k: (k, left_b64, right_b64).
+
+        k is the Eytzinger index of the internal node being expanded; the
+        proof reveals its two children (2k, 2k+1).
+        """
+        if k < 1 or k > self.max_k:
+            raise ValueError(f"Index k={k} out of range [1, {self.max_k}]")
+
+        left_k, right_k = children_of_k(k)
+        left = node_hash_at_k(self._tree_levels, self.depth, left_k)
+        right = node_hash_at_k(self._tree_levels, self.depth, right_k)
+        return k, bytes_to_b64(left), bytes_to_b64(right)
 
 
 def compute_cumulative_owed_amount(*, i: int, unit_value: int) -> int:

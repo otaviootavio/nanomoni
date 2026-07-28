@@ -22,6 +22,7 @@ from ...application.issuer.payword_dtos import (
     PaywordSettlementRequestDTO,
 )
 from ...application.issuer.paytree_dtos import (
+    PaytreeChildPairSettlementRequestDTO,
     PaytreeOpenChannelResponseDTO,
     PaytreePaymentChannelResponseDTO,
     PaytreeSettlementRequestDTO,
@@ -219,6 +220,30 @@ class AsyncIssuerClient:
         dto: PaytreeSettlementRequestDTO,
     ) -> CloseChannelResponseDTO:
         path = f"/issuer/channels/paytree/first-opt/{channel_id}/settlements"
+        resp = await self._http.post(path, json=dto.model_dump())
+        return CloseChannelResponseDTO.model_validate(resp.json())
+
+    async def open_paytree_child_pair_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeOpenChannelResponseDTO:
+        resp = await self._http.post(
+            "/issuer/channels/paytree/child-pair", json=dto.model_dump()
+        )
+        return PaytreeOpenChannelResponseDTO.model_validate(resp.json())
+
+    async def get_paytree_child_pair_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaytreePaymentChannelResponseDTO:
+        path = f"/issuer/channels/paytree/child-pair/{dto.channel_id}"
+        resp = await self._http.get(path)
+        return PaytreePaymentChannelResponseDTO.model_validate(resp.json())
+
+    async def settle_paytree_child_pair_payment_channel(
+        self,
+        channel_id: str,
+        dto: PaytreeChildPairSettlementRequestDTO,
+    ) -> CloseChannelResponseDTO:
+        path = f"/issuer/channels/paytree/child-pair/{channel_id}/settlements"
         resp = await self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 

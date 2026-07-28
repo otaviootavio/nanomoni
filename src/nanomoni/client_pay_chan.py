@@ -94,6 +94,16 @@ async def run_client_flow() -> None:
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, paytree_unit_value
             )
+        elif client_mode == "paytree_child_pair":
+            paytree_obj, paytree_root_b64, paytree_unit_value, paytree_max_i = (
+                paytree.init_commitment_child_pair(settings, payment_count)
+            )
+            # Child-pair payments are indexed by Eytzinger node k (1..max_k),
+            # not by leaf index; clip the requested payment count to max_k.
+            payments = list(range(1, min(payment_count, paytree_obj.max_k) + 1))
+            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
+                client_mode, payments, paytree_unit_value
+            )
         else:
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments
@@ -121,6 +131,16 @@ async def run_client_flow() -> None:
                 paytree_max_i,
             )
         elif client_mode == "paytree_first_opt":
+            open_dto = paytree.build_open_channel_request(
+                client_private_key,
+                settings.client_public_key_der_b64,
+                vendor_pk.public_key_der_b64,
+                channel_amount,
+                paytree_root_b64,
+                paytree_unit_value,
+                paytree_max_i,
+            )
+        elif client_mode == "paytree_child_pair":
             open_dto = paytree.build_open_channel_request(
                 client_private_key,
                 settings.client_public_key_der_b64,
@@ -189,6 +209,17 @@ async def run_client_flow() -> None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
             paytree_for_payments = paytree_obj
             await paytree.send_first_opt_payments(
+                vendor,
+                channel_id,
+                paytree_for_payments,
+                payments,
+                inter_payment_delay=delay,
+            )
+        elif client_mode == "paytree_child_pair":
+            if paytree_obj is None:
+                raise RuntimeError(PAYTREE_NOT_INITIALIZED)
+            paytree_for_payments = paytree_obj
+            await paytree.send_child_pair_payments(
                 vendor,
                 channel_id,
                 paytree_for_payments,

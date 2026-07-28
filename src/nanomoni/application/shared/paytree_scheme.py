@@ -8,6 +8,7 @@ in ``crypto`` — keeping ``crypto`` a pure, dependency-free bottom layer.
 from __future__ import annotations
 
 from nanomoni.application.shared.paytree_proof import (
+    verify_paytree_child_pair_payment,
     verify_paytree_proof_first_opt,
     verify_paytree_proof_standard,
 )
@@ -102,3 +103,26 @@ class PaytreeFirstOptCryptoScheme:
             pos = get_sibling_position_at_level(leaf_index, level)
             updates[key_eytzinger(level, pos, depth)] = sib_b64
         return updates
+
+
+class PaytreeChildPairCryptoScheme:
+    """Stateless verifier for child-pair PayTree proofs (heap-indexed child reveal).
+
+    Unlike `PaytreeStdCryptoScheme`/`PaytreeFirstOptCryptoScheme`, verification
+    is against the already-known parent node hash (looked up by the caller
+    from the node store), not the channel commitment/root directly — the root
+    is only ever used to seed node 1 on the first payment.
+    """
+
+    def verify(self, known_parent_b64: str, left_b64: str, right_b64: str) -> bool:
+        return verify_paytree_child_pair_payment(
+            known_parent_b64=known_parent_b64,
+            left_b64=left_b64,
+            right_b64=right_b64,
+        )
+
+    def build_node_updates(
+        self, k: int, left_b64: str, right_b64: str
+    ) -> dict[str, str]:
+        """Build node_key → hash_b64 updates for the two newly revealed children of k."""
+        return {str(2 * k): left_b64, str(2 * k + 1): right_b64}

@@ -10,6 +10,10 @@ from .paytree_first_opt import (
     get_paytree_first_opt_charts,
     LATENCY_BUCKET_METRIC as _PAYTREE_FIRST_OPT_METRIC,
 )
+from .paytree_child_pair import (
+    get_paytree_child_pair_charts,
+    LATENCY_BUCKET_METRIC as _PAYTREE_CHILD_PAIR_METRIC,
+)
 
 # Single source of truth for mode -> latency-histogram bucket metric name,
 # consumed by pipeline/latency.py to build the steady-state latency box/ECDF/
@@ -19,6 +23,7 @@ LATENCY_BUCKET_METRIC_BY_MODE: Dict[str, str] = {
     "payword": _PAYWORD_METRIC,
     "paytree": _PAYTREE_METRIC,
     "paytree_first_opt": _PAYTREE_FIRST_OPT_METRIC,
+    "paytree_child_pair": _PAYTREE_CHILD_PAIR_METRIC,
 }
 
 # mode -> chart getter: the one place that knows how to turn a mode name into
@@ -28,6 +33,7 @@ _MODE_CHART_GETTERS = {
     "payword": get_payword_charts,
     "paytree": get_paytree_charts,
     "paytree_first_opt": get_paytree_first_opt_charts,
+    "paytree_child_pair": get_paytree_child_pair_charts,
 }
 
 

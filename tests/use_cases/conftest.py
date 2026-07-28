@@ -20,9 +20,13 @@ from nanomoni.application.vendor.use_cases.paytree_std_payment import (
 from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
 )
+from nanomoni.application.vendor.use_cases.paytree_child_pair_payment import (
+    PaytreeChildPairPaymentService,
+)
 from nanomoni.application.shared.paytree_scheme import (
     PaytreeStdCryptoScheme,
     PaytreeFirstOptCryptoScheme,
+    PaytreeChildPairCryptoScheme,
 )
 from nanomoni.infrastructure.vendor.merkle_node_repository_impl import (
     MerkleNodeRepositoryImpl,
@@ -195,6 +199,19 @@ def paytree_first_opt_channel_service(
     )
 
 
+@pytest.fixture
+def paytree_child_pair_channel_service(
+    issuer_account_repository: InMemoryAccountRepository,
+    issuer_payment_channel_repository: InMemoryIssuerPaymentChannelRepository,
+    issuer_private_key: ec.EllipticCurvePrivateKey,
+) -> PaytreeChannelService:
+    return PaytreeChannelService(
+        account_repo=issuer_account_repository,
+        channel_repo=issuer_payment_channel_repository,
+        issuer_private_key=issuer_private_key,
+    )
+
+
 # ============================================================================
 # Issuer Client Adapter Fixtures
 # ============================================================================
@@ -207,6 +224,7 @@ def issuer_client(
     payword_channel_service: PaywordChannelService,
     paytree_std_channel_service: PaytreeChannelService,
     paytree_first_opt_channel_service: PaytreeChannelService,
+    paytree_child_pair_channel_service: PaytreeChannelService,
 ) -> UseCaseIssuerClient:
     return UseCaseIssuerClient(
         registration_service=registration_service,
@@ -214,6 +232,7 @@ def issuer_client(
         payword_channel_service=payword_channel_service,
         paytree_std_channel_service=paytree_std_channel_service,
         paytree_first_opt_channel_service=paytree_first_opt_channel_service,
+        paytree_child_pair_channel_service=paytree_child_pair_channel_service,
     )
 
 
@@ -224,6 +243,7 @@ def issuer_client_factory(
     payword_channel_service: PaywordChannelService,
     paytree_std_channel_service: PaytreeChannelService,
     paytree_first_opt_channel_service: PaytreeChannelService,
+    paytree_child_pair_channel_service: PaytreeChannelService,
 ) -> IssuerClientFactory:
     def factory() -> IssuerClientProtocol:
         client: IssuerClientProtocol = UseCaseIssuerClient(
@@ -232,6 +252,7 @@ def issuer_client_factory(
             payword_channel_service=payword_channel_service,
             paytree_std_channel_service=paytree_std_channel_service,
             paytree_first_opt_channel_service=paytree_first_opt_channel_service,
+            paytree_child_pair_channel_service=paytree_child_pair_channel_service,
         )
         return client
 
@@ -320,6 +341,23 @@ def paytree_first_opt_payment_service(
     )
 
 
+@pytest.fixture
+def paytree_child_pair_payment_service(
+    vendor_payment_repositories: VendorPaymentRepositories,
+    issuer_client_factory: IssuerClientFactory,
+    vendor_public_key_der_b64: str,
+    vendor_private_key_pem: str,
+) -> PaytreeChildPairPaymentService:
+    return PaytreeChildPairPaymentService(
+        payment_repository=vendor_payment_repositories.payment,
+        issuer_client_factory=issuer_client_factory,
+        vendor_public_key_der_b64=vendor_public_key_der_b64,
+        crypto_scheme=PaytreeChildPairCryptoScheme(),
+        node_repo=MerkleNodeRepositoryImpl(vendor_payment_repositories.store),
+        vendor_private_key_pem=vendor_private_key_pem,
+    )
+
+
 # ============================================================================
 # Vendor Client Adapter Fixtures
 # ============================================================================
@@ -331,6 +369,7 @@ def vendor_client(
     payword_payment_service: PaywordPaymentService,
     paytree_std_payment_service: PaytreeStdPaymentService,
     paytree_first_opt_payment_service: PaytreeFirstOptPaymentService,
+    paytree_child_pair_payment_service: PaytreeChildPairPaymentService,
     vendor_public_key_der_b64: str,
 ) -> UseCaseVendorClient:
     return UseCaseVendorClient(
@@ -338,5 +377,6 @@ def vendor_client(
         payword_payment_service=payword_payment_service,
         paytree_std_payment_service=paytree_std_payment_service,
         paytree_first_opt_payment_service=paytree_first_opt_payment_service,
+        paytree_child_pair_payment_service=paytree_child_pair_payment_service,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
     )

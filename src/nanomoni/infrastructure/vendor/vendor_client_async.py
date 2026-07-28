@@ -17,7 +17,9 @@ from ...application.vendor.payword_dtos import (
     ReceivePaywordPaymentDTO,
 )
 from ...application.vendor.paytree_dtos import (
+    PaytreeChildPairPaymentResponseDTO,
     PaytreePaymentResponseDTO,
+    ReceivePaytreeChildPairPaymentDTO,
     ReceivePaytreeStdPaymentDTO,
     ReceivePaytreeFirstOptPaymentDTO,
 )
@@ -178,6 +180,23 @@ class VendorClientAsync:
     ) -> None:
         """Ask the vendor to settle a first-opt PayTree payment channel."""
         path = f"/vendor/channels/paytree/first-opt/{dto.channel_id}/closure-requests"
+        await self._http.post(path, json=dto.model_dump())
+
+    async def send_paytree_child_pair_payment(
+        self,
+        channel_id: str,
+        dto: ReceivePaytreeChildPairPaymentDTO,
+    ) -> PaytreeChildPairPaymentResponseDTO:
+        """Send a child-pair PayTree payment to the vendor API."""
+        path = f"/vendor/channels/paytree/child-pair/{channel_id}/payments"
+        resp = await self._post_with_payment_retries(path, json=dto.model_dump())
+        return PaytreeChildPairPaymentResponseDTO.model_validate(resp.json())
+
+    async def request_settle_channel_paytree_child_pair(
+        self, dto: CloseChannelDTO
+    ) -> None:
+        """Ask the vendor to settle a child-pair PayTree payment channel."""
+        path = f"/vendor/channels/paytree/child-pair/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
     async def aclose(self) -> None:
