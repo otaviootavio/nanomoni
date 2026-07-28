@@ -65,9 +65,12 @@ class PaytreeFirstOptCryptoScheme:
 
         if not subroot_b64 and subroot_index == root_key:
             subroot_b64 = root_b64
-        if not subroot_b64 and subroot_index == key_eytzinger(0, i, depth):
-            subroot_b64 = leaf_b64
 
+        # An empty-siblings proof is only legitimate when the trusted leaf node
+        # (0, i) is already present in the node store (persisted by a prior
+        # verified payment). Never fall back to the client-supplied leaf_b64:
+        # doing so would trust an unverified value that is not bound to the
+        # channel commitment, allowing a forged leaf to pass verification.
         if not subroot_b64:
             return False
 
