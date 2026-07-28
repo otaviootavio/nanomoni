@@ -76,7 +76,7 @@ def get_paytree_std_channel_service() -> PaytreeChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaytreeChannelService(
-        account_repo, channel_repo, settings.issuer_private_key, optimization_type=0
+        account_repo, channel_repo, settings.issuer_private_key
     )
 
 
@@ -85,5 +85,5 @@ def get_paytree_first_opt_channel_service() -> PaytreeChannelService:
     channel_repo = get_payment_channel_repository()
     settings = get_settings_dependency()
     return PaytreeChannelService(
-        account_repo, channel_repo, settings.issuer_private_key, optimization_type=1
+        account_repo, channel_repo, settings.issuer_private_key
     )

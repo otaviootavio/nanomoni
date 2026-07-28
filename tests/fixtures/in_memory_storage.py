@@ -355,11 +355,38 @@ class InMemoryKeyValueStore(KeyValueStore):
         n = int(args[1]) if len(args) > 1 else 0
         prefix = f"merkle_node:{channel_id}:"
 
+        base = 2 + n * 2
+        new_ref = int(args[base]) if len(args) > base else 0
+        state_json = args[base + 1]
+        proof_json = args[base + 2]
+        channel_json = args[base + 3]
+        new_is_closed = args[base + 4] == "1"
+        created_ts = float(args[base + 5]) if len(args) > base + 5 else 0.0
+
+        # Monotonic CAS mirroring the Lua save_payment_with_nodes script.
         old_is_closed = None
+        max_steps: Optional[int] = None
+        prev = -1
         existing = self._data.get(channel_key)
         if existing:
             ch = json.loads(existing)
             old_is_closed = ch.get("is_closed")
+            ms = ch.get("max_steps")
+            max_steps = int(ms) if ms is not None else None
+            last_ref = ch.get("last_proof_reference")
+            if last_ref is not None:
+                prev = int(last_ref)
+        else:
+            new_ch = json.loads(channel_json)
+            ms = new_ch.get("max_steps")
+            max_steps = int(ms) if ms is not None else None
+
+        if not max_steps:
+            return [2, ""]
+        if new_ref > max_steps:
+            return [3, str(prev)]
+        if new_ref <= prev:
+            return [0, str(prev)]
 
         for i in range(n):
             suffix = args[2 + i * 2]
@@ -374,19 +401,22 @@ class InMemoryKeyValueStore(KeyValueStore):
             self._sorted_sets[index_key].append((suffix, 0.0))
             self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
 
-        base = 2 + n * 2
-        new_ref = int(args[base]) if len(args) > base else 0
-        state_json = args[base + 1]
-        proof_json = args[base + 2]
-        channel_json = args[base + 3]
-        new_is_closed = args[base + 4] == "1"
-        created_ts = float(args[base + 5]) if len(args) > base + 5 else 0.0
-
         self._data[channel_key] = channel_json
         self._data[state_key] = state_json
         self._data[proof_key] = proof_json
 
-        if old_is_closed is not None and old_is_closed != new_is_closed:
+        if old_is_closed is None:
+            all_key = "payment_channels:all"
+            target_key = closed_key if new_is_closed else open_key
+            for key in (all_key, target_key):
+                if key not in self._sorted_sets:
+                    self._sorted_sets[key] = []
+                self._sorted_sets[key] = [
+                    (m, s) for m, s in self._sorted_sets[key] if m != channel_id
+                ]
+                self._sorted_sets[key].append((channel_id, created_ts))
+                self._sorted_sets[key].sort(key=lambda x: x[1], reverse=True)
+        elif old_is_closed != new_is_closed:
             for key in (open_key, closed_key):
                 if key not in self._sorted_sets:
                     self._sorted_sets[key] = []

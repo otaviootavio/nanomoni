@@ -7,9 +7,9 @@ This document describes the control flow of **standard** vs **first-opt** PayTre
 ## 1. Receive Payment — Standard Flow (CFG)
 
 ```
-receive_paytree_payment
+receive_paytree_std_payment
     │
-    ├─[optimization_type != 1]──► _receive_paytree_payment_std
+    ├──────────────────────────► _receive_paytree_payment_std
     │
     │   get_paytree_pruned_channel_state(channel_id)
     │       │  [Repo: GET payment_channel:{id} → _deserialize_channel (json.loads + model_validate)]
@@ -56,9 +56,9 @@ receive_paytree_payment
 ## 2. Receive Payment — First-Opt Flow (CFG)
 
 ```
-receive_paytree_payment
+receive_paytree_first_opt_payment
     │
-    └─[optimization_type == 1]──► _receive_paytree_payment_first_opt
+    └──────────────────────────► _receive_paytree_payment_first_opt
         │
         compute depth, root_key, subroot_index
         │
@@ -192,11 +192,11 @@ So: **first-opt trades cheaper receive (no full proof blob, batched channel+node
 ## 6. CFG Summary Diagram (High-Level)
 
 ```
-                    receive_paytree_payment
+                    route selects std vs first-opt
                                 │
               ┌─────────────────┴─────────────────┐
               ▼                                   ▼
-     optimization_type==1                  optimization_type!=1
+   /channels/paytree/first-opt         /channels/paytree/std
               │                                   │
               ▼                                   ▼
    _receive_paytree_payment_first_opt    _receive_paytree_payment_std

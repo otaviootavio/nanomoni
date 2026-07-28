@@ -24,7 +24,7 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
     """
     Story: Complete PayTree first-opt payment channel flow - all actors succeed.
 
-    Same phases as test_complete_paytree_flow but with optimization_type=1:
+    Same phases as test_complete_paytree_flow but with first-opt:
     pruned proofs per payment; vendor stores leaf hashes + siblings and rebuilds
     full proof at settle. Uses a larger tree and consecutive payments so we
     exercise the rebuild path (would fail without storing (0, i) -> leaf_b64).
@@ -54,7 +54,6 @@ async def test_complete_paytree_first_opt_flow_all_actors_succeed(
         amount=channel_amount,
         unit_value=unit_value,
         max_i=max_i,
-        paytree_optimization_type=1,
     )
     channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
     channel_id = channel_response.channel_id

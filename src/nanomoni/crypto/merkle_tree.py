@@ -13,7 +13,9 @@ from __future__ import annotations
 import hashlib
 
 from nanomoni.crypto.merkle_index import (
+    get_ancestor_at_level,
     get_node_dependency_indexes,
+    lca_between,
     level_position_from_eytzinger,
 )
 from typing import Final
@@ -223,3 +225,24 @@ def build_node_from_dependencies(
         level - 1, 2 * position + 1, node_hashes, depth
     )
     return combine_children(left, right, True)
+
+
+def proof_indexes_first_opt(
+    leaf_index: int,
+    prior_leaves: list[int],
+    depth: int,
+) -> list[tuple[int, int]]:
+    """Return sibling indexes (level, position) for a pruned proof (leaf -> sub-root).
+
+    Uses LCA with the last prior leaf to determine the sub-root (for sequential
+    sends the max LCP is with the immediate prior). The upper level fetches
+    secret and sibling hashes from storage using these indexes.
+    """
+    last_prior = prior_leaves[-1] if prior_leaves else None
+    k_max = lca_between(leaf_index, last_prior, depth) if last_prior is not None else -1
+    ancestor_level = depth if k_max == 0 else depth - k_max - 1
+    ancestor_pos = get_ancestor_at_level(leaf_index, ancestor_level)
+
+    return build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
+        0, leaf_index, ancestor_level, ancestor_pos
+    )

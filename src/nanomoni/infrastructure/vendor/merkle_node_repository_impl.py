@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ...domain.vendor.merkle_node_repository import MerkleNodeRepository
 from ...infrastructure.storage import KeyValueStore
 
@@ -12,6 +14,21 @@ def _node_key(channel_id: str, node_key: str) -> str:
 
 def _index_key(channel_id: str) -> str:
     return f"merkle_node_index:{channel_id}"
+
+
+def _parse_ref(value: object) -> Optional[int]:
+    """Parse the CAS reference returned by a Lua script (str/bytes/int/None)."""
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        value = value.decode()
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
 
 
 class MerkleNodeRepositoryImpl(MerkleNodeRepository):
@@ -91,7 +108,7 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
         proof_json: str,
         is_closed: bool,
         created_at_ts: float,
-    ) -> None:
+    ) -> tuple[int, Optional[int]]:
         index_key = _index_key(channel_id)
         channel_key = f"payment_channel:{channel_id}"
         state_key = f"payment_state:{channel_id}"
@@ -118,7 +135,12 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
                 str(created_at_ts),
             ]
         )
-        await self._store.run_script("save_payment_with_nodes", keys=keys, args=args)
+        result = await self._store.run_script(
+            "save_payment_with_nodes", keys=keys, args=args
+        )
+        code = int(result[0]) if result and result[0] is not None else 0
+        stored_ref = _parse_ref(result[1]) if result and len(result) > 1 else None
+        return code, stored_ref
 
     async def delete(self, channel_id: str) -> int:
         index = _index_key(channel_id)

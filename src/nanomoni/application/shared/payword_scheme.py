@@ -1,14 +1,18 @@
-"""PaywordCryptoScheme — wraps PayWord hash-chain proof verification."""
+"""PaywordCryptoScheme — wraps PayWord hash-chain proof verification.
+
+Orchestrator over the ``crypto`` PayWord primitives; lives in the application
+layer so that ``crypto`` stays a pure, dependency-free bottom layer.
+"""
 
 from __future__ import annotations
 
-from ..crypto.payword import (
+from nanomoni.crypto.payword import (
     b64_to_bytes,
     verify_token_against_root,
     verify_token_incremental,
 )
-from ..domain.shared.proof_reference import ProofReference
-from .scheme import CryptoProof
+from nanomoni.domain.shared.crypto_proof import CryptoProof
+from nanomoni.domain.shared.proof_reference import ProofReference
 
 
 class PaywordCryptoScheme:
@@ -19,10 +23,7 @@ class PaywordCryptoScheme:
     falls back to root-based verification.
     """
 
-    def extract_reference(self, proof: CryptoProof) -> ProofReference:
-        return ProofReference(value=int(proof.data["k"]))
-
-    async def verify(
+    def verify(
         self,
         commitment: str,
         reference: ProofReference,

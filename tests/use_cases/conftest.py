@@ -20,14 +20,14 @@ from nanomoni.application.vendor.use_cases.paytree_std_payment import (
 from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
 )
-from nanomoni.crypto.paytree_scheme import (
+from nanomoni.application.shared.paytree_scheme import (
     PaytreeStdCryptoScheme,
     PaytreeFirstOptCryptoScheme,
 )
 from nanomoni.infrastructure.vendor.merkle_node_repository_impl import (
     MerkleNodeRepositoryImpl,
 )
-from nanomoni.crypto.payword_scheme import PaywordCryptoScheme
+from nanomoni.application.shared.payword_scheme import PaywordCryptoScheme
 from tests.fixtures import (
     InMemoryAccountRepository,
     InMemoryIssuerPaymentChannelRepository,
@@ -179,7 +179,6 @@ def paytree_std_channel_service(
         account_repo=issuer_account_repository,
         channel_repo=issuer_payment_channel_repository,
         issuer_private_key=issuer_private_key,
-        optimization_type=0,
     )
 
 
@@ -193,7 +192,6 @@ def paytree_first_opt_channel_service(
         account_repo=issuer_account_repository,
         channel_repo=issuer_payment_channel_repository,
         issuer_private_key=issuer_private_key,
-        optimization_type=1,
     )
 
 

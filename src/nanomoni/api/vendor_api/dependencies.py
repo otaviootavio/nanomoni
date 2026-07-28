@@ -21,8 +21,11 @@ from ...domain.vendor.user_repository import UserRepository
 from ...infrastructure.database import DatabaseClient, get_database_client
 from ...infrastructure.issuer.issuer_client import AsyncIssuerClient
 from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
-from ...crypto.paytree_scheme import PaytreeStdCryptoScheme, PaytreeFirstOptCryptoScheme
-from ...crypto.payword_scheme import PaywordCryptoScheme
+from ...application.shared.paytree_scheme import (
+    PaytreeStdCryptoScheme,
+    PaytreeFirstOptCryptoScheme,
+)
+from ...application.shared.payword_scheme import PaywordCryptoScheme
 from ...domain.vendor.payment_channel_repository import SignatureRepository
 from ...infrastructure.vendor.merkle_node_repository_impl import (
     MerkleNodeRepositoryImpl,

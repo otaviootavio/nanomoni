@@ -1,18 +1,23 @@
-"""PayTree crypto schemes — one per proof mode."""
+"""PayTree crypto schemes — one per proof mode.
+
+These are orchestrators (they compose crypto primitives, the protocol layer and
+shared verification helpers), so they live in the application layer rather than
+in ``crypto`` — keeping ``crypto`` a pure, dependency-free bottom layer.
+"""
 
 from __future__ import annotations
 
-from ..application.shared.paytree_proof import (
+from nanomoni.application.shared.paytree_proof import (
     verify_paytree_proof_first_opt,
     verify_paytree_proof_standard,
 )
-from ..crypto.merkle_index import (
+from nanomoni.crypto.merkle_index import (
     get_sibling_position_at_level,
     key_eytzinger,
 )
-from ..domain.shared.proof_reference import ProofReference
-from ..protocol import infer_subroot_index_for_incoming_pruned_merkle_proof
-from .scheme import CryptoProof
+from nanomoni.domain.shared.crypto_proof import CryptoProof
+from nanomoni.domain.shared.proof_reference import ProofReference
+from nanomoni.protocol import infer_subroot_index_for_incoming_pruned_merkle_proof
 
 
 class PaytreeStdCryptoScheme:

@@ -13,8 +13,8 @@ from ....application.issuer.payword_dtos import PaywordSettlementRequestDTO
 from ....application.shared.payword_payloads import PaywordSettlementPayload
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.payword_scheme import PaywordCryptoScheme
-from ....crypto.scheme import CryptoProof
+from ...shared.payword_scheme import PaywordCryptoScheme
+from ....domain.shared.crypto_proof import CryptoProof
 from ....domain.shared import IssuerClientFactory
 from ....domain.shared.proof_reference import PaymentScheme, ProofReference
 from ....domain.vendor.entities import PaymentChannel, PaymentState
@@ -144,9 +144,7 @@ class PaywordPaymentService:
                 "delta_k": (dto.k - prev_ref.value) if prev_ref else None,
             },
         )
-        if not await self.crypto_scheme.verify(
-            channel.commitment, new_ref, verify_proof
-        ):
+        if not self.crypto_scheme.verify(channel.commitment, new_ref, verify_proof):
             if prev_ref is None:
                 raise ValueError("Invalid PayWord token for k (root mismatch)")
             raise ValueError("Invalid PayWord token for k (incremental mismatch)")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from ...crypto.scheme import CryptoProof
+from ...domain.shared.crypto_proof import CryptoProof
 from ...domain.vendor.entities import PaymentChannel, PaymentState
 from ...domain.vendor.payment_repository import PaymentRepository
 from .payment_channel_repository_base_impl import PaymentChannelRepositoryBaseImpl

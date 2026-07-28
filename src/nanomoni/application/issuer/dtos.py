@@ -48,8 +48,6 @@ class OpenChannelRequestDTO(BaseModel):
     paytree_root_b64: Optional[str] = None
     paytree_unit_value: Optional[int] = None
     paytree_max_i: Optional[int] = None
-    # 0 or None = no optimization; fixed at channel open, client cannot change mid-channel
-    paytree_optimization_type: Optional[int] = None
 
 
 class OpenChannelResponseDTO(BaseModel):

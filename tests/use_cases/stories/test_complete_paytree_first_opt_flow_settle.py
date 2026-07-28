@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
 )
-from nanomoni.crypto.paytree_scheme import PaytreeFirstOptCryptoScheme
+from nanomoni.application.shared.paytree_scheme import PaytreeFirstOptCryptoScheme
 from nanomoni.infrastructure.vendor.merkle_node_repository_impl import (
     MerkleNodeRepositoryImpl,
 )
@@ -88,7 +88,6 @@ async def test_paytree_first_opt_settle_succeeds_when_channel_in_first_opt_store
         amount=channel_amount,
         unit_value=unit_value,
         max_i=max_i,
-        paytree_optimization_type=1,
     )
     channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
     channel_id = channel_response.channel_id

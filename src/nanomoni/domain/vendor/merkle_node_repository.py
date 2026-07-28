@@ -33,6 +33,15 @@ class MerkleNodeRepository(Protocol):
         proof_json: str,
         is_closed: bool,
         created_at_ts: float,
-    ) -> None: ...
+    ) -> tuple[int, Optional[int]]:
+        """Atomically save merkle nodes + channel/state/proof with a monotonic CAS.
+
+        Returns (status, stored_ref):
+          1 = success (stored_ref = new_ref)
+          0 = stale/not-increasing (stored_ref = current last_proof_reference)
+          2 = no max_steps available for the channel
+          3 = capacity exceeded (stored_ref = current last_proof_reference)
+        """
+        ...
 
     async def delete(self, channel_id: str) -> int: ...

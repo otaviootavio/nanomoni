@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Protocol
 
 from .entities import PaymentChannel, PaymentChannelBase, PaymentState
-from ...crypto.scheme import CryptoProof
+from ..shared.crypto_proof import CryptoProof
 
 
 class PaymentRepository(Protocol):

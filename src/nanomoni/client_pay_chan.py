@@ -129,7 +129,6 @@ async def run_client_flow() -> None:
                 paytree_root_b64,
                 paytree_unit_value,
                 paytree_max_i,
-                paytree_optimization_type=1,
             )
         else:
             open_dto = signature.build_open_channel_request(

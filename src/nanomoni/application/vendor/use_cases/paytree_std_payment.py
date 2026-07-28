@@ -13,8 +13,8 @@ from ....application.issuer.paytree_dtos import PaytreeSettlementRequestDTO
 from ....application.shared.paytree_payloads import PaytreeSettlementPayload
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.paytree_scheme import PaytreeStdCryptoScheme
-from ....crypto.scheme import CryptoProof
+from ...shared.paytree_scheme import PaytreeStdCryptoScheme
+from ....domain.shared.crypto_proof import CryptoProof
 from ....domain.shared import IssuerClientFactory
 from ....domain.shared.proof_reference import PaymentScheme, ProofReference
 from ....domain.vendor.entities import PaymentChannel, PaymentState

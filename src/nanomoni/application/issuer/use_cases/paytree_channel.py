@@ -46,13 +46,10 @@ class PaytreeChannelService:
         account_repo: AccountRepository,
         channel_repo: PaymentChannelRepository,
         issuer_private_key: ec.EllipticCurvePrivateKey,
-        *,
-        optimization_type: int = 0,
     ):
         self.account_repo = account_repo
         self.channel_repo = channel_repo
         self.issuer_private_key = issuer_private_key
-        self.optimization_type = optimization_type
 
     @staticmethod
     def _compute_channel_id(
@@ -74,8 +71,6 @@ class PaytreeChannelService:
             or dto.paytree_max_i is None
         ):
             raise ValueError("PayTree fields are required for PayTree channel opening")
-
-        optimization_type = self.optimization_type
 
         # Verify client signature over the flat DTO fields
         # Reconstruct canonical JSON from DTO fields (excluding signature)
@@ -145,7 +140,6 @@ class PaytreeChannelService:
             paytree_root_b64=dto.paytree_root_b64,
             paytree_unit_value=dto.paytree_unit_value,
             paytree_max_i=dto.paytree_max_i,
-            paytree_optimization_type=optimization_type,
         )
         created = await self.channel_repo.create(channel)
         if not isinstance(created, PaytreePaymentChannel):
@@ -178,7 +172,6 @@ class PaytreeChannelService:
             paytree_root_b64=created.paytree_root_b64,
             paytree_unit_value=created.paytree_unit_value,
             paytree_max_i=created.paytree_max_i,
-            paytree_optimization_type=created.paytree_optimization_type,
         )
 
     async def settle_channel(

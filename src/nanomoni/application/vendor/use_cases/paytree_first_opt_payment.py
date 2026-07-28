@@ -20,8 +20,8 @@ from ....crypto.merkle_tree import (
     get_proof_dependency_indexes,
 )
 from ....crypto.paytree import b64_to_bytes, bytes_to_b64
-from ....crypto.paytree_scheme import PaytreeFirstOptCryptoScheme
-from ....crypto.scheme import CryptoProof
+from ...shared.paytree_scheme import PaytreeFirstOptCryptoScheme
+from ....domain.shared.crypto_proof import CryptoProof
 from ....domain.shared import IssuerClientFactory
 from ....domain.shared.proof_reference import PaymentScheme, ProofReference
 from ....domain.vendor.entities import PaymentChannel, PaymentState
@@ -241,7 +241,10 @@ class PaytreeFirstOptPaymentService:
             {"scheme": store_proof.scheme.value, **store_proof.data}
         )
 
-        await node_repo.save_nodes_and_payment(
+        # The atomic monotonic CAS lives inside save_nodes_and_payment, so a
+        # concurrent request that advanced the reference cannot be overwritten
+        # here (unlike the previous unconditional SET).
+        status, stored_ref = await node_repo.save_nodes_and_payment(
             channel_id=channel_id,
             node_updates=node_updates,
             new_ref=dto.i,
@@ -252,12 +255,21 @@ class PaytreeFirstOptPaymentService:
             created_at_ts=payment_channel.created_at.timestamp(),
         )
 
-        return PaytreePaymentResponseDTO(
-            channel_id=channel_id,
-            i=dto.i,
-            cumulative_owed_amount=cumulative_owed,
-            created_at=created_at,
-        )
+        if status == 1:
+            return PaytreePaymentResponseDTO(
+                channel_id=channel_id,
+                i=dto.i,
+                cumulative_owed_amount=cumulative_owed,
+                created_at=created_at,
+            )
+        if status == 0:
+            raise ValueError(
+                f"PayTree i must be increasing (race detected). Got {dto.i}, "
+                f"channel has {stored_ref}"
+            )
+        if status == 3:
+            raise ValueError("PayTree i exceeds max_i for this channel")
+        raise RuntimeError(f"Unexpected result from atomic save: status={status}")
 
     async def _rebuild_paytree_proof_for_settlement(
         self,

@@ -22,9 +22,9 @@ from .merkle_index import (
 from .merkle_tree import (
     build_merkle_tree,
     hash_bytes,
+    proof_indexes_first_opt,
     verify_proof_to_known_node,
 )
-from nanomoni.protocol import proof_indexes_first_opt
 
 
 def b64_to_bytes(data_b64: str) -> bytes:

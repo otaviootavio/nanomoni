@@ -145,6 +145,9 @@ _SAVE_CHANNEL_AND_INITIAL_PAYMENT_UNIFIED_SCRIPT = """
 """
 
 # save_payment_with_nodes: first-opt PayTree atomic save (nodes + channel + state + proof).
+# Performs the same monotonic CAS as save_payment (against the *stored* channel's
+# last_proof_reference / max_steps) so concurrent first-opt payments cannot move the
+# reference backwards or exceed capacity. Nothing is written unless the CAS passes.
 # KEYS[1] = merkle_node_index:{id}, KEYS[2] = payment_channel:{id},
 # KEYS[3] = payment_state:{id}, KEYS[4] = crypto_proof:{id},
 # KEYS[5] = payment_channels:open, KEYS[6] = payment_channels:closed
@@ -152,6 +155,8 @@ _SAVE_CHANNEL_AND_INITIAL_PAYMENT_UNIFIED_SCRIPT = """
 # ARGV[3..2+2n] = node_suffix, val pairs,
 # ARGV[3+2n] = new_ref, ARGV[4+2n] = state_json, ARGV[5+2n] = proof_json,
 # ARGV[6+2n] = channel_json, ARGV[7+2n] = is_closed ("0"/"1"), ARGV[8+2n] = created_ts
+# Returns {status, ref}: 1 = success (ref=new_ref), 0 = stale/not-increasing (ref=prev),
+#         2 = no max_steps available, 3 = capacity exceeded (ref=prev).
 _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
     local index_key = KEYS[1]
     local channel_key = KEYS[2]
@@ -163,20 +168,6 @@ _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
     local n = tonumber(ARGV[2]) or 0
     local prefix = "merkle_node:" .. channel_id .. ":"
 
-    local old_is_closed = nil
-    local existing = redis.call('GET', channel_key)
-    if existing and existing ~= '' then
-        local ch = cjson.decode(existing)
-        old_is_closed = ch.is_closed
-    end
-
-    for i = 1, n do
-        local suffix = ARGV[2 + (i-1)*2 + 1]
-        local val = ARGV[2 + (i-1)*2 + 2]
-        redis.call('SET', prefix .. suffix, val)
-        redis.call('ZADD', index_key, 0, suffix)
-    end
-
     local new_ref = tonumber(ARGV[3 + n*2])
     local state_json = ARGV[4 + n*2]
     local proof_json = ARGV[5 + n*2]
@@ -184,11 +175,58 @@ _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
     local new_is_closed = (ARGV[7 + n*2] == '1')
     local created_ts = tonumber(ARGV[8 + n*2]) or 0
 
+    -- Resolve the authoritative max_steps and previous reference for the CAS.
+    -- A stored channel is the source of truth; for a brand-new channel fall back
+    -- to the channel_json being written (sourced from the issuer).
+    local max_steps = nil
+    local prev = -1
+    local old_is_closed = nil
+    local existing = redis.call('GET', channel_key)
+    if existing and existing ~= '' then
+        local ch = cjson.decode(existing)
+        old_is_closed = ch.is_closed
+        max_steps = tonumber(ch.max_steps)
+        local last_ref = ch.last_proof_reference
+        if last_ref ~= nil and last_ref ~= cjson.null then
+            prev = tonumber(last_ref)
+        end
+    else
+        local new_ch = cjson.decode(channel_json)
+        max_steps = tonumber(new_ch.max_steps)
+    end
+
+    if not max_steps then
+        return {2, ''}
+    end
+    if new_ref > max_steps then
+        return {3, tostring(prev)}
+    end
+    if new_ref <= prev then
+        return {0, tostring(prev)}
+    end
+
+    -- CAS passed: commit nodes first, then channel/state/proof atomically.
+    for i = 1, n do
+        local suffix = ARGV[2 + (i-1)*2 + 1]
+        local val = ARGV[2 + (i-1)*2 + 2]
+        redis.call('SET', prefix .. suffix, val)
+        redis.call('ZADD', index_key, 0, suffix)
+    end
+
     redis.call('SET', channel_key, channel_json)
     redis.call('SET', state_key, state_json)
     redis.call('SET', proof_key, proof_json)
 
-    if old_is_closed ~= nil and old_is_closed ~= new_is_closed then
+    if old_is_closed == nil then
+        -- Brand-new channel in the vendor store: register it in the indexes so
+        -- get_all()/listing and index-based cleanup can see it.
+        redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
+        if new_is_closed then
+            redis.call('ZADD', closed_key, created_ts, channel_id)
+        else
+            redis.call('ZADD', open_key, created_ts, channel_id)
+        end
+    elseif old_is_closed ~= new_is_closed then
         if new_is_closed then
             redis.call('ZREM', open_key, channel_id)
             redis.call('ZADD', closed_key, created_ts, channel_id)

@@ -46,8 +46,8 @@ from __future__ import annotations
 from nanomoni.crypto.merkle_index import key_eytzinger
 from nanomoni.crypto.merkle_tree import build_merkle_tree, hash_bytes
 from nanomoni.crypto.paytree import bytes_to_b64
-from nanomoni.crypto.paytree_scheme import PaytreeFirstOptCryptoScheme
-from nanomoni.crypto.scheme import CryptoProof
+from nanomoni.application.shared.paytree_scheme import PaytreeFirstOptCryptoScheme
+from nanomoni.domain.shared.crypto_proof import CryptoProof
 from nanomoni.domain.shared.proof_reference import PaymentScheme, ProofReference
 
 # 8-leaf committed tree -> depth 3, max_steps (max leaf index) = 7.

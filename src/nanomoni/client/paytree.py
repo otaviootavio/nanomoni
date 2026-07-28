@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from asyncio import sleep
 from time import perf_counter
-from typing import Optional
 
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
@@ -49,7 +48,6 @@ def build_open_payload(
     paytree_root_b64: str,
     paytree_unit_value: int,
     paytree_max_i: int,
-    paytree_optimization_type: Optional[int] = None,
 ) -> PaytreeOpenChannelRequestPayload:
     return PaytreeOpenChannelRequestPayload(
         client_public_key_der_b64=client_public_key_der_b64,
@@ -58,7 +56,6 @@ def build_open_payload(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
-        paytree_optimization_type=paytree_optimization_type,
     )
 
 
@@ -70,7 +67,6 @@ def build_open_channel_request(
     paytree_root_b64: str,
     paytree_unit_value: int,
     paytree_max_i: int,
-    paytree_optimization_type: Optional[int] = None,
 ) -> OpenChannelRequestDTO:
     payload = PaytreeOpenChannelRequestPayload(
         client_public_key_der_b64=client_public_key_der_b64,
@@ -79,7 +75,6 @@ def build_open_channel_request(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
-        paytree_optimization_type=paytree_optimization_type,
     )
     payload_bytes = json_to_bytes(payload.model_dump(exclude_none=True))
     signature_b64 = sign_bytes(client_private_key, payload_bytes)
@@ -92,7 +87,6 @@ def build_open_channel_request(
         paytree_root_b64=paytree_root_b64,
         paytree_unit_value=paytree_unit_value,
         paytree_max_i=paytree_max_i,
-        paytree_optimization_type=paytree_optimization_type,
     )
 
 

@@ -21,15 +21,15 @@ Steps shared by both:
 
 3. Duplicate check (same logic): `prev_i`, `prev_leaf` from channel; `check_duplicate_paytree_payment_by_leaf(i, leaf, prev_i, prev_leaf)` (in-memory).
 
-4. Branch on **`payment_channel.paytree_optimization_type`**:
-   - **1** → first-opt flow (`_receive_paytree_payment_first_opt`).
-   - **0** (or else) → standard flow (full proof + `PaytreeState`).
+4. Route selects the flow:
+   - **`/channels/paytree/first-opt/...`** → first-opt flow (`PaytreeFirstOptPaymentService`).
+   - **`/channels/paytree/std/...`** → standard flow (full proof + `PaytreeState`).
 
-So the **first store access is the same** in both: one pruned channel fetch. The difference is what happens after the branch.
+So the **first store access is the same** in both: one pruned channel fetch. The difference is what happens after the route selects the service.
 
 ---
 
-## 2. Standard flow (optimization_type = 0)
+## 2. Standard flow (`/channels/paytree/std`)
 
 **Goal:** Persist **full proof** as `PaytreeState` and keep channel metadata in sync, with atomic scripts.
 
@@ -55,7 +55,7 @@ Wide red blocks for `save_paytree_pay` / `save_paytree_payme` (the script-driven
 
 ---
 
-## 3. First-optimization flow (optimization_type = 1)
+## 3. First-optimization flow (`/channels/paytree/first-opt`)
 
 **Goal:** Persist only **sparse Merkle nodes** and channel metadata; no full `PaytreeState`; verify using root + subroot from the node store.
 
