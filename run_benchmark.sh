@@ -90,6 +90,16 @@ run_paytree() {
   run_mode "paytree"
 }
 
+run_paytree_first_opt() {
+  source envs/client.env.sh
+  export CLIENT_PAYMENT_MODE="paytree_first_opt"
+  export CLIENT_PAYMENT_COUNT=$BENCHMARK_COUNT_VAR
+  export CLIENT_PAYTREE_MAX_I=$BENCHMARK_COUNT_VAR
+  # Ensure channel_amount >= (max_i * unit_value) with headroom for remainder.
+  export CLIENT_CHANNEL_AMOUNT=10000000
+  run_mode "paytree_first_opt"
+}
+
 run_payword() {
   source envs/client.env.sh
   export CLIENT_PAYMENT_MODE="payword"
@@ -114,6 +124,8 @@ for tps in "${TPS_VALUES[@]}"; do
   run_signature
   sleep "$SLEEP_TIME"
   run_paytree
+  sleep "$SLEEP_TIME"
+  run_paytree_first_opt
   sleep "$SLEEP_TIME"
   run_payword
   sleep "$SLEEP_TIME"

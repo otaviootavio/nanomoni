@@ -158,6 +158,7 @@ async def get_paytree_first_opt_payment_service(
         payment_repository=get_payment_repository(),
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
-        crypto_scheme=PaytreeFirstOptCryptoScheme(node_repo=node_repo),
+        crypto_scheme=PaytreeFirstOptCryptoScheme(),
+        node_repo=node_repo,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )

@@ -11,7 +11,7 @@ class CryptoProof:
     """Raw scheme-specific proof data.  Opaque above the crypto layer.
 
     PayTree (storage):  {"leaf_b64": str, "siblings_b64": list[str], "optimization_type": int}
-    PayTree (verify):   above + {"max_steps": int, "channel_id": str}
+    PayTree (verify):   above + {"max_steps": int}
     PayWord (storage):  {"token_b64": str}
     PayWord (verify):   above + {"prev_token_b64": str|None, "delta_k": int|None}
     """

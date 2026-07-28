@@ -25,6 +25,7 @@ from ....crypto.scheme import CryptoProof
 from ....domain.shared import IssuerClientFactory
 from ....domain.shared.proof_reference import PaymentScheme, ProofReference
 from ....domain.vendor.entities import PaymentChannel, PaymentState
+from ....domain.vendor.merkle_node_repository import MerkleNodeRepository
 from ....domain.vendor.payment_repository import PaymentRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ....protocol import infer_subroot_index_for_incoming_pruned_merkle_proof
@@ -88,6 +89,7 @@ class PaytreeFirstOptPaymentService:
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         crypto_scheme: PaytreeFirstOptCryptoScheme,
+        node_repo: MerkleNodeRepository,
         *,
         vendor_private_key_pem: Optional[str] = None,
     ):
@@ -95,6 +97,7 @@ class PaytreeFirstOptPaymentService:
         self.issuer_client_factory = issuer_client_factory
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
         self.crypto_scheme = crypto_scheme
+        self.node_repo = node_repo
         self.vendor_private_key_pem = vendor_private_key_pem
 
     async def receive_payment(
@@ -102,15 +105,19 @@ class PaytreeFirstOptPaymentService:
         channel_id: str,
         dto: ReceivePaytreeFirstOptPaymentDTO,
     ) -> PaytreePaymentResponseDTO:
-        node_repo = self.crypto_scheme._node_repo
-        depth = compute_tree_depth(dto.paytree_max_i)
-        root_key = key_eytzinger(depth, 0, depth)
-        subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
-            dto.i, len(dto.siblings_b64), depth
+        node_repo = self.node_repo
+
+        # Best-effort key guess to combine the channel read with a node read in
+        # one round trip, before the channel (and its authoritative max_steps)
+        # is even known. dto.paytree_max_i is client-supplied and only used here.
+        prefetch_depth = compute_tree_depth(dto.paytree_max_i)
+        prefetch_root_key = key_eytzinger(prefetch_depth, 0, prefetch_depth)
+        prefetch_subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
+            dto.i, len(dto.siblings_b64), prefetch_depth
         )
 
         channel_json, nodes = await node_repo.get_channel_and_nodes(
-            channel_id, [root_key, subroot_index]
+            channel_id, [prefetch_root_key, prefetch_subroot_index]
         )
 
         if not channel_json:
@@ -119,18 +126,32 @@ class PaytreeFirstOptPaymentService:
             )
             if payment_channel.commitment:
                 await node_repo.merge_nodes(
-                    channel_id, {root_key: payment_channel.commitment}
+                    channel_id, {prefetch_root_key: payment_channel.commitment}
                 )
         else:
             payment_channel = PaymentChannel.model_validate_json(channel_json)
-            root_b64 = nodes.get(root_key) or ""
+            root_b64 = nodes.get(prefetch_root_key) or ""
             if not root_b64 and payment_channel.commitment:
                 await node_repo.merge_nodes(
-                    channel_id, {root_key: payment_channel.commitment}
+                    channel_id, {prefetch_root_key: payment_channel.commitment}
                 )
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
+
+        # From here on, every node-store key is derived from the channel's
+        # authoritative max_steps — not dto.paytree_max_i, which only primed the
+        # read above — same as verify() trusting channel.commitment (not client
+        # input) as the root. Reuse the prefetch if it happens to already cover
+        # these keys (the common case, since paytree_max_i normally matches);
+        # otherwise do one fresh, authoritative read.
+        depth = compute_tree_depth(payment_channel.max_steps)
+        root_key = key_eytzinger(depth, 0, depth)
+        subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
+            dto.i, len(dto.siblings_b64), depth
+        )
+        if root_key not in nodes or subroot_index not in nodes:
+            nodes = await node_repo.get_nodes(channel_id, [root_key, subroot_index])
 
         new_ref = ProofReference(value=dto.i)
         prev_ref = (
@@ -156,11 +177,10 @@ class PaytreeFirstOptPaymentService:
                         "leaf_b64": dto.leaf_b64,
                         "siblings_b64": dto.siblings_b64,
                         "max_steps": payment_channel.max_steps,
-                        "channel_id": channel_id,
                     },
                 )
-                if not await self.crypto_scheme.verify(
-                    payment_channel.commitment, new_ref, verify_proof
+                if not self.crypto_scheme.verify(
+                    payment_channel.commitment, new_ref, verify_proof, nodes=nodes
                 ):
                     raise ValueError("Invalid PayTree first-opt proof")
                 created_at = (
@@ -190,11 +210,10 @@ class PaytreeFirstOptPaymentService:
                 "leaf_b64": dto.leaf_b64,
                 "siblings_b64": dto.siblings_b64,
                 "max_steps": payment_channel.max_steps,
-                "channel_id": channel_id,
             },
         )
-        if not await self.crypto_scheme.verify(
-            payment_channel.commitment, new_ref, verify_proof
+        if not self.crypto_scheme.verify(
+            payment_channel.commitment, new_ref, verify_proof, nodes=nodes
         ):
             raise ValueError("Invalid PayTree first-opt proof (verification failed)")
 
@@ -247,7 +266,7 @@ class PaytreeFirstOptPaymentService:
         last_i: int,
         last_leaf_b64: str,
     ) -> Optional[tuple[str, list[str]]]:
-        node_repo = self.crypto_scheme._node_repo
+        node_repo = self.node_repo
         depth = compute_tree_depth(channel.max_steps)
         full_sibling_indexes = build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
             0, last_i, depth, 0

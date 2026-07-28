@@ -40,7 +40,8 @@ def paytree_first_opt_payment_service_fixture(
         payment_repository=vendor_payment_repositories.payment,
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=vendor_public_key_der_b64,
-        crypto_scheme=PaytreeFirstOptCryptoScheme(node_repo=node_repo),
+        crypto_scheme=PaytreeFirstOptCryptoScheme(),
+        node_repo=node_repo,
         vendor_private_key_pem=vendor_private_key_pem,
     )
 

@@ -14,7 +14,7 @@ export VENDOR_API_HOST="0.0.0.0"
 export VENDOR_API_PORT="8000"
 export VENDOR_API_DEBUG="false"
 export VENDOR_API_CORS_ORIGINS="*"
-export VENDOR_API_WORKERS="16"
+export VENDOR_API_WORKERS="1"
 
 # Prometheus multiprocess metrics directory (must be writable by the app)
 export PROMETHEUS_MULTIPROC_DIR="/tmp/prometheus_vendor"

@@ -13,7 +13,6 @@ from ..crypto.merkle_index import (
 from ..domain.shared.proof_reference import ProofReference
 from ..protocol import infer_subroot_index_for_incoming_pruned_merkle_proof
 from .scheme import CryptoProof
-from ..domain.vendor.merkle_node_repository import MerkleNodeRepository
 
 
 class PaytreeStdCryptoScheme:
@@ -35,22 +34,25 @@ class PaytreeStdCryptoScheme:
 
 
 class PaytreeFirstOptCryptoScheme:
-    """Node-store-backed verifier for first-opt (pruned leaf→sub-root) PayTree proofs."""
+    """Stateless verifier for first-opt (pruned leaf→sub-root) PayTree proofs.
 
-    def __init__(self, node_repo: MerkleNodeRepository) -> None:
-        self._node_repo = node_repo
+    Takes the sub-root/root node values as an already-read ``nodes`` argument —
+    same pattern as ``commitment`` on ``PaytreeStdCryptoScheme`` — rather than
+    fetching them itself. The caller (which already reads the node store once
+    up front to derive the channel) owns sourcing and freshness of ``nodes``.
+    """
 
-    async def verify(
+    def verify(
         self,
         commitment: str,
         reference: ProofReference,
         proof: CryptoProof,
+        nodes: dict[str, str],
     ) -> bool:
         i = reference.value
         leaf_b64: str = proof.data["leaf_b64"]
         siblings_b64: list[str] = proof.data["siblings_b64"]
         max_steps: int = int(proof.data["max_steps"])
-        channel_id: str = proof.data.get("channel_id", "")
 
         depth = max_steps.bit_length() if max_steps > 0 else 0
         root_key = key_eytzinger(depth, 0, depth)
@@ -58,7 +60,6 @@ class PaytreeFirstOptCryptoScheme:
             i, len(siblings_b64), depth
         )
 
-        nodes = await self._node_repo.get_nodes(channel_id, [root_key, subroot_index])
         subroot_b64 = nodes.get(subroot_index, "")
         root_b64 = nodes.get(root_key, "") or commitment
 
