@@ -98,7 +98,9 @@ async def test_first_opt_save_rejects_stale_reference() -> None:
     store, repo = await _new_repo()
 
     # First payment i=5 succeeds and becomes the committed reference.
-    status, ref = await _save(repo, _make_channel("c1", max_steps=128, last_ref=None), 5)
+    status, ref = await _save(
+        repo, _make_channel("c1", max_steps=128, last_ref=None), 5
+    )
     assert (status, ref) == (1, 5)
 
     # A concurrent request that read prev=5 but arrives with a lower i must be
@@ -132,7 +134,9 @@ async def test_first_opt_save_prevents_reorder_double_write() -> None:
 async def test_first_opt_save_rejects_reference_beyond_max_steps() -> None:
     store, repo = await _new_repo()
 
-    status, _ = await _save(repo, _make_channel("c1", max_steps=128, last_ref=None), 200)
+    status, _ = await _save(
+        repo, _make_channel("c1", max_steps=128, last_ref=None), 200
+    )
     assert status == 3
     assert await _stored_ref(store, "c1") is None
 
