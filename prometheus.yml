@@ -6,7 +6,16 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']
 
+  # Scraped far faster than the 15s global default so the saturation sweep can
+  # measure achieved TPS with rate(...[10s]) -- 10 samples per window -- and keep
+  # benchmark runs short. rate() needs >= 2 samples in its window (4+ to be
+  # robust), so the scrape interval is what sets the minimum usable run length.
+  # scrape_timeout must be <= scrape_interval or Prometheus refuses to start; the
+  # global default is 10s, so it is overridden here too. Measured cost: the
+  # vendor renders /metrics in ~6ms (267 series), i.e. ~0.6% of its CPU at 1s.
   - job_name: 'vendor-api'
+    scrape_interval: 1s
+    scrape_timeout: 900ms
     static_configs:
       - targets: ['vendor:8000']
 

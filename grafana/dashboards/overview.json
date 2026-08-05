@@ -1562,7 +1562,7 @@
           "refId": "A"
         }
       ],
-      "title": "Issuer Redis CPU Usage (Cores)",
+      "title": "Vendor Redis CPU Usage (Cores)",
       "type": "timeseries"
     },
     {
@@ -1664,7 +1664,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1675,7 +1675,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[1m])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1688,7 +1688,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[1m])",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1701,7 +1701,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1714,7 +1714,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1727,7 +1727,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1740,7 +1740,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1753,12 +1753,38 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_child_pair_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Child-Pair",
+          "range": true,
+          "refId": "I"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_child_pair_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[10s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Child-Pair (client_error)",
+          "range": true,
+          "refId": "J"
         }
       ],
       "title": "Vendor Payment TPS (success)",
@@ -1854,7 +1880,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(\n  0.99,\n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(\n  0.99,\n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Signature P99",
@@ -1867,7 +1893,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Signature P95",
@@ -1880,7 +1906,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Signature P50",
@@ -1893,7 +1919,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Payword P99",
@@ -1906,7 +1932,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Payword P95",
@@ -1919,7 +1945,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(payword_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Payword P50",
@@ -1932,7 +1958,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P99",
@@ -1945,7 +1971,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P95",
@@ -1958,7 +1984,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P50",
@@ -1971,7 +1997,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1984,7 +2010,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1997,12 +2023,51 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "L"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_child_pair_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Child-Pair P99",
+          "range": true,
+          "refId": "M"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_child_pair_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Child-Pair P95",
+          "range": true,
+          "refId": "N"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_child_pair_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Child-Pair P50",
+          "range": true,
+          "refId": "O"
         }
       ],
       "title": "Vendor Payment Duration Average (ms)",

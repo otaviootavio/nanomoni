@@ -10,35 +10,15 @@ metric-vs-TPS charts at ``plots/<timestamp>/``.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from bench_plotter.io_utils import load_json_data
+from bench_plotter.io_utils import load_timing_file as _load_timing
 from bench_plotter.pipeline import generate_plots_from_intervals
 
+from bench_plotter.profiling.aggregate import generate_profile_outputs
+
 from .aggregate import generate_aggregate_plots
-
-
-def _load_timing(path: str) -> Tuple[str, List[Dict[str, Any]]]:
-    """Return ``(server_run_timestamp, runs)`` from a timing file.
-
-    Accepts the sweep object shape or a legacy bare list (timestamp then
-    derived from ``now``).
-    """
-    data = load_json_data(path)
-    if isinstance(data, dict):
-        ts = data.get("server_run_timestamp") or datetime.now().strftime(
-            "%Y%m%d_%H%M%S"
-        )
-        runs = data.get("runs", [])
-        if not isinstance(runs, list):
-            runs = []
-        return str(ts), [r for r in runs if isinstance(r, dict)]
-    if isinstance(data, list):
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return ts, [r for r in data if isinstance(r, dict)]
-    return datetime.now().strftime("%Y%m%d_%H%M%S"), []
 
 
 def _successful(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -70,6 +50,9 @@ def _interval_for_pipeline(run: Dict[str, Any]) -> Dict[str, Any]:
         "mode": run.get("mode"),
         "status": run.get("status", "success"),
         "prometheus_timestamps": run.get("prometheus_timestamps", {}),
+        # Kept so the pipeline can turn a per-second rate into a per-payment
+        # amount (see pipeline/per_payment_table_transform.py).
+        "tps": run.get("tps"),
     }
 
 
@@ -118,6 +101,17 @@ def generate_sweep_plots(
     aggregate_runs = [r for r in runs if r.get("tps") is not None]
     written.extend(
         generate_aggregate_plots(
+            aggregate_runs,
+            output_dir=str(base),
+            workers=workers,
+            parallel=parallel,
+        )
+    )
+    # Best-effort: a down/unreachable Pyroscope must not fail the rest of the
+    # sweep, so generate_profile_outputs already swallows and logs its own
+    # errors internally.
+    written.extend(
+        generate_profile_outputs(
             aggregate_runs,
             output_dir=str(base),
             workers=workers,

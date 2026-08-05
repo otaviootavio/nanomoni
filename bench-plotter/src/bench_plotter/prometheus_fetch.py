@@ -19,25 +19,32 @@ import httpx
 from bench_plotter.settings import prometheus_base_url
 
 
-_SCRAPE_INTERVAL_SECONDS = 15
+_MIN_STEP_SECONDS = 5
 # Prometheus's query_range API rejects requests whose point count would exceed
 # roughly this many points per series.
 _MAX_POINTS_PER_SERIES = 11_000
 
 
 def _step_for_range_seconds(total_seconds: float) -> str:
-    """Query at the Prometheus scrape_interval (15s), widening only if needed.
+    """Query at 5s, widening only if needed.
 
-    A step finer than the scrape interval only yields duplicated (stair-stepped)
-    points and noisy rate() output, so 15s is the floor. It's also usually the
-    ceiling: coarsening the step for large windows is unnecessary noise
-    reduction for the minutes-to-hours-long windows this tool queries. But
-    Prometheus caps the number of points a query_range call may return, so for
-    a window long enough to exceed that cap at 15s, the step is widened just
-    enough to stay under it rather than letting the query fail outright.
+    5s is not a scrape interval -- it's a floor chosen to cover the tightest
+    rate() window used anywhere in this codebase: vendor-api metrics use
+    ``rate(...[10s])`` (matching that job's 1s scrape), and a step wider than
+    the window leaves a gap `rate()` never covers (window 10s, step 15s: the
+    window at t covers (t-10, t], the next at t+15 covers (t+5, t+15], so
+    (t, t+5] is never evaluated). A step no wider than the window guarantees
+    the evaluations overlap and nothing is missed. cadvisor's coarser
+    ``[1m]`` windows are unaffected -- they just get extra, harmless points at
+    this finer step. It's also usually the ceiling: coarsening the step for
+    large windows is unnecessary noise reduction for the minutes-to-hours-long
+    windows this tool queries. But Prometheus caps the number of points a
+    query_range call may return, so for a window long enough to exceed that
+    cap at 5s, the step is widened just enough to stay under it rather than
+    letting the query fail outright.
     """
-    if total_seconds <= _SCRAPE_INTERVAL_SECONDS * _MAX_POINTS_PER_SERIES:
-        return f"{_SCRAPE_INTERVAL_SECONDS}s"
+    if total_seconds <= _MIN_STEP_SECONDS * _MAX_POINTS_PER_SERIES:
+        return f"{_MIN_STEP_SECONDS}s"
     step = math.ceil(total_seconds / _MAX_POINTS_PER_SERIES)
     return f"{step}s"
 

@@ -97,69 +97,6 @@ class PaymentService:
         except ValidationError as e:
             raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
-    async def _save_payment_with_retry(
-        self,
-        *,
-        channel_id: str,
-        payment_channel: SignaturePaymentChannel,
-        new_state: SignatureState,
-        is_first_payment: bool,
-    ) -> tuple[int, Optional[SignatureState], SignaturePaymentChannel]:
-        """
-        Save an off-chain payment, reconciling vendor cache races.
-
-        Repository status codes:
-          - 1: stored successfully (returns stored_tx)
-          - 0: rejected (race / not increasing; returns current tx or None)
-          - 2: channel missing in vendor cache (needs issuer verification)
-
-        """
-
-        # We may need up to two passes:
-        # - First attempt using current local knowledge.
-        # - If status==2, fetch from issuer, then retry initial-cache + save.
-        for attempt in range(2):
-            if is_first_payment:
-                (
-                    status,
-                    stored_state,
-                ) = await self.payment_channel_repository.save_channel_and_initial_payment(
-                    payment_channel, new_state
-                )
-                if status == 1:
-                    return status, stored_state, payment_channel
-
-                # status == 0: cache collision; switch to subsequent-save flow
-                is_first_payment = False
-                cached = await self.payment_channel_repository.get_by_channel_id(
-                    channel_id
-                )
-                if not cached:
-                    raise RuntimeError(
-                        "Race condition handling failed: channel missing after collision"
-                    )
-                if not isinstance(cached, SignaturePaymentChannel):
-                    raise TypeError("Cached channel is not signature-mode")
-                payment_channel = cached
-
-            status, stored_state = await self.payment_channel_repository.save_payment(
-                payment_channel, new_state
-            )
-
-            if status != 2:
-                return status, stored_state, payment_channel
-
-            # status == 2: vendor cache is missing the channel; fetch from issuer,
-            # then cache it and retry the save flow once.
-            if attempt == 0:
-                payment_channel = await self._verify_payment_channel(channel_id)
-                is_first_payment = True
-                continue
-
-        # If we get here, something is inconsistent (e.g., channel was verified
-        # but still appears missing in storage).
-        return status, stored_state, payment_channel
-
     async def receive_payment(self, dto: ReceivePaymentDTO) -> OffChainTxResponseDTO:
         """Receive and validate an off-chain payment from a client."""
         # 1) Get full channel aggregate (lazy load)
@@ -235,16 +172,62 @@ class PaymentService:
             created_at=datetime.now(timezone.utc),
         )
 
-        (
-            status,
-            stored_tx,
-            _payment_channel,
-        ) = await self._save_payment_with_retry(
-            channel_id=dto.channel_id,
-            payment_channel=payment_channel,
-            new_state=signature_state,
-            is_first_payment=is_first_payment,
-        )
+        # 7) Save with retry, reconciling vendor cache races.
+        #
+        # Repository status codes:
+        #   - 1: stored successfully (returns stored_tx)
+        #   - 0: rejected (race / not increasing; returns current tx or None)
+        #   - 2: channel missing in vendor cache (needs issuer verification)
+        #
+        # Inlined as sibling calls (matching payword/paytree's retry shape)
+        # rather than a nested wrapper: every repository call here sits
+        # directly under receive_payment, so CPU-time profiling attributes
+        # each one to the same leaf name at the same depth, instead of
+        # nesting a second get_by_channel_id/issuer-HTTP call inside another
+        # db-bucket function.
+        #
+        # Up to two passes: first attempt using current local knowledge; if
+        # status==2, fetch from issuer, then retry initial-cache + save.
+        status: int
+        stored_tx: Optional[SignatureState]
+        for attempt in range(2):
+            if is_first_payment:
+                (
+                    status,
+                    stored_tx,
+                ) = await self.payment_channel_repository.save_channel_and_initial_payment(
+                    payment_channel, signature_state
+                )
+                if status == 1:
+                    break
+
+                # status == 0: cache collision; switch to subsequent-save flow
+                is_first_payment = False
+                cached = await self.payment_channel_repository.get_by_channel_id(
+                    dto.channel_id
+                )
+                if not cached:
+                    raise RuntimeError(
+                        "Race condition handling failed: channel missing after collision"
+                    )
+                if not isinstance(cached, SignaturePaymentChannel):
+                    raise TypeError("Cached channel is not signature-mode")
+                payment_channel = cached
+
+            status, stored_tx = await self.payment_channel_repository.save_payment(
+                payment_channel, signature_state
+            )
+
+            if status != 2:
+                break
+
+            # status == 2: vendor cache is missing the channel; fetch from
+            # issuer, then cache it and retry the save flow once.
+            if attempt == 0:
+                payment_channel = await self._verify_payment_channel(dto.channel_id)
+                is_first_payment = True
+                continue
+            break
 
         if status == 1:
             # Success: transaction was stored

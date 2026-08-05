@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Optional
 
+from pydantic import ValidationError
+
 from ...domain.shared.crypto_proof import CryptoProof
 from ...domain.vendor.entities import PaymentChannel, PaymentState
 from ...domain.vendor.payment_repository import PaymentRepository
@@ -14,14 +16,28 @@ from .payment_channel_repository_base_impl import PaymentChannelRepositoryBaseIm
 class PaymentRepositoryImpl(PaymentChannelRepositoryBaseImpl, PaymentRepository):
     """KeyValueStore implementation for unified PaymentChannel + PaymentState."""
 
+    def _parse_channel(self, raw: str) -> Optional[PaymentChannel]:
+        """Parse a stored channel in a single pass.
+
+        Every channel this repository owns is a ``PaymentChannel``, so it can
+        validate straight from JSON instead of going through the base class's
+        ``_deserialize_channel``, which spends an extra Python ``json.loads``
+        pass just to read ``scheme`` and pick a model. Anything that isn't a
+        proof-based channel falls back to that dispatch, which distinguishes a
+        signature-mode channel stored under the same key (not found, as before)
+        from genuinely corrupt data (raises, as before).
+        """
+        try:
+            return PaymentChannel.model_validate_json(raw)
+        except ValidationError:
+            channel = self._deserialize_channel(raw)
+            return channel if isinstance(channel, PaymentChannel) else None
+
     async def get_channel(self, channel_id: str) -> Optional[PaymentChannel]:
         raw = await self.store.get(f"payment_channel:{channel_id}")
         if not raw:
             return None
-        channel = self._deserialize_channel(raw)
-        if not isinstance(channel, PaymentChannel):
-            return None
-        return channel
+        return self._parse_channel(raw)
 
     async def get_state(self, channel_id: str) -> Optional[PaymentState]:
         raw = await self.store.get(f"payment_state:{channel_id}")
@@ -35,11 +51,7 @@ class PaymentRepositoryImpl(PaymentChannelRepositoryBaseImpl, PaymentRepository)
         channel_raw, state_raw = await self.store.mget(
             [f"payment_channel:{channel_id}", f"payment_state:{channel_id}"]
         )
-        channel: Optional[PaymentChannel] = None
-        if channel_raw:
-            c = self._deserialize_channel(channel_raw)
-            if isinstance(c, PaymentChannel):
-                channel = c
+        channel = self._parse_channel(channel_raw) if channel_raw else None
         state: Optional[PaymentState] = None
         if state_raw:
             state = PaymentState.model_validate_json(state_raw)
@@ -68,9 +80,17 @@ class PaymentRepositoryImpl(PaymentChannelRepositoryBaseImpl, PaymentRepository)
         if code == 1:
             return 1, new_state
         if code == 0:
+            # The script's stale branch returns only the previous ref
+            # (tostring(prev)), not the full state, so reconstructing the
+            # current PaymentState needs this extra read.
             return 0, await self.get_state(channel.channel_id)
         if code == 3:
-            return 3, await self.get_state(channel.channel_id)
+            # Unlike the stale branch, the capacity-exceeded branch already
+            # returns the full current state JSON (or '' if none), so it can
+            # be parsed directly instead of spending a second round trip.
+            raw = result[1] if result and len(result) > 1 else None
+            state = PaymentState.model_validate_json(raw) if raw else None
+            return 3, state
         return 2, None
 
     async def save_channel_and_initial_state(

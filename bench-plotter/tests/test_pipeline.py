@@ -3,7 +3,7 @@
 import os
 import pickle
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytest
 
@@ -14,23 +14,24 @@ from bench_plotter.pipeline.plan import build_plan
 from bench_plotter.pipeline.fetch import _unique_specs
 
 
-def _intervals(modes: List[str]) -> List[Dict[str, Any]]:
+def _intervals(modes: List[str], tps: Optional[int] = None) -> List[Dict[str, Any]]:
     out = []
     for i, mode in enumerate(modes):
         start = 1_000_000 + i * 1000
-        out.append(
-            {
-                "mode": mode,
-                "status": "success",
-                "prometheus_timestamps": {"start_ms": start, "finish_ms": start + 600},
-            }
-        )
+        interval: Dict[str, Any] = {
+            "mode": mode,
+            "status": "success",
+            "prometheus_timestamps": {"start_ms": start, "finish_ms": start + 600},
+        }
+        if tps is not None:
+            interval["tps"] = tps
+        out.append(interval)
     return out
 
 
-def _plan_paths(modes: List[str]) -> set:
+def _plan_paths(modes: List[str], tps: Optional[int] = None) -> set:
     """All figure output paths the plan implies, expanding multi-output jobs."""
-    intervals = _intervals(modes)
+    intervals = _intervals(modes, tps)
     charts = get_charts_for_modes(set(modes))
     jobs = build_plan(intervals, charts, output_dir="plots")
     paths = set()
@@ -41,8 +42,8 @@ def _plan_paths(modes: List[str]) -> set:
             for key in ("ecdf_path", "violin_path"):
                 paths.add(os.path.relpath(job.params[key], "plots"))
         if job.kind == "latency_dist":
-            paths.add("tps_metrics/vendor_payment_latency_ecdf.png")
-            paths.add("tps_metrics/vendor_payment_latency_violin.png")
+            for key in ("ecdf_path", "violin_path", "stats_path"):
+                paths.add(os.path.relpath(job.params[key], "plots"))
     return paths
 
 
@@ -88,12 +89,21 @@ PAYWORD_CONTRACT = {
     "tps_metrics/vendor_payment_latency_boxplot.png",
     "tps_metrics/vendor_payment_latency_ecdf.png",
     "tps_metrics/vendor_payment_latency_violin.png",
+    "tps_metrics/vendor_payment_latency_stats.png",
 }
+
+# Dividing a rate by the payment rate that drove it needs the run's tps, which
+# only a sweep-built plan carries.
+PER_PAYMENT_PATH = "client_resources/client_network_kib_s_output_per_payment.png"
 
 
 class TestBuildPlan:
     def test_payword_only_path_set(self) -> None:
         assert _plan_paths(["payword"]) == PAYWORD_CONTRACT
+
+    def test_per_payment_table_only_when_intervals_carry_tps(self) -> None:
+        assert PER_PAYMENT_PATH not in _plan_paths(["payword"])
+        assert PER_PAYMENT_PATH in _plan_paths(["payword"], tps=256)
 
     def test_only_present_modes_are_queried(self) -> None:
         # A payword-only plan must not reference other modes' metrics.
@@ -161,6 +171,7 @@ class TestDrawContract:
             "precomputed_box",
             "bucket_ecdf",
             "sweep_line",
+            "stats_table",
         }
         assert expected_fns <= set(DRAW_REGISTRY)
 
