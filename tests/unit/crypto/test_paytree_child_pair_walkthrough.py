@@ -124,3 +124,36 @@ def test_verify_close_proof_rejects_tampered_sibling() -> None:
     right = node_hash_at_k(tree_levels, DEPTH, 5)
     tampered_sibling = hash_bytes(b"not-h3")
     assert not verify_child_pair_close_proof(root, 2, left, right, [tampered_sibling])
+
+
+def test_verify_close_proof_rejects_index_relabeling_forgery() -> None:
+    """A genuine close proof for a real k must not also verify for a forged k'.
+
+    Regression test for a bypass where `known_node_level` was taken from
+    `len(siblings)` (caller-controlled) instead of from k's true distance to
+    the root. Since the combine order at each hop depends only on the
+    walked index's parity, any k' congruent to the real k modulo
+    2**len(siblings) replayed the identical hash chain and reached the real
+    root without ever having a genuine proof for k'. A vendor exploiting this
+    against the issuer's settlement endpoint could claim a k' far larger than
+    the real k (up to the channel's max_i) using proof bytes from one small
+    real payment, draining most of the channel's escrow.
+    """
+    root, tree_levels = _build_tree()
+
+    # Genuine close proof for k=2 (1 outer sibling: h3).
+    left = node_hash_at_k(tree_levels, DEPTH, 4)
+    right = node_hash_at_k(tree_levels, DEPTH, 5)
+    siblings = [node_hash_at_k(tree_levels, DEPTH, 3)]
+    assert verify_child_pair_close_proof(root, 2, left, right, siblings)
+
+    # Reusing the exact same (left, right, siblings), every k' congruent to
+    # 2 modulo 2**len(siblings)==2 must be rejected, not just accepted as a
+    # fluke of the honest k=2 case.
+    for forged_k in (4, 6, 8, 10, 12, 14):
+        assert not verify_child_pair_close_proof(
+            root, forged_k, left, right, siblings
+        )
+
+    # A k' with the wrong parity for the supplied siblings must also fail.
+    assert not verify_child_pair_close_proof(root, 3, left, right, siblings)

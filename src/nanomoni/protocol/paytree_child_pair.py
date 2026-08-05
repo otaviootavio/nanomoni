@@ -54,12 +54,25 @@ def verify_close_proof(
     and k plays the role of the "leaf index" — the same even/odd-index parity
     rule that picks combine order for a leaf's authentication path applies
     identically when climbing from any Eytzinger index k to the root.
+
+    The number of hops from k to the root (Eytzinger index 1) is fixed by k
+    itself (k.bit_length() - 1) and MUST NOT be taken from len(siblings): a
+    caller-controlled sibling count lets an attacker claim an inflated k that
+    is merely congruent to the real k modulo 2**len(siblings), which replays
+    the same hash chain without ever having reached the real root at k's true
+    depth. Rejecting any sibling count that doesn't match k's true distance
+    to the root closes that alias.
     """
+    if k < 1:
+        return False
+    expected_hops = k.bit_length() - 1
+    if len(siblings) != expected_hops:
+        return False
     node = hash_bytes(left + right)
     return verify_proof_to_known_node(
         leaf_hash=node,
         leaf_index=k,
         siblings=siblings,
         known_node_hash=root,
-        known_node_level=len(siblings),
+        known_node_level=expected_hops,
     )

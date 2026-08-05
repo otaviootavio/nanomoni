@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
@@ -16,16 +17,12 @@ from ....application.vendor.use_cases.paytree_child_pair_payment import (
     PaytreeChildPairPaymentService,
 )
 from ..dependencies import get_paytree_child_pair_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/channels/paytree/child-pair", tags=["channels", "paytree-child-pair"]
-)
-
-
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]
-    + [float(x) for x in range(15, 55, 5)]
-    + [float("inf")]
 )
 
 paytree_child_pair_payment_requests_total = Counter(
@@ -77,7 +74,8 @@ async def receive_paytree_child_pair_payment(
             status="client_error"
         ).observe(elapsed)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to process PayTree child-pair payment")
         paytree_child_pair_payment_requests_total.labels(status="server_error").inc()
         elapsed = (time.perf_counter() - start_time) * 1000
         paytree_child_pair_payment_request_duration_milliseconds.labels(
@@ -85,7 +83,7 @@ async def receive_paytree_child_pair_payment(
         ).observe(elapsed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process PayTree child-pair payment: {str(e)}",
+            detail="Failed to process PayTree child-pair payment",
         )
     finally:
         paytree_child_pair_payment_requests_inprogress.dec()
