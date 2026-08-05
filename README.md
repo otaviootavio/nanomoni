@@ -130,10 +130,29 @@ Issuer and vendor will start their Redis dependencies via `depends_on`.
 ```sh
 docker compose build
 
-source ./envs/issuer.env.sh && docker compose up issuer -d
-source ./envs/vendor.env.sh && docker compose up vendor -d
-source ./envs/client.env.sh && docker compose up client -d
+source ./envs/issuer.env.sh && docker compose up issuer -d --build
+source ./envs/vendor.env.sh && docker compose up vendor -d --build
+source ./envs/client.env.sh && docker compose up client -d --build
 ```
+
+### Vendor worker ports
+
+With `VENDOR_API_WORKERS=N` the vendor runs N single-worker servers on
+consecutive ports from `VENDOR_API_PORT` (so `8000..8011` for the benchmark
+layout), one listening socket each, instead of N workers sharing one socket. A
+keep-alive connection is served end to end by the worker that accepted it, so the
+port a client dials is the worker it reaches — which is what lets the load
+generator spread itself evenly (`CLIENT_VENDOR_PORT_COUNT`) instead of leaving
+the kernel to pile connections onto a few workers.
+
+Only `8000` is published to the host; the rest of the range would collide with
+the issuer on 8001 and the client's metrics on 8002. For the same reason the
+local-dev and example env scripts keep `VENDOR_API_WORKERS=1`. See
+[docs/worker-affinity-and-saturation.md](docs/worker-affinity-and-saturation.md)
+for the reasoning and the measurements,
+[docs/benchmark-ceiling-and-what-remains.md](docs/benchmark-ceiling-and-what-remains.md)
+for where the ceiling ends up and what holds it, and [tuning.md](tuning.md) for the
+core layout.
 
 ## Publishing Docker images
 

@@ -16,6 +16,10 @@ if sys.platform != "win32":
 
 from .envs.issuer_env import get_settings
 
+# See the equivalent constant in nanomoni.main: uvicorn's 5s default drops idle
+# connections while a benchmark client's event loop is stalled on crypto.
+KEEP_ALIVE_TIMEOUT_SEC = 120
+
 
 def _setup_prometheus_multiproc_dir() -> None:
     """Prepare the Prometheus multiprocess directory before Uvicorn forks workers."""
@@ -50,6 +54,7 @@ def main() -> None:
         port=settings.api_port,
         reload=settings.api_debug,
         log_level="info",
+        timeout_keep_alive=KEEP_ALIVE_TIMEOUT_SEC,
     )
 
 

@@ -39,8 +39,11 @@ class VendorClientAsync:
         *,
         payment_retries: int = 2,
         payment_retry_backoff_s: float = 0.15,
+        connection_limit: int | None = None,
     ) -> None:
-        self._http = AsyncHttpClient(base_url, timeout=timeout)
+        self._http = AsyncHttpClient(
+            base_url, timeout=timeout, connection_limit=connection_limit
+        )
         self._payment_retries = payment_retries
         self._payment_retry_backoff_s = payment_retry_backoff_s
 

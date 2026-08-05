@@ -11,7 +11,7 @@ required_env() {
 
 required_env "VENDOR_BASE_URL"
 required_env "ISSUER_BASE_URL"
-required_env "CLIENT_PRIVATE_KEY_PEM"
+required_env "CLIENT_PRIVATE_KEY_PEMS"
 required_env "CLIENT_PAYMENT_COUNT"
 required_env "CLIENT_CHANNEL_AMOUNT"
 

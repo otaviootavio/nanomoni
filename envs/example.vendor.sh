@@ -14,7 +14,16 @@ export VENDOR_API_HOST="0.0.0.0"
 export VENDOR_API_PORT="8000"
 export VENDOR_API_DEBUG="false"
 export VENDOR_API_CORS_ORIGINS="*"
+# Each worker is its own single-worker server on its own port, counting up from
+# VENDOR_API_PORT (N workers occupy PORT..PORT+N-1). Keep this at 1 outside the
+# benchmark: on the host, 8001 and 8002 already belong to the issuer and to the
+# client's metrics. The client's CLIENT_VENDOR_PORT_COUNT must match this value.
 export VENDOR_API_WORKERS="1"
+
+# Pin each Uvicorn worker to a single core of the container's cpuset, so the
+# kernel cannot migrate it mid-run. Needs a cpuset with at least
+# VENDOR_API_WORKERS cores; leave "false" outside benchmarks.
+export VENDOR_PIN_WORKERS_TO_CORES="false"
 
 # Prometheus multiprocess metrics directory (must be writable by the app)
 export PROMETHEUS_MULTIPROC_DIR="/tmp/prometheus_vendor"
