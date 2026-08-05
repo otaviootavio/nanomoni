@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
@@ -16,15 +17,11 @@ from ....application.vendor.use_cases.paytree_std_payment import (
     PaytreeStdPaymentService,
 )
 from ..dependencies import get_paytree_std_payment_service
+from ..metrics import PAYMENT_DURATION_BUCKETS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/channels/paytree/std", tags=["channels", "paytree-std"])
-
-
-PAYMENT_DURATION_BUCKETS = (
-    [round(0.5 * i, 1) for i in range(1, 21)]
-    + [float(x) for x in range(15, 55, 5)]
-    + [float("inf")]
-)
 
 paytree_std_payment_requests_total = Counter(
     "paytree_std_payment_requests_total",
@@ -75,7 +72,8 @@ async def receive_paytree_std_payment(
             status="client_error"
         ).observe(elapsed)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to process PayTree std payment")
         paytree_std_payment_requests_total.labels(status="server_error").inc()
         elapsed = (time.perf_counter() - start_time) * 1000
         paytree_std_payment_request_duration_milliseconds.labels(
@@ -83,7 +81,7 @@ async def receive_paytree_std_payment(
         ).observe(elapsed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process PayTree std payment: {str(e)}",
+            detail="Failed to process PayTree std payment",
         )
     finally:
         paytree_std_payment_requests_inprogress.dec()
