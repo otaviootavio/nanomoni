@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
+from ...domain.shared.crypto_proof import CryptoProof
+from ...domain.vendor.entities import PaymentChannel, PaymentState
 from ...domain.vendor.merkle_node_repository import MerkleNodeRepository
 from ...infrastructure.storage import KeyValueStore
 
@@ -41,7 +44,7 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
         self,
         channel_id: str,
         read_keys: list[str],
-    ) -> tuple[str | None, dict[str, str]]:
+    ) -> tuple[Optional[PaymentChannel], dict[str, str]]:
         channel_key = f"payment_channel:{channel_id}"
         read_redis_keys = [_node_key(channel_id, k) for k in read_keys]
         if len(read_redis_keys) < 2:
@@ -50,14 +53,16 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
             [channel_key, read_redis_keys[0], read_redis_keys[1]]
         )
         channel_raw = (values[0] or "").strip() if values else ""
-        channel_json = channel_raw if channel_raw else None
+        channel = (
+            PaymentChannel.model_validate_json(channel_raw) if channel_raw else None
+        )
         out: dict[str, str] = {}
         for i, k in enumerate(read_keys[:2]):
             val = (
                 (values[i + 1] or "").strip() if values and i + 1 < len(values) else ""
             )
             out[k] = val
-        return channel_json, out
+        return channel, out
 
     async def get_nodes(self, channel_id: str, node_keys: list[str]) -> dict[str, str]:
         if not node_keys:
@@ -65,28 +70,6 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
         keys = [_node_key(channel_id, k) for k in node_keys]
         values = await self._store.mget(keys)
         return {node_keys[i]: v for i, v in enumerate(values) if v is not None}
-
-    async def get_nodes_and_merge(
-        self,
-        channel_id: str,
-        read_keys: list[str],
-        updates: dict[str, str],
-    ) -> dict[str, str]:
-        index = _index_key(channel_id)
-        read_redis_keys = [_node_key(channel_id, k) for k in read_keys]
-        if len(read_redis_keys) < 2:
-            read_redis_keys.extend([read_redis_keys[0]] * (2 - len(read_redis_keys)))
-        keys = [index, read_redis_keys[0], read_redis_keys[1]]
-        args = [channel_id, str(len(updates))]
-        for node_key, hash_b64 in updates.items():
-            args.extend([node_key, hash_b64])
-        result = await self._store.run_script(
-            "merkle_get_nodes_and_merge", keys=keys, args=args
-        )
-        out: dict[str, str] = {}
-        for i, k in enumerate(read_keys[:2]):
-            out[k] = (result[i] or "") if result and i < len(result) else ""
-        return out
 
     async def merge_nodes(self, channel_id: str, updates: dict[str, str]) -> None:
         if not updates:
@@ -103,11 +86,9 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
         channel_id: str,
         node_updates: dict[str, str],
         new_ref: int,
-        channel_json: str,
-        state_json: str,
-        proof_json: str,
-        is_closed: bool,
-        created_at_ts: float,
+        channel: PaymentChannel,
+        state: PaymentState,
+        proof: CryptoProof,
     ) -> tuple[int, Optional[int]]:
         index_key = _index_key(channel_id)
         channel_key = f"payment_channel:{channel_id}"
@@ -121,6 +102,9 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
             "payment_channels:open",
             "payment_channels:closed",
         ]
+        channel_json = channel.model_dump_json()
+        state_json = state.model_dump_json()
+        proof_json = json.dumps({"scheme": proof.scheme.value, **proof.data})
         n = len(node_updates)
         args = [channel_id, str(n)]
         for node_key, hash_b64 in node_updates.items():
@@ -131,8 +115,8 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
                 state_json,
                 proof_json,
                 channel_json,
-                "1" if is_closed else "0",
-                str(created_at_ts),
+                "1" if channel.is_closed else "0",
+                str(channel.created_at.timestamp()),
             ]
         )
         result = await self._store.run_script(

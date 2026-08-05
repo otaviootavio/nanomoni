@@ -22,6 +22,7 @@ from typing import Optional
 
 import pytest
 
+from nanomoni.domain.shared.crypto_proof import CryptoProof
 from nanomoni.domain.shared.proof_reference import PaymentScheme
 from nanomoni.domain.vendor.entities import PaymentChannel, PaymentState
 from nanomoni.infrastructure.scripts import VENDOR_SCRIPTS
@@ -74,15 +75,14 @@ async def _save(
     """Emulate the use case: embed the new reference in the channel, then save."""
     channel.last_proof_reference = ref
     state = _make_state(channel.channel_id, ref)
+    proof = CryptoProof(scheme=PaymentScheme.PAYTREE, data={})
     return await repo.save_nodes_and_payment(
         channel_id=channel.channel_id,
         node_updates={},
         new_ref=ref,
-        channel_json=channel.model_dump_json(),
-        state_json=state.model_dump_json(),
-        proof_json="{}",
-        is_closed=False,
-        created_at_ts=channel.created_at.timestamp(),
+        channel=channel,
+        state=state,
+        proof=proof,
     )
 
 

@@ -9,7 +9,6 @@ is needed to address the sparse node store.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -118,11 +117,11 @@ class PaytreeChildPairPaymentService:
         node_repo = self.node_repo
         k_key = str(dto.k)
 
-        channel_json, nodes = await node_repo.get_channel_and_nodes(
+        payment_channel, nodes = await node_repo.get_channel_and_nodes(
             channel_id, [ROOT_KEY, k_key]
         )
 
-        if not channel_json:
+        if payment_channel is None:
             payment_channel = await _fetch_and_validate_channel(
                 channel_id, self.issuer_client_factory, self.vendor_public_key_der_b64
             )
@@ -132,7 +131,6 @@ class PaytreeChildPairPaymentService:
                 )
                 nodes[ROOT_KEY] = payment_channel.commitment
         else:
-            payment_channel = PaymentChannel.model_validate_json(channel_json)
             if not nodes.get(ROOT_KEY) and payment_channel.commitment:
                 await node_repo.merge_nodes(
                     channel_id, {ROOT_KEY: payment_channel.commitment}
@@ -218,21 +216,14 @@ class PaytreeChildPairPaymentService:
         )
 
         payment_channel.last_proof_reference = dto.k
-        channel_json_updated = payment_channel.model_dump_json()
-        state_json = new_state.model_dump_json()
-        proof_json = json.dumps(
-            {"scheme": store_proof.scheme.value, **store_proof.data}
-        )
 
         status, stored_ref = await node_repo.save_nodes_and_payment(
             channel_id=channel_id,
             node_updates=node_updates,
             new_ref=dto.k,
-            channel_json=channel_json_updated,
-            state_json=state_json,
-            proof_json=proof_json,
-            is_closed=payment_channel.is_closed,
-            created_at_ts=payment_channel.created_at.timestamp(),
+            channel=payment_channel,
+            state=new_state,
+            proof=store_proof,
         )
 
         if status == 1:

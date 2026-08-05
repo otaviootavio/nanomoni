@@ -171,8 +171,6 @@ class InMemoryKeyValueStore(KeyValueStore):
             return self._execute_save_channel_and_initial_payment_unified(keys, args)
         elif script_name_lower == "save_payment_with_nodes":
             return self._execute_save_payment_with_nodes(keys, args)
-        elif script_name_lower == "merkle_get_nodes_and_merge":
-            return self._execute_merkle_get_nodes_and_merge(keys, args)
         elif script_name_lower == "merkle_merge_nodes":
             return self._execute_merkle_merge_nodes(keys, args)
         elif script_name_lower == "save_signature_payment" or (
@@ -259,7 +257,7 @@ class InMemoryKeyValueStore(KeyValueStore):
             key=lambda x: x[1], reverse=True
         )
 
-        return [1, state_json]
+        return [1, ""]
 
     def _execute_create_channel(self, keys: List[str], args: List[str]) -> list[Any]:
         """Execute create_channel script logic."""
@@ -339,7 +337,7 @@ class InMemoryKeyValueStore(KeyValueStore):
             key=lambda x: x[1], reverse=True
         )
 
-        return [1, state_json]
+        return [1, ""]
 
     def _execute_save_payment_with_nodes(
         self, keys: List[str], args: List[str]
@@ -364,13 +362,13 @@ class InMemoryKeyValueStore(KeyValueStore):
         created_ts = float(args[base + 5]) if len(args) > base + 5 else 0.0
 
         # Monotonic CAS mirroring the Lua save_payment_with_nodes script.
-        old_is_closed = None
+        is_new_channel = True
         max_steps: Optional[int] = None
         prev = -1
         existing = self._data.get(channel_key)
         if existing:
+            is_new_channel = False
             ch = json.loads(existing)
-            old_is_closed = ch.get("is_closed")
             ms = ch.get("max_steps")
             max_steps = int(ms) if ms is not None else None
             last_ref = ch.get("last_proof_reference")
@@ -405,7 +403,7 @@ class InMemoryKeyValueStore(KeyValueStore):
         self._data[state_key] = state_json
         self._data[proof_key] = proof_json
 
-        if old_is_closed is None:
+        if is_new_channel:
             all_key = "payment_channels:all"
             target_key = closed_key if new_is_closed else open_key
             for key in (all_key, target_key):
@@ -416,44 +414,8 @@ class InMemoryKeyValueStore(KeyValueStore):
                 ]
                 self._sorted_sets[key].append((channel_id, created_ts))
                 self._sorted_sets[key].sort(key=lambda x: x[1], reverse=True)
-        elif old_is_closed != new_is_closed:
-            for key in (open_key, closed_key):
-                if key not in self._sorted_sets:
-                    self._sorted_sets[key] = []
-                self._sorted_sets[key] = [
-                    (m, s) for m, s in self._sorted_sets[key] if m != channel_id
-                ]
-            target_key = closed_key if new_is_closed else open_key
-            self._sorted_sets[target_key].append((channel_id, created_ts))
-            self._sorted_sets[target_key].sort(key=lambda x: x[1], reverse=True)
 
         return [1, str(new_ref)]
-
-    def _execute_merkle_get_nodes_and_merge(
-        self, keys: List[str], args: List[str]
-    ) -> list[Any]:
-        """Execute merkle_get_nodes_and_merge: MGET 2 keys, then MSET+ZADD with merkle_node: prefix."""
-        index_key = keys[0]
-        read_key_1 = keys[1]
-        read_key_2 = keys[2]
-        channel_id = args[0]
-        n = int(args[1]) if len(args) > 1 else 0
-        prefix = f"merkle_node:{channel_id}:"
-        read1 = self._data.get(read_key_1) or ""
-        read2 = self._data.get(read_key_2) or ""
-        for i in range(n):
-            suffix = args[2 + i * 2]
-            val = args[2 + i * 2 + 1]
-            full_key = prefix + suffix
-            self._data[full_key] = val
-            if index_key not in self._sorted_sets:
-                self._sorted_sets[index_key] = []
-            self._sorted_sets[index_key] = [
-                (m, s) for m, s in self._sorted_sets[index_key] if m != suffix
-            ]
-            self._sorted_sets[index_key].append((suffix, 0.0))
-            self._sorted_sets[index_key].sort(key=lambda x: x[1], reverse=True)
-        return [read1, read2]
 
     def _execute_merkle_merge_nodes(self, keys: List[str], args: List[str]) -> Any:
         """Execute merkle_merge_nodes: MSET + ZADD with merkle_node: prefix."""

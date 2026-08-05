@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -116,11 +115,11 @@ class PaytreeFirstOptPaymentService:
             dto.i, len(dto.siblings_b64), prefetch_depth
         )
 
-        channel_json, nodes = await node_repo.get_channel_and_nodes(
+        payment_channel, nodes = await node_repo.get_channel_and_nodes(
             channel_id, [prefetch_root_key, prefetch_subroot_index]
         )
 
-        if not channel_json:
+        if payment_channel is None:
             payment_channel = await _fetch_and_validate_channel(
                 channel_id, self.issuer_client_factory, self.vendor_public_key_der_b64
             )
@@ -129,7 +128,6 @@ class PaytreeFirstOptPaymentService:
                     channel_id, {prefetch_root_key: payment_channel.commitment}
                 )
         else:
-            payment_channel = PaymentChannel.model_validate_json(channel_json)
             root_b64 = nodes.get(prefetch_root_key) or ""
             if not root_b64 and payment_channel.commitment:
                 await node_repo.merge_nodes(
@@ -235,24 +233,18 @@ class PaytreeFirstOptPaymentService:
         )
 
         payment_channel.last_proof_reference = dto.i
-        channel_json_updated = payment_channel.model_dump_json()
-        state_json = new_state.model_dump_json()
-        proof_json = json.dumps(
-            {"scheme": store_proof.scheme.value, **store_proof.data}
-        )
 
         # The atomic monotonic CAS lives inside save_nodes_and_payment, so a
         # concurrent request that advanced the reference cannot be overwritten
-        # here (unlike the previous unconditional SET).
+        # here (unlike the previous unconditional SET). Serialization of
+        # channel/state/proof happens inside the repository call itself.
         status, stored_ref = await node_repo.save_nodes_and_payment(
             channel_id=channel_id,
             node_updates=node_updates,
             new_ref=dto.i,
-            channel_json=channel_json_updated,
-            state_json=state_json,
-            proof_json=proof_json,
-            is_closed=payment_channel.is_closed,
-            created_at_ts=payment_channel.created_at.timestamp(),
+            channel=payment_channel,
+            state=new_state,
+            proof=store_proof,
         )
 
         if status == 1:
