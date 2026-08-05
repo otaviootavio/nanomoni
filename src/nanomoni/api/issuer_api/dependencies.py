@@ -87,3 +87,12 @@ def get_paytree_first_opt_channel_service() -> PaytreeChannelService:
     return PaytreeChannelService(
         account_repo, channel_repo, settings.issuer_private_key
     )
+
+
+def get_paytree_child_pair_channel_service() -> PaytreeChannelService:
+    account_repo = get_account_repository()
+    channel_repo = get_payment_channel_repository()
+    settings = get_settings_dependency()
+    return PaytreeChannelService(
+        account_repo, channel_repo, settings.issuer_private_key
+    )

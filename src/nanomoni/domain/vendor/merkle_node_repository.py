@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
+from ..shared.crypto_proof import CryptoProof
+from .entities import PaymentChannel, PaymentState
+
 
 class MerkleNodeRepository(Protocol):
     async def get_nodes(self, channel_id: str, keys: list[str]) -> dict[str, str]: ...
@@ -12,14 +15,9 @@ class MerkleNodeRepository(Protocol):
         self,
         channel_id: str,
         read_keys: list[str],
-    ) -> tuple[Optional[str], dict[str, str]]: ...
-
-    async def get_nodes_and_merge(
-        self,
-        channel_id: str,
-        read_keys: list[str],
-        updates: dict[str, str],
-    ) -> dict[str, str]: ...
+    ) -> tuple[Optional[PaymentChannel], dict[str, str]]:
+        """Read the channel (deserialized) and a batch of node keys in one round trip."""
+        ...
 
     async def merge_nodes(self, channel_id: str, updates: dict[str, str]) -> None: ...
 
@@ -28,13 +26,15 @@ class MerkleNodeRepository(Protocol):
         channel_id: str,
         node_updates: dict[str, str],
         new_ref: int,
-        channel_json: str,
-        state_json: str,
-        proof_json: str,
-        is_closed: bool,
-        created_at_ts: float,
+        channel: PaymentChannel,
+        state: PaymentState,
+        proof: CryptoProof,
     ) -> tuple[int, Optional[int]]:
         """Atomically save merkle nodes + channel/state/proof with a monotonic CAS.
+
+        Serializes ``channel``/``state``/``proof`` internally (mirroring
+        ``PaymentRepositoryImpl.save_payment``), so this cost is consistently
+        attributed to the repository layer rather than the calling use case.
 
         Returns (status, stored_ref):
           1 = success (stored_ref = new_ref)

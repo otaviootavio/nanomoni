@@ -65,7 +65,9 @@ _SAVE_CHANNEL_AND_INITIAL_STATE_SCRIPT = """
     redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
     redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
 
-    return {1, state_json}
+    -- Caller already has state_json (it built it); echoing it back would
+    -- just make the caller re-parse what it wrote.
+    return {1, ''}
 """
 
 VENDOR_SCRIPTS["save_channel_and_initial_payment"] = (
@@ -141,13 +143,23 @@ _SAVE_CHANNEL_AND_INITIAL_PAYMENT_UNIFIED_SCRIPT = """
     redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
     redis.call('ZADD', 'payment_channels:open', created_ts, channel_id)
 
-    return {1, state_json}
+    -- Caller already has state_json (it built it); echoing it back would
+    -- just make the caller re-parse what it wrote.
+    return {1, ''}
 """
 
 # save_payment_with_nodes: first-opt PayTree atomic save (nodes + channel + state + proof).
 # Performs the same monotonic CAS as save_payment (against the *stored* channel's
 # last_proof_reference / max_steps) so concurrent first-opt payments cannot move the
 # reference backwards or exceed capacity. Nothing is written unless the CAS passes.
+#
+# is_closed is accepted only to register a brand-new channel in the correct
+# open/closed index on its first write; on every later write it is always
+# whatever the stored channel already has (closing a channel goes through
+# mark_closed()/update(), a separate write path -- see
+# payment_channel_repository_base_impl.py), so there is no open<->closed
+# transition to detect here.
+#
 # KEYS[1] = merkle_node_index:{id}, KEYS[2] = payment_channel:{id},
 # KEYS[3] = payment_state:{id}, KEYS[4] = crypto_proof:{id},
 # KEYS[5] = payment_channels:open, KEYS[6] = payment_channels:closed
@@ -180,11 +192,11 @@ _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
     -- to the channel_json being written (sourced from the issuer).
     local max_steps = nil
     local prev = -1
-    local old_is_closed = nil
+    local is_new_channel = true
     local existing = redis.call('GET', channel_key)
     if existing and existing ~= '' then
+        is_new_channel = false
         local ch = cjson.decode(existing)
-        old_is_closed = ch.is_closed
         max_steps = tonumber(ch.max_steps)
         local last_ref = ch.last_proof_reference
         if last_ref ~= nil and last_ref ~= cjson.null then
@@ -217,7 +229,7 @@ _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
     redis.call('SET', state_key, state_json)
     redis.call('SET', proof_key, proof_json)
 
-    if old_is_closed == nil then
+    if is_new_channel then
         -- Brand-new channel in the vendor store: register it in the indexes so
         -- get_all()/listing and index-based cleanup can see it.
         redis.call('ZADD', 'payment_channels:all', created_ts, channel_id)
@@ -226,36 +238,9 @@ _SAVE_PAYMENT_WITH_NODES_SCRIPT = """
         else
             redis.call('ZADD', open_key, created_ts, channel_id)
         end
-    elseif old_is_closed ~= new_is_closed then
-        if new_is_closed then
-            redis.call('ZREM', open_key, channel_id)
-            redis.call('ZADD', closed_key, created_ts, channel_id)
-        else
-            redis.call('ZREM', closed_key, channel_id)
-            redis.call('ZADD', open_key, created_ts, channel_id)
-        end
     end
 
     return {1, tostring(new_ref)}
-"""
-
-# Merkle node read+merge: MGET two nodes then MSET+ZADD updates atomically.
-# KEYS[1] = merkle_node_index:{id}, KEYS[2] = read key 1, KEYS[3] = read key 2
-# ARGV[1] = channel_id, ARGV[2] = num_updates, ARGV[3+] = suffix, val pairs
-_MERKLE_GET_NODES_AND_MERGE_SCRIPT = """
-    local index_key = KEYS[1]
-    local read1 = redis.call('GET', KEYS[2])
-    local read2 = redis.call('GET', KEYS[3])
-    local channel_id = ARGV[1]
-    local n = tonumber(ARGV[2]) or 0
-    local prefix = "merkle_node:" .. channel_id .. ":"
-    for i = 1, n do
-        local suffix = ARGV[2 + (i-1)*2 + 1]
-        local val = ARGV[2 + (i-1)*2 + 2]
-        redis.call('SET', prefix .. suffix, val)
-        redis.call('ZADD', index_key, 0, suffix)
-    end
-    return {read1 or '', read2 or ''}
 """
 
 # Merkle node merge only: MSET + ZADD in one shot.
@@ -280,7 +265,6 @@ VENDOR_SCRIPTS.update(
         "save_payment": _SAVE_PAYMENT_SCRIPT,
         "save_channel_and_initial_payment_unified": _SAVE_CHANNEL_AND_INITIAL_PAYMENT_UNIFIED_SCRIPT,
         "save_payment_with_nodes": _SAVE_PAYMENT_WITH_NODES_SCRIPT,
-        "merkle_get_nodes_and_merge": _MERKLE_GET_NODES_AND_MERGE_SCRIPT,
         "merkle_merge_nodes": _MERKLE_MERGE_NODES_SCRIPT,
     }
 )

@@ -22,6 +22,7 @@ from typing import Optional
 
 import pytest
 
+from nanomoni.domain.shared.crypto_proof import CryptoProof
 from nanomoni.domain.shared.proof_reference import PaymentScheme
 from nanomoni.domain.vendor.entities import PaymentChannel, PaymentState
 from nanomoni.infrastructure.scripts import VENDOR_SCRIPTS
@@ -74,15 +75,14 @@ async def _save(
     """Emulate the use case: embed the new reference in the channel, then save."""
     channel.last_proof_reference = ref
     state = _make_state(channel.channel_id, ref)
+    proof = CryptoProof(scheme=PaymentScheme.PAYTREE, data={})
     return await repo.save_nodes_and_payment(
         channel_id=channel.channel_id,
         node_updates={},
         new_ref=ref,
-        channel_json=channel.model_dump_json(),
-        state_json=state.model_dump_json(),
-        proof_json="{}",
-        is_closed=False,
-        created_at_ts=channel.created_at.timestamp(),
+        channel=channel,
+        state=state,
+        proof=proof,
     )
 
 
@@ -98,7 +98,9 @@ async def test_first_opt_save_rejects_stale_reference() -> None:
     store, repo = await _new_repo()
 
     # First payment i=5 succeeds and becomes the committed reference.
-    status, ref = await _save(repo, _make_channel("c1", max_steps=128, last_ref=None), 5)
+    status, ref = await _save(
+        repo, _make_channel("c1", max_steps=128, last_ref=None), 5
+    )
     assert (status, ref) == (1, 5)
 
     # A concurrent request that read prev=5 but arrives with a lower i must be
@@ -132,7 +134,9 @@ async def test_first_opt_save_prevents_reorder_double_write() -> None:
 async def test_first_opt_save_rejects_reference_beyond_max_steps() -> None:
     store, repo = await _new_repo()
 
-    status, _ = await _save(repo, _make_channel("c1", max_steps=128, last_ref=None), 200)
+    status, _ = await _save(
+        repo, _make_channel("c1", max_steps=128, last_ref=None), 200
+    )
     assert status == 3
     assert await _stored_ref(store, "c1") is None
 

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         PaywordSettlementRequestDTO,
     )
     from ...application.issuer.paytree_dtos import (
+        PaytreeChildPairSettlementRequestDTO,
         PaytreeOpenChannelResponseDTO,
         PaytreePaymentChannelResponseDTO,
         PaytreeSettlementRequestDTO,
@@ -187,6 +188,22 @@ class IssuerClientProtocol(Protocol):
         self,
         channel_id: str,
         dto: "PaytreeSettlementRequestDTO",
+    ) -> "CloseChannelResponseDTO": ...
+
+    # PayTree Child-Pair Payment Channels
+
+    async def open_paytree_child_pair_payment_channel(
+        self, dto: "OpenChannelRequestDTO"
+    ) -> "PaytreeOpenChannelResponseDTO": ...
+
+    async def get_paytree_child_pair_payment_channel(
+        self, dto: "GetPaymentChannelRequestDTO"
+    ) -> "PaytreePaymentChannelResponseDTO": ...
+
+    async def settle_paytree_child_pair_payment_channel(
+        self,
+        channel_id: str,
+        dto: "PaytreeChildPairSettlementRequestDTO",
     ) -> "CloseChannelResponseDTO": ...
 
     # Context Manager Support

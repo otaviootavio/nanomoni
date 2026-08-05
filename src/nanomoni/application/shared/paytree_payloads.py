@@ -34,3 +34,21 @@ class PaytreeSettlementPayload(BaseModel):
     i: int = Field(..., ge=0)
     leaf_b64: str
     siblings_b64: list[str]
+
+
+class PaytreeChildPairSettlementPayload(BaseModel):
+    """Payload signed by the vendor when settling a PayTree child-pair channel.
+
+    Unlike the standard/first-opt settlement (full leaf->root proof), this
+    carries a frontier proof: the most recently paid node's children plus one
+    outer sibling per remaining level up to the root (see
+    `protocol.paytree_child_pair.verify_close_proof`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str
+    k: int = Field(..., ge=1)
+    left_b64: str
+    right_b64: str
+    siblings_b64: list[str]

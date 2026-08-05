@@ -16,11 +16,13 @@ from ....application.issuer.dtos import (
     GetPaymentChannelRequestDTO,
 )
 from ....application.issuer.paytree_dtos import (
+    PaytreeChildPairSettlementRequestDTO,
     PaytreeOpenChannelResponseDTO,
     PaytreePaymentChannelResponseDTO,
     PaytreeSettlementRequestDTO,
 )
 from ....application.shared.paytree_payloads import (
+    PaytreeChildPairSettlementPayload,
     PaytreeSettlementPayload,
 )
 from ....application.shared.serialization import payload_to_bytes
@@ -30,7 +32,10 @@ from ....crypto.certificates import (
     verify_signature_bytes,
     dto_to_canonical_json_bytes,
 )
-from ...shared.paytree_proof import verify_paytree_proof_standard
+from ...shared.paytree_proof import (
+    verify_paytree_child_pair_close,
+    verify_paytree_proof_standard,
+)
 from ....crypto.paytree import b64_to_bytes, compute_cumulative_owed_amount
 from ....domain.issuer.entities import Account, PaytreePaymentChannel
 from ....domain.issuer.repositories import AccountRepository, PaymentChannelRepository
@@ -268,6 +273,127 @@ class PaytreeChannelService:
             )
         except Exception as close_err:
             # Roll back both balance updates if closing persistence fails.
+            rollback_errors: list[Exception] = []
+            try:
+                await self.account_repo.update_balance(
+                    channel.vendor_public_key_der_b64, -cumulative_owed_amount
+                )
+            except Exception as e:
+                rollback_errors.append(e)
+            try:
+                await self.account_repo.update_balance(
+                    channel.client_public_key_der_b64, -remainder
+                )
+            except Exception as e:
+                rollback_errors.append(e)
+
+            if rollback_errors:
+                raise RuntimeError(
+                    "Failed to mark channel closed and failed to roll back balances"
+                ) from close_err
+            raise
+
+        return CloseChannelResponseDTO(
+            channel_id=channel_id,
+            client_balance=client_acc.balance,
+            vendor_balance=vendor_acc.balance,
+        )
+
+    async def settle_channel_child_pair(
+        self, channel_id: str, dto: PaytreeChildPairSettlementRequestDTO
+    ) -> CloseChannelResponseDTO:
+        """Settle a child-pair channel from a frontier proof (not a full leaf->root proof).
+
+        `channel.paytree_max_i` is reused as `max_k` for this mode: opening a
+        child-pair channel via `PaytreeOpenChannelRequestPayload` stores the
+        same root/unit_value/max fields regardless of which payment sub-protocol
+        the vendor and client use for per-payment verification.
+        """
+        channel = await self.channel_repo.get_by_channel_id(channel_id)
+        if not channel:
+            raise ValueError("Payment channel not found")
+        if channel.is_closed:
+            raise ValueError("Payment channel already closed")
+        if not isinstance(channel, PaytreePaymentChannel):
+            raise ValueError("Payment channel is not PayTree-enabled")
+
+        if dto.vendor_public_key_der_b64 != channel.vendor_public_key_der_b64:
+            raise ValueError("Mismatched vendor public key for channel")
+
+        if dto.k > channel.paytree_max_i:
+            raise ValueError("k exceeds PayTree max_k for this channel")
+
+        settlement_payload = PaytreeChildPairSettlementPayload(
+            channel_id=channel_id,
+            k=dto.k,
+            left_b64=dto.left_b64,
+            right_b64=dto.right_b64,
+            siblings_b64=dto.siblings_b64,
+        )
+        payload_bytes = payload_to_bytes(settlement_payload)
+        vendor_public_key = load_public_key_from_der_b64(
+            DERB64(channel.vendor_public_key_der_b64)
+        )
+        try:
+            verify_signature_bytes(
+                vendor_public_key, payload_bytes, dto.vendor_signature_b64
+            )
+        except InvalidSignature:
+            raise ValueError("Invalid vendor signature for PayTree settlement")
+
+        try:
+            _ = b64_to_bytes(channel.paytree_root_b64)
+        except Exception as e:
+            raise ValueError(f"Invalid PayTree root encoding: {e}") from e
+
+        if not verify_paytree_child_pair_close(
+            root_b64=channel.paytree_root_b64,
+            k=dto.k,
+            left_b64=dto.left_b64,
+            right_b64=dto.right_b64,
+            siblings_b64=dto.siblings_b64,
+        ):
+            raise ValueError("Invalid PayTree child-pair proof (root mismatch)")
+
+        cumulative_owed_amount = compute_cumulative_owed_amount(
+            i=dto.k, unit_value=channel.paytree_unit_value
+        )
+        if cumulative_owed_amount > channel.amount:
+            raise ValueError("Invalid owed amount")
+
+        vendor_acc = await self.account_repo.get_by_public_key(
+            channel.vendor_public_key_der_b64
+        )
+        if not vendor_acc:
+            vendor_acc = Account(
+                public_key_der_b64=channel.vendor_public_key_der_b64, balance=0
+            )
+            await self.account_repo.upsert(vendor_acc)
+
+        remainder = channel.amount - cumulative_owed_amount
+        vendor_acc = await self.account_repo.update_balance(
+            channel.vendor_public_key_der_b64, cumulative_owed_amount
+        )
+        try:
+            client_acc = await self.account_repo.update_balance(
+                channel.client_public_key_der_b64, remainder
+            )
+        except Exception:
+            await self.account_repo.update_balance(
+                channel.vendor_public_key_der_b64, -cumulative_owed_amount
+            )
+            raise
+
+        try:
+            await self.channel_repo.mark_closed(
+                channel_id,
+                close_payload_b64=None,
+                client_close_signature_b64=None,
+                amount=channel.amount,
+                balance=cumulative_owed_amount,
+                vendor_close_signature_b64=dto.vendor_signature_b64,
+            )
+        except Exception as close_err:
             rollback_errors: list[Exception] = []
             try:
                 await self.account_repo.update_balance(

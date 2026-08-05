@@ -12,6 +12,7 @@ from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.vendor.paytree_dtos import (
     ReceivePaytreeStdPaymentDTO,
     ReceivePaytreeFirstOptPaymentDTO,
+    ReceivePaytreeChildPairPaymentDTO,
 )
 from nanomoni.crypto.paytree import Paytree
 from nanomoni.crypto.certificates import (
@@ -39,6 +40,28 @@ def init_commitment(
     paytree = Paytree.create(max_i=paytree_max_i)
     paytree_root_b64 = paytree.commitment_root_b64
     return paytree, paytree_root_b64, paytree_unit_value, paytree_max_i
+
+
+def init_commitment_child_pair(
+    settings: Settings,
+    payment_count: int,
+) -> tuple[Paytree, str, int, int]:
+    """Initialize a child-pair PayTree commitment.
+
+    Returns (paytree, root_b64, unit_value, max_k) — unlike `init_commitment`,
+    the fourth value is the tree's `max_k` (number of internal nodes), which
+    is what gets sent as the channel's `paytree_max_i` field: child-pair
+    payments are indexed by Eytzinger node index k, not by leaf index.
+    """
+    paytree_unit_value = settings.client_paytree_unit_value
+    paytree_max_i = (
+        settings.client_paytree_max_i
+        if settings.client_paytree_max_i is not None
+        else payment_count
+    )
+    paytree = Paytree.create(max_i=paytree_max_i)
+    paytree_root_b64 = paytree.commitment_root_b64
+    return paytree, paytree_root_b64, paytree_unit_value, paytree.max_k
 
 
 def build_open_payload(
@@ -162,5 +185,37 @@ async def send_first_opt_payments(
                 leaf_b64=leaf_b64,
                 siblings_b64=siblings_b64,
                 paytree_max_i=paytree.max_i,
+            ),
+        )
+
+
+async def send_child_pair_payments(
+    vendor: VendorClientAsync,
+    channel_id: str,
+    paytree: Paytree,
+    payments: list[int],
+    inter_payment_delay: float = 0.0,
+) -> None:
+    """Send child-pair PayTree payments to the vendor.
+
+    ``payments`` are Eytzinger node indexes k (must be sent in increasing
+    order, each revealing the two children of node k).
+    """
+    start = perf_counter()
+    for n, k in enumerate(payments):
+        if inter_payment_delay > 0:
+            target = start + n * inter_payment_delay
+            now = perf_counter()
+            if target > now:
+                await sleep(target - now)
+            elif now - target > inter_payment_delay:
+                start = now - n * inter_payment_delay
+        k_val, left_b64, right_b64 = paytree.payment_proof_child_pair(k)
+        await vendor.send_paytree_child_pair_payment(
+            channel_id,
+            ReceivePaytreeChildPairPaymentDTO(
+                k=k_val,
+                left_b64=left_b64,
+                right_b64=right_b64,
             ),
         )

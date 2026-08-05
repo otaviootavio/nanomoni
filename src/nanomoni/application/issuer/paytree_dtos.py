@@ -55,3 +55,14 @@ class PaytreeSettlementRequestDTO(BaseModel):
     leaf_b64: str
     siblings_b64: list[str]
     vendor_signature_b64: str
+
+
+class PaytreeChildPairSettlementRequestDTO(BaseModel):
+    """Settlement request for PayTree child-pair mode (vendor-signed frontier proof)."""
+
+    vendor_public_key_der_b64: str
+    k: int = Field(..., ge=1)
+    left_b64: str
+    right_b64: str
+    siblings_b64: list[str]
+    vendor_signature_b64: str

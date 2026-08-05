@@ -40,7 +40,13 @@ _MAX_CONCURRENCY = 8
 
 # Stable visual identity per payment mode (sorted-mode index into the palette).
 _MODE_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "*")
-_KNOWN_MODES = ("paytree", "paytree_first_opt", "payword", "signature")
+_KNOWN_MODES = (
+    "paytree",
+    "paytree_first_opt",
+    "paytree_child_pair",
+    "payword",
+    "signature",
+)
 
 
 def _mode_style(mode: str) -> Dict[str, str]:

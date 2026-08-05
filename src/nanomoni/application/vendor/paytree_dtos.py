@@ -35,3 +35,26 @@ class PaytreePaymentResponseDTO(CommonSerializersMixin, BaseModel):
     i: int
     cumulative_owed_amount: int
     created_at: datetime
+
+
+class ReceivePaytreeChildPairPaymentDTO(BaseModel):
+    """DTO for receiving a child-pair PayTree payment (heap-indexed child reveal).
+
+    Unlike first-opt, node keys here are just `str(k)` (no depth/level math),
+    so no `paytree_max_k` hint is needed to combine the channel+node read.
+    """
+
+    k: int = Field(
+        ..., ge=1, description="Eytzinger index of the parent node being expanded"
+    )
+    left_b64: str = Field(..., description="Base64-encoded left child hash (2k)")
+    right_b64: str = Field(..., description="Base64-encoded right child hash (2k+1)")
+
+
+class PaytreeChildPairPaymentResponseDTO(CommonSerializersMixin, BaseModel):
+    """DTO for returning child-pair PayTree payment acceptance data."""
+
+    channel_id: str
+    k: int
+    cumulative_owed_amount: int
+    created_at: datetime

@@ -26,7 +26,7 @@ class PaymentChannelRepositoryBaseImpl(PaymentChannelRepositoryBase):
 
     def _deserialize_channel(self, raw: str) -> PaymentChannelBase:
         data = json.loads(raw)
-        if data.get("scheme") in ("payword", "paytree"):
+        if data.get("scheme") in ("payword", "paytree", "paytree_child_pair"):
             return PaymentChannel.model_validate(data)
         return SignaturePaymentChannel.model_validate(data)
 

@@ -17,6 +17,8 @@ from nanomoni.application.vendor.payword_dtos import (
     PaywordPaymentResponseDTO,
 )
 from nanomoni.application.vendor.paytree_dtos import (
+    PaytreeChildPairPaymentResponseDTO,
+    ReceivePaytreeChildPairPaymentDTO,
     ReceivePaytreeStdPaymentDTO,
     ReceivePaytreeFirstOptPaymentDTO,
     PaytreePaymentResponseDTO,
@@ -30,6 +32,9 @@ from nanomoni.application.vendor.use_cases.paytree_std_payment import (
 )
 from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
     PaytreeFirstOptPaymentService,
+)
+from nanomoni.application.vendor.use_cases.paytree_child_pair_payment import (
+    PaytreeChildPairPaymentService,
 )
 
 
@@ -56,11 +61,14 @@ class UseCaseVendorClient:
         paytree_std_payment_service: PaytreeStdPaymentService,
         paytree_first_opt_payment_service: PaytreeFirstOptPaymentService,
         vendor_public_key_der_b64: str,
+        paytree_child_pair_payment_service: PaytreeChildPairPaymentService
+        | None = None,
     ) -> None:
         self.payment_service = payment_service
         self.payword_payment_service = payword_payment_service
         self.paytree_std_payment_service = paytree_std_payment_service
         self.paytree_first_opt_payment_service = paytree_first_opt_payment_service
+        self.paytree_child_pair_payment_service = paytree_child_pair_payment_service
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
 
     async def get_public_key(self) -> VendorPublicKeyDTO:
@@ -184,6 +192,31 @@ class UseCaseVendorClient:
             return UseCaseResponse(
                 status_code=400, content=json.dumps({"detail": str(e)}).encode("utf-8")
             )
+
+    # PayTree Child-Pair
+
+    async def receive_paytree_child_pair_payment(
+        self,
+        channel_id: str,
+        *,
+        k: int,
+        left_b64: str,
+        right_b64: str,
+    ) -> PaytreeChildPairPaymentResponseDTO:
+        assert self.paytree_child_pair_payment_service is not None
+        dto = ReceivePaytreeChildPairPaymentDTO(
+            k=k, left_b64=left_b64, right_b64=right_b64
+        )
+        return await self.paytree_child_pair_payment_service.receive_payment(
+            channel_id, dto
+        )
+
+    async def request_channel_settlement_paytree_child_pair(
+        self, channel_id: str
+    ) -> None:
+        assert self.paytree_child_pair_payment_service is not None
+        dto = CloseChannelDTO(channel_id=channel_id)
+        await self.paytree_child_pair_payment_service.settle_channel(dto)
 
     # Generic raw helpers
 

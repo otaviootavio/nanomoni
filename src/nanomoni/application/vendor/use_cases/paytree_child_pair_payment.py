@@ -1,4 +1,11 @@
-"""Vendor use case: first-opt PayTree payments (pruned leaf→sub-root proof)."""
+"""Vendor use case: PayTree child-pair payments (heap-indexed child reveal).
+
+Per payment k, the client reveals the two children of node k (Eytzinger
+index); the vendor accepts iff H(left, right) equals the hash it already
+knows for node k (starting from the root at k=1), then learns nodes 2k and
+2k+1. Unlike first-opt, node keys are simply `str(k)` — no depth/level math
+is needed to address the sparse node store.
+"""
 
 from __future__ import annotations
 
@@ -8,18 +15,13 @@ from typing import Optional
 from pydantic import ValidationError
 
 from ....application.issuer.dtos import GetPaymentChannelRequestDTO
-from ....application.issuer.paytree_dtos import PaytreeSettlementRequestDTO
-from ....application.shared.paytree_payloads import PaytreeSettlementPayload
+from ....application.issuer.paytree_dtos import PaytreeChildPairSettlementRequestDTO
+from ....application.shared.paytree_payloads import PaytreeChildPairSettlementPayload
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
-from ....crypto.merkle_index import compute_tree_depth, key_eytzinger
-from ....crypto.merkle_tree import (
-    build_merkle_proof_indexes_for_leaf_a_given_ancestor_b,
-    build_node_from_dependencies,
-    get_proof_dependency_indexes,
-)
+from ....protocol import build_child_pair_close_proof
 from ....crypto.paytree import b64_to_bytes, bytes_to_b64
-from ...shared.paytree_scheme import PaytreeFirstOptCryptoScheme
+from ...shared.paytree_scheme import PaytreeChildPairCryptoScheme
 from ....domain.shared.crypto_proof import CryptoProof
 from ....domain.shared import IssuerClientFactory
 from ....domain.shared.proof_reference import PaymentScheme, ProofReference
@@ -27,13 +29,21 @@ from ....domain.vendor.entities import PaymentChannel, PaymentState
 from ....domain.vendor.merkle_node_repository import MerkleNodeRepository
 from ....domain.vendor.payment_repository import PaymentRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
-from ....protocol import infer_subroot_index_for_incoming_pruned_merkle_proof
 from ..dtos import CloseChannelDTO
-from ..paytree_dtos import PaytreePaymentResponseDTO, ReceivePaytreeFirstOptPaymentDTO
+from ..paytree_dtos import (
+    PaytreeChildPairPaymentResponseDTO,
+    ReceivePaytreeChildPairPaymentDTO,
+)
 from .payment_validators import (
     check_proof_reference_duplicate,
     validate_proof_reference,
 )
+
+ROOT_KEY = "1"
+
+
+def _fingerprint(left_b64: str, right_b64: str) -> str:
+    return f"{left_b64}:{right_b64}"
 
 
 async def _fetch_and_validate_channel(
@@ -41,11 +51,11 @@ async def _fetch_and_validate_channel(
     issuer_client_factory: IssuerClientFactory,
     vendor_public_key_der_b64: str,
 ) -> PaymentChannel:
-    """Fetch and validate channel from the issuer (first-opt endpoint)."""
+    """Fetch and validate channel from the issuer (child-pair endpoint)."""
     try:
         async with issuer_client_factory() as issuer_client:
             dto = GetPaymentChannelRequestDTO(channel_id=channel_id)
-            issuer_channel = await issuer_client.get_paytree_first_opt_payment_channel(
+            issuer_channel = await issuer_client.get_paytree_child_pair_payment_channel(
                 dto
             )
 
@@ -64,7 +74,7 @@ async def _fetch_and_validate_channel(
                 is_closed=issuer_channel.is_closed,
                 created_at=issuer_channel.created_at,
                 commitment=issuer_channel.paytree_root_b64,
-                scheme=PaymentScheme.PAYTREE,
+                scheme=PaymentScheme.PAYTREE_CHILD_PAIR,
                 max_steps=issuer_channel.paytree_max_i,
                 unit_value=issuer_channel.paytree_unit_value,
             )
@@ -79,15 +89,15 @@ async def _fetch_and_validate_channel(
         raise ValueError(f"Invalid payment channel data from issuer: {e}")
 
 
-class PaytreeFirstOptPaymentService:
-    """Handles first-opt (pruned-proof) PayTree payments and settlement."""
+class PaytreeChildPairPaymentService:
+    """Handles child-pair PayTree payments and settlement."""
 
     def __init__(
         self,
         payment_repository: PaymentRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
-        crypto_scheme: PaytreeFirstOptCryptoScheme,
+        crypto_scheme: PaytreeChildPairCryptoScheme,
         node_repo: MerkleNodeRepository,
         *,
         vendor_private_key_pem: Optional[str] = None,
@@ -102,21 +112,13 @@ class PaytreeFirstOptPaymentService:
     async def receive_payment(
         self,
         channel_id: str,
-        dto: ReceivePaytreeFirstOptPaymentDTO,
-    ) -> PaytreePaymentResponseDTO:
+        dto: ReceivePaytreeChildPairPaymentDTO,
+    ) -> PaytreeChildPairPaymentResponseDTO:
         node_repo = self.node_repo
-
-        # Best-effort key guess to combine the channel read with a node read in
-        # one round trip, before the channel (and its authoritative max_steps)
-        # is even known. dto.paytree_max_i is client-supplied and only used here.
-        prefetch_depth = compute_tree_depth(dto.paytree_max_i)
-        prefetch_root_key = key_eytzinger(prefetch_depth, 0, prefetch_depth)
-        prefetch_subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
-            dto.i, len(dto.siblings_b64), prefetch_depth
-        )
+        k_key = str(dto.k)
 
         payment_channel, nodes = await node_repo.get_channel_and_nodes(
-            channel_id, [prefetch_root_key, prefetch_subroot_index]
+            channel_id, [ROOT_KEY, k_key]
         )
 
         if payment_channel is None:
@@ -125,73 +127,54 @@ class PaytreeFirstOptPaymentService:
             )
             if payment_channel.commitment:
                 await node_repo.merge_nodes(
-                    channel_id, {prefetch_root_key: payment_channel.commitment}
+                    channel_id, {ROOT_KEY: payment_channel.commitment}
                 )
+                nodes[ROOT_KEY] = payment_channel.commitment
         else:
-            root_b64 = nodes.get(prefetch_root_key) or ""
-            if not root_b64 and payment_channel.commitment:
+            if not nodes.get(ROOT_KEY) and payment_channel.commitment:
                 await node_repo.merge_nodes(
-                    channel_id, {prefetch_root_key: payment_channel.commitment}
+                    channel_id, {ROOT_KEY: payment_channel.commitment}
                 )
+                nodes[ROOT_KEY] = payment_channel.commitment
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
 
-        # From here on, every node-store key is derived from the channel's
-        # authoritative max_steps — not dto.paytree_max_i, which only primed the
-        # read above — same as verify() trusting channel.commitment (not client
-        # input) as the root. Reuse the prefetch if it happens to already cover
-        # these keys (the common case, since paytree_max_i normally matches);
-        # otherwise do one fresh, authoritative read.
-        depth = compute_tree_depth(payment_channel.max_steps)
-        root_key = key_eytzinger(depth, 0, depth)
-        subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
-            dto.i, len(dto.siblings_b64), depth
-        )
-        if root_key not in nodes or subroot_index not in nodes:
-            nodes = await node_repo.get_nodes(channel_id, [root_key, subroot_index])
-
-        new_ref = ProofReference(value=dto.i)
+        new_ref = ProofReference(value=dto.k)
         prev_ref = (
             ProofReference(value=payment_channel.last_proof_reference)
             if payment_channel.last_proof_reference is not None
             else None
         )
         cumulative_owed = new_ref.value * payment_channel.unit_value
+        fingerprint = _fingerprint(dto.left_b64, dto.right_b64)
 
         if prev_ref is not None and new_ref.value <= prev_ref.value:
             prev_state = await self.payment_repository.get_state(channel_id)
             prev_fingerprint = prev_state.proof_fingerprint if prev_state else None
             is_dup = check_proof_reference_duplicate(
                 new_ref=new_ref,
-                new_fingerprint=dto.leaf_b64,
+                new_fingerprint=fingerprint,
                 prev_ref=prev_ref,
                 prev_fingerprint=prev_fingerprint,
             )
             if is_dup:
-                verify_proof = CryptoProof(
-                    scheme=PaymentScheme.PAYTREE,
-                    data={
-                        "leaf_b64": dto.leaf_b64,
-                        "siblings_b64": dto.siblings_b64,
-                        "max_steps": payment_channel.max_steps,
-                    },
-                )
-                if not self.crypto_scheme.verify(
-                    payment_channel.commitment, new_ref, verify_proof, nodes=nodes
+                known_parent_b64 = nodes.get(k_key, "")
+                if not known_parent_b64 or not self.crypto_scheme.verify(
+                    known_parent_b64, dto.left_b64, dto.right_b64
                 ):
-                    raise ValueError("Invalid PayTree first-opt proof")
+                    raise ValueError("Invalid PayTree child-pair proof")
                 created_at = (
                     prev_state.created_at if prev_state else datetime.now(timezone.utc)
                 )
-                return PaytreePaymentResponseDTO(
+                return PaytreeChildPairPaymentResponseDTO(
                     channel_id=channel_id,
-                    i=dto.i,
+                    k=dto.k,
                     cumulative_owed_amount=cumulative_owed,
                     created_at=created_at,
                 )
             raise ValueError(
-                f"PayTree i must be increasing. Got {dto.i}, channel has {prev_ref.value}"
+                f"PayTree k must be increasing. Got {dto.k}, channel has {prev_ref.value}"
             )
 
         validate_proof_reference(
@@ -202,104 +185,62 @@ class PaytreeFirstOptPaymentService:
                 f"Cumulative owed {cumulative_owed} exceeds channel amount {payment_channel.amount}"
             )
 
-        verify_proof = CryptoProof(
-            scheme=PaymentScheme.PAYTREE,
-            data={
-                "leaf_b64": dto.leaf_b64,
-                "siblings_b64": dto.siblings_b64,
-                "max_steps": payment_channel.max_steps,
-            },
-        )
-        if not self.crypto_scheme.verify(
-            payment_channel.commitment, new_ref, verify_proof, nodes=nodes
-        ):
-            raise ValueError("Invalid PayTree first-opt proof (verification failed)")
+        # The parent hash must come from a previously verified node (or the
+        # channel's own commitment, seeded at k=1) — never fall back to
+        # unverified client input.
+        known_parent_b64 = nodes.get(k_key, "")
+        if not known_parent_b64:
+            raise ValueError(
+                f"Unknown parent node for k={dto.k}; payments must reveal children "
+                "of an already-verified node, in increasing k order"
+            )
+
+        if not self.crypto_scheme.verify(known_parent_b64, dto.left_b64, dto.right_b64):
+            raise ValueError("Invalid PayTree child-pair proof (verification failed)")
 
         node_updates = self.crypto_scheme.build_node_updates(
-            dto.i, dto.leaf_b64, dto.siblings_b64, depth
+            dto.k, dto.left_b64, dto.right_b64
         )
 
         created_at = datetime.now(timezone.utc)
         new_state = PaymentState(
             channel_id=channel_id,
-            proof_reference=dto.i,
+            proof_reference=dto.k,
             cumulative_owed=cumulative_owed,
-            proof_fingerprint=dto.leaf_b64,
+            proof_fingerprint=fingerprint,
             created_at=created_at,
         )
         store_proof = CryptoProof(
-            scheme=PaymentScheme.PAYTREE,
-            data={"leaf_b64": dto.leaf_b64, "siblings_b64": dto.siblings_b64},
+            scheme=PaymentScheme.PAYTREE_CHILD_PAIR,
+            data={"left_b64": dto.left_b64, "right_b64": dto.right_b64},
         )
 
-        payment_channel.last_proof_reference = dto.i
+        payment_channel.last_proof_reference = dto.k
 
-        # The atomic monotonic CAS lives inside save_nodes_and_payment, so a
-        # concurrent request that advanced the reference cannot be overwritten
-        # here (unlike the previous unconditional SET). Serialization of
-        # channel/state/proof happens inside the repository call itself.
         status, stored_ref = await node_repo.save_nodes_and_payment(
             channel_id=channel_id,
             node_updates=node_updates,
-            new_ref=dto.i,
+            new_ref=dto.k,
             channel=payment_channel,
             state=new_state,
             proof=store_proof,
         )
 
         if status == 1:
-            return PaytreePaymentResponseDTO(
+            return PaytreeChildPairPaymentResponseDTO(
                 channel_id=channel_id,
-                i=dto.i,
+                k=dto.k,
                 cumulative_owed_amount=cumulative_owed,
                 created_at=created_at,
             )
         if status == 0:
             raise ValueError(
-                f"PayTree i must be increasing (race detected). Got {dto.i}, "
+                f"PayTree k must be increasing (race detected). Got {dto.k}, "
                 f"channel has {stored_ref}"
             )
         if status == 3:
-            raise ValueError("PayTree i exceeds max_i for this channel")
+            raise ValueError("PayTree k exceeds max_k for this channel")
         raise RuntimeError(f"Unexpected result from atomic save: status={status}")
-
-    async def _rebuild_paytree_proof_for_settlement(
-        self,
-        channel_id: str,
-        channel: PaymentChannel,
-        last_i: int,
-        last_leaf_b64: str,
-    ) -> Optional[tuple[str, list[str]]]:
-        node_repo = self.node_repo
-        depth = compute_tree_depth(channel.max_steps)
-        full_sibling_indexes = build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
-            0, last_i, depth, 0
-        )
-        dependency_indexes = get_proof_dependency_indexes(full_sibling_indexes, depth)
-        node_keys = [key_eytzinger(lev, pos, depth) for lev, pos in dependency_indexes]
-        nodes_b64 = await node_repo.get_nodes(channel_id, node_keys)
-
-        node_hashes: dict[tuple[int, int], bytes] = {}
-        for lev, pos in dependency_indexes:
-            key = key_eytzinger(lev, pos, depth)
-            if (lev, pos) == (0, last_i):
-                node_hashes[(lev, pos)] = b64_to_bytes(last_leaf_b64)
-            else:
-                b64 = nodes_b64.get(key)
-                if b64:
-                    node_hashes[(lev, pos)] = b64_to_bytes(b64)
-                elif lev == depth and pos == 0 and channel.commitment:
-                    node_hashes[(lev, pos)] = b64_to_bytes(channel.commitment)
-
-        try:
-            full_siblings = [
-                build_node_from_dependencies(lev, pos, node_hashes, depth)
-                for lev, pos in full_sibling_indexes
-            ]
-        except KeyError:
-            return None
-
-        return last_leaf_b64, [bytes_to_b64(s) for s in full_siblings]
 
     async def settle_channel(self, dto: CloseChannelDTO) -> None:
         channel_id = dto.channel_id
@@ -310,27 +251,41 @@ class PaytreeFirstOptPaymentService:
             return None
 
         state = await self.payment_repository.get_state(channel_id)
-        leaf_b64: Optional[str] = None
-        siblings_b64: Optional[list[str]] = None
-
-        if state:
-            result = await self._rebuild_paytree_proof_for_settlement(
-                channel_id, channel, state.proof_reference, state.proof_fingerprint
-            )
-            if result:
-                leaf_b64, siblings_b64 = result
-
-        if not state or leaf_b64 is None or siblings_b64 is None:
+        if not state:
             raise ValueError("No complete PayTree proof available for settlement")
 
-        cumulative_owed = state.proof_reference * channel.unit_value
+        k = state.proof_reference
+        cumulative_owed = k * channel.unit_value
         if cumulative_owed > channel.amount:
             raise ValueError("Invalid owed amount")
 
-        settlement_payload = PaytreeSettlementPayload(
+        # Fetch every node needed to walk from k's children up to (but not
+        # including) the root: str(2k), str(2k+1), then str(sibling) at each
+        # level on the way up.
+        keys_needed = [str(2 * k), str(2 * k + 1)]
+        current = k
+        while current != 1:
+            keys_needed.append(str(current ^ 1))
+            current //= 2
+
+        nodes_b64 = await self.node_repo.get_nodes(channel_id, keys_needed)
+        try:
+            known: dict[int, bytes] = {
+                int(key): b64_to_bytes(value) for key, value in nodes_b64.items()
+            }
+            left, right, siblings = build_child_pair_close_proof(k, known)
+        except KeyError:
+            raise ValueError("No complete PayTree proof available for settlement")
+
+        left_b64 = bytes_to_b64(left)
+        right_b64 = bytes_to_b64(right)
+        siblings_b64 = [bytes_to_b64(s) for s in siblings]
+
+        settlement_payload = PaytreeChildPairSettlementPayload(
             channel_id=channel_id,
-            i=state.proof_reference,
-            leaf_b64=leaf_b64,
+            k=k,
+            left_b64=left_b64,
+            right_b64=right_b64,
             siblings_b64=siblings_b64,
         )
         payload_bytes = payload_to_bytes(settlement_payload)
@@ -340,16 +295,17 @@ class PaytreeFirstOptPaymentService:
         vendor_private_key = load_private_key_from_pem(self.vendor_private_key_pem)
         vendor_signature_b64 = sign_bytes(vendor_private_key, payload_bytes)
 
-        request_dto = PaytreeSettlementRequestDTO(
+        request_dto = PaytreeChildPairSettlementRequestDTO(
             vendor_public_key_der_b64=channel.vendor_public_key_der_b64,
-            i=state.proof_reference,
-            leaf_b64=leaf_b64,
+            k=k,
+            left_b64=left_b64,
+            right_b64=right_b64,
             siblings_b64=siblings_b64,
             vendor_signature_b64=vendor_signature_b64,
         )
 
         async with self.issuer_client_factory() as issuer_client:
-            await issuer_client.settle_paytree_first_opt_payment_channel(
+            await issuer_client.settle_paytree_child_pair_payment_channel(
                 channel_id, request_dto
             )
 
