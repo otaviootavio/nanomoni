@@ -28,16 +28,16 @@ async def test_vendor_accepts_duplicate_paytree_payment_same_i_same_proof(
         unit_value=1,
         max_i=100,
     )
-    channel_response = await issuer_client.open_paytree_channel(open_request)
+    channel_response = await issuer_client.open_paytree_std_channel(open_request)
     channel_id = channel_response.channel_id
 
     i = 10
     i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
 
-    first = await vendor_client.receive_paytree_payment(
+    first = await vendor_client.receive_paytree_std_payment(
         channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
     )
-    dup = await vendor_client.receive_paytree_payment(
+    dup = await vendor_client.receive_paytree_std_payment(
         channel_id, i=i_val, leaf_b64=leaf_b64, siblings_b64=siblings_b64
     )
 

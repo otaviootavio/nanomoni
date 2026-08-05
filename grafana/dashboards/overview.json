@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -69,6 +69,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -115,7 +116,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -176,6 +177,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -222,7 +224,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -273,6 +275,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -319,7 +322,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -367,6 +370,115 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      },
+      "id": 23,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (name) (\n  rate(container_network_receive_bytes_total{\n    job=\"cadvisor\",\n    container_label_com_docker_compose_service=\"redis-issuer\",\n    image!=\"\"\n  }[1m])\n) / 1024",
+          "legendFormat": "Input",
+          "range": true,
+          "refId": "Input"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "sum by (name) (\n  rate(container_network_transmit_bytes_total{\n    job=\"cadvisor\",\n    container_label_com_docker_compose_service=\"issuer\",\n    image!=\"\"\n  }[1m])\n) / 1024",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Output",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Issuer Network (KiB/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "af7qj924y8ohsc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -413,7 +525,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -464,6 +576,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -510,7 +623,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -571,6 +684,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -617,7 +731,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -678,6 +792,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -724,7 +839,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -775,6 +890,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -821,7 +937,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -882,6 +998,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -928,7 +1045,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -989,6 +1106,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1035,7 +1153,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -1086,6 +1204,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1132,7 +1251,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -1180,6 +1299,115 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 35
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (name) (\n  rate(container_network_receive_bytes_total{\n    job=\"cadvisor\",\n    container_label_com_docker_compose_service=\"redis-vendor\",\n    image!=\"\"\n  }[1m])\n) / 1024",
+          "legendFormat": "Input",
+          "range": true,
+          "refId": "Input"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "sum by (name) (\n  rate(container_network_transmit_bytes_total{\n    job=\"cadvisor\",\n    container_label_com_docker_compose_service=\"vendor\",\n    image!=\"\"\n  }[1m])\n) / 1024",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Output",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Redis Vendor Network (KiB/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "af7qj924y8ohsc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1226,7 +1454,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -1277,6 +1505,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1323,7 +1552,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -1384,6 +1613,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1430,11 +1660,11 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -1445,7 +1675,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
+          "expr": "rate(payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[1m])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1458,7 +1688,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[1m])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1471,7 +1701,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
+          "expr": "rate(payword_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1484,7 +1714,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_payment_requests_total{job=\"vendor-api\", status=\"success\"}[30s])",
+          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -1497,12 +1727,38 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "rate(paytree_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[30s])",
+          "expr": "rate(paytree_std_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_first_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[1m])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "H"
         }
       ],
       "title": "Vendor Payment TPS (success)",
@@ -1524,6 +1780,7 @@
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
+            "axisSoftMin": 0,
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -1542,6 +1799,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1578,8 +1836,8 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "hidden",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": false
         },
         "tooltip": {
@@ -1588,7 +1846,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "datasource": {
@@ -1599,7 +1857,7 @@
           "expr": "histogram_quantile(\n  0.99,\n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
-          "legendFormat": "P99",
+          "legendFormat": "Signature P99",
           "range": true,
           "refId": "B"
         },
@@ -1612,7 +1870,7 @@
           "expr": "histogram_quantile(0.95, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
-          "legendFormat": "P95",
+          "legendFormat": "Signature P95",
           "range": true,
           "refId": "C"
         },
@@ -1625,7 +1883,7 @@
           "expr": "histogram_quantile(0.50, \n  sum(rate(payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
-          "legendFormat": "P50",
+          "legendFormat": "Signature P50",
           "range": true,
           "refId": "D"
         },
@@ -1674,7 +1932,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P99",
@@ -1687,7 +1945,7 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P95",
@@ -1700,12 +1958,51 @@
             "uid": "af7qj924y8ohsc"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_std_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Paytree P50",
           "range": true,
           "refId": "I"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "J"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "K"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_first_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[1m])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "L"
         }
       ],
       "title": "Vendor Payment Duration Average (ms)",
@@ -1759,7 +2056,9 @@
         "namePlacement": "auto",
         "orientation": "vertical",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -1767,7 +2066,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "12.1.1",
+      "pluginVersion": "12.3.3",
       "targets": [
         {
           "editorMode": "code",
@@ -1787,7 +2086,7 @@
   ],
   "preload": false,
   "refresh": "5s",
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": []
@@ -1800,5 +2099,5 @@
   "timezone": "browser",
   "title": "Vendor Dashboard",
   "uid": "52fe04d2-3de3-4bb6-8359-34904ef733ae",
-  "version": 6
+  "version": 1
 }

@@ -25,7 +25,7 @@ from ....crypto.certificates import (
 )
 from ....domain.shared import IssuerClientFactory
 from ....domain.vendor.entities import SignaturePaymentChannel, SignatureState
-from ....domain.vendor.payment_channel_repository import PaymentChannelRepository
+from ....domain.vendor.signature_repository import SignatureRepository
 from ....infrastructure.http.http_client import HttpRequestError, HttpResponseError
 from ..dtos import (
     CloseChannelDTO,
@@ -44,7 +44,7 @@ class PaymentService:
 
     def __init__(
         self,
-        payment_channel_repository: PaymentChannelRepository,
+        payment_channel_repository: SignatureRepository,
         issuer_client_factory: IssuerClientFactory,
         vendor_public_key_der_b64: str,
         *,

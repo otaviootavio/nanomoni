@@ -25,11 +25,7 @@ class AccountRepositoryImpl(AccountRepository):
         """
         account_key = f"account:{account.public_key_der_b64}"
         await self.store.set(account_key, account.model_dump_json())
-        # Return the stored/normalized representation
-        stored_raw = await self.store.get(account_key)
-        return (
-            account if stored_raw is None else Account.model_validate_json(stored_raw)
-        )
+        return account
 
     async def get_by_public_key(self, public_key_der_b64: str) -> Optional[Account]:
         account_key = f"account:{public_key_der_b64}"

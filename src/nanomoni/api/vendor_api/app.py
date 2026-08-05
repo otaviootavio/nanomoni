@@ -26,8 +26,7 @@ from .dependencies import get_key_value_store_dependency
 from .routers import (
     payments,
     paytree_first_opt_payments,
-    paytree_payments,
-    paytree_second_opt_payments,
+    paytree_std_payments,
     payword_payments,
     tasks,
     users,
@@ -54,9 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 logger.exception("Failed to register Redis Lua script '%s'", name)
                 # Re-raise to prevent startup with unregistered scripts
                 raise
-        await register_vendor_with_issuer(
-            settings, session=app.state.issuer_session
-        )
+        await register_vendor_with_issuer(settings, session=app.state.issuer_session)
         yield
     finally:
         await app.state.issuer_session.close()
@@ -87,9 +84,8 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api/v1/vendor")
     app.include_router(payments.router, prefix="/api/v1/vendor")
     app.include_router(payword_payments.router, prefix="/api/v1/vendor")
-    app.include_router(paytree_payments.router, prefix="/api/v1/vendor")
+    app.include_router(paytree_std_payments.router, prefix="/api/v1/vendor")
     app.include_router(paytree_first_opt_payments.router, prefix="/api/v1/vendor")
-    app.include_router(paytree_second_opt_payments.router, prefix="/api/v1/vendor")
 
     @app.get("/")
     async def root() -> dict[str, str]:

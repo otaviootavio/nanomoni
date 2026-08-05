@@ -9,6 +9,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from ..shared.serializers import CommonSerializersMixin
+from ..shared.proof_reference import PaymentScheme
 
 
 class Account(CommonSerializersMixin, BaseModel):
@@ -59,17 +60,14 @@ class PaytreePaymentChannel(PaymentChannelBase):
     paytree_max_i: int
 
 
-class PaytreeFirstOptPaymentChannel(PaymentChannelBase):
-    """PayTree First Opt channel with Merkle tree commitment."""
+class IssuerPaymentChannel(PaymentChannelBase):
+    """Unified proof-based payment channel on the issuer side.
 
-    paytree_first_opt_root_b64: str
-    paytree_first_opt_unit_value: int
-    paytree_first_opt_max_i: int
+    Replaces PaywordPaymentChannel and PaytreePaymentChannel. The issuer
+    does not track per-payment state (no last_proof_reference).
+    """
 
-
-class PaytreeSecondOptPaymentChannel(PaymentChannelBase):
-    """PayTree Second Opt channel with Merkle tree commitment."""
-
-    paytree_second_opt_root_b64: str
-    paytree_second_opt_unit_value: int
-    paytree_second_opt_max_i: int
+    commitment: str
+    scheme: PaymentScheme
+    max_steps: int
+    unit_value: int

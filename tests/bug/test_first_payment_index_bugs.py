@@ -94,13 +94,13 @@ class TestPaytreeZeroIndexFix:
             max_i=max_i,
         )
 
-        channel_response = await issuer_client.open_paytree_channel(open_request)
+        channel_response = await issuer_client.open_paytree_std_channel(open_request)
         channel_id = channel_response.channel_id
 
         # Generate proof for i=0
         i, leaf_b64, siblings_b64 = paytree.payment_proof(i=0)
 
-        response = await vendor_client.receive_paytree_payment_raw(
+        response = await vendor_client.receive_paytree_std_payment_raw(
             channel_id,
             i=i,
             leaf_b64=leaf_b64,
@@ -300,7 +300,7 @@ class TestConsistencyBetweenModes:
             unit_value=unit_value,
             max_i=100,
         )
-        paytree_channel = await issuer_client.open_paytree_channel(paytree_request)
+        paytree_channel = await issuer_client.open_paytree_std_channel(paytree_request)
 
         # Send minimum valid first payment for each mode
         # Payword: k=1 (k=0 is rejected)
@@ -313,7 +313,7 @@ class TestConsistencyBetweenModes:
 
         # Paytree: i=1 (i=0 is rejected)
         i, leaf_b64, siblings_b64 = paytree.payment_proof(i=1)
-        paytree_response = await vendor_client.receive_paytree_payment(
+        paytree_response = await vendor_client.receive_paytree_std_payment(
             paytree_channel.channel_id,
             i=i,
             leaf_b64=leaf_b64,
@@ -415,11 +415,11 @@ class TestSkipPaymentsBug:
             unit_value=unit_value,
             max_i=100,
         )
-        channel = await issuer_client.open_paytree_channel(open_request)
+        channel = await issuer_client.open_paytree_std_channel(open_request)
 
         # Skip directly to i=5
         i, leaf_b64, siblings_b64 = paytree.payment_proof(i=5)
-        response = await vendor_client.receive_paytree_payment(
+        response = await vendor_client.receive_paytree_std_payment(
             channel.channel_id,
             i=i,
             leaf_b64=leaf_b64,
@@ -470,7 +470,7 @@ class TestSettlementWithZeroPaymentFix:
             unit_value=unit_value,
             max_i=100,
         )
-        channel = await issuer_client.open_paytree_channel(open_request)
+        channel = await issuer_client.open_paytree_std_channel(open_request)
 
         # Check client balance after opening (should be reduced by channel_amount)
         client_after_open = await issuer_client.get_account(client.public_key_der_b64)
@@ -478,7 +478,7 @@ class TestSettlementWithZeroPaymentFix:
 
         # Attempt payment with i=0 (should be rejected)
         i, leaf_b64, siblings_b64 = paytree.payment_proof(i=0)
-        rejected = await vendor_client.receive_paytree_payment_raw(
+        rejected = await vendor_client.receive_paytree_std_payment_raw(
             channel.channel_id,
             i=i,
             leaf_b64=leaf_b64,
@@ -490,7 +490,7 @@ class TestSettlementWithZeroPaymentFix:
 
         # Send valid first payment with i=1
         i, leaf_b64, siblings_b64 = paytree.payment_proof(i=1)
-        payment_response = await vendor_client.receive_paytree_payment(
+        payment_response = await vendor_client.receive_paytree_std_payment(
             channel.channel_id,
             i=i,
             leaf_b64=leaf_b64,
@@ -500,7 +500,7 @@ class TestSettlementWithZeroPaymentFix:
         assert payment_response.cumulative_owed_amount == unit_value
 
         # Request settlement
-        await vendor_client.request_channel_settlement_paytree(channel.channel_id)
+        await vendor_client.request_channel_settlement_paytree_std(channel.channel_id)
 
         # Wait for settlement to complete
         import asyncio

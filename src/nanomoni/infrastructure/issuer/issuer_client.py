@@ -26,16 +26,6 @@ from ...application.issuer.paytree_dtos import (
     PaytreePaymentChannelResponseDTO,
     PaytreeSettlementRequestDTO,
 )
-from ...application.issuer.paytree_first_opt_dtos import (
-    PaytreeFirstOptOpenChannelResponseDTO,
-    PaytreeFirstOptPaymentChannelResponseDTO,
-    PaytreeFirstOptSettlementRequestDTO,
-)
-from ...application.issuer.paytree_second_opt_dtos import (
-    PaytreeSecondOptOpenChannelResponseDTO,
-    PaytreeSecondOptPaymentChannelResponseDTO,
-    PaytreeSecondOptSettlementRequestDTO,
-)
 from ..http.http_client import HttpClient, AsyncHttpClient
 
 
@@ -184,73 +174,51 @@ class AsyncIssuerClient:
         resp = await self._http.get(path)
         return PaywordPaymentChannelResponseDTO.model_validate(resp.json())
 
-    async def open_paytree_payment_channel(
+    async def open_paytree_std_payment_channel(
         self, dto: OpenChannelRequestDTO
     ) -> PaytreeOpenChannelResponseDTO:
-        resp = await self._http.post("/issuer/channels/paytree", json=dto.model_dump())
+        resp = await self._http.post(
+            "/issuer/channels/paytree/std", json=dto.model_dump()
+        )
         return PaytreeOpenChannelResponseDTO.model_validate(resp.json())
 
-    async def get_paytree_payment_channel(
+    async def get_paytree_std_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
     ) -> PaytreePaymentChannelResponseDTO:
-        path = f"/issuer/channels/paytree/{dto.channel_id}"
+        path = f"/issuer/channels/paytree/std/{dto.channel_id}"
         resp = await self._http.get(path)
         return PaytreePaymentChannelResponseDTO.model_validate(resp.json())
 
-    async def settle_paytree_payment_channel(
+    async def settle_paytree_std_payment_channel(
         self,
         channel_id: str,
         dto: PaytreeSettlementRequestDTO,
     ) -> CloseChannelResponseDTO:
-        path = f"/issuer/channels/paytree/{channel_id}/settlements"
+        path = f"/issuer/channels/paytree/std/{channel_id}/settlements"
         resp = await self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 
     async def open_paytree_first_opt_payment_channel(
         self, dto: OpenChannelRequestDTO
-    ) -> PaytreeFirstOptOpenChannelResponseDTO:
+    ) -> PaytreeOpenChannelResponseDTO:
         resp = await self._http.post(
-            "/issuer/channels/paytree_first_opt", json=dto.model_dump()
+            "/issuer/channels/paytree/first-opt", json=dto.model_dump()
         )
-        return PaytreeFirstOptOpenChannelResponseDTO.model_validate(resp.json())
+        return PaytreeOpenChannelResponseDTO.model_validate(resp.json())
 
     async def get_paytree_first_opt_payment_channel(
         self, dto: GetPaymentChannelRequestDTO
-    ) -> PaytreeFirstOptPaymentChannelResponseDTO:
-        path = f"/issuer/channels/paytree_first_opt/{dto.channel_id}"
+    ) -> PaytreePaymentChannelResponseDTO:
+        path = f"/issuer/channels/paytree/first-opt/{dto.channel_id}"
         resp = await self._http.get(path)
-        return PaytreeFirstOptPaymentChannelResponseDTO.model_validate(resp.json())
+        return PaytreePaymentChannelResponseDTO.model_validate(resp.json())
 
     async def settle_paytree_first_opt_payment_channel(
         self,
         channel_id: str,
-        dto: PaytreeFirstOptSettlementRequestDTO,
+        dto: PaytreeSettlementRequestDTO,
     ) -> CloseChannelResponseDTO:
-        path = f"/issuer/channels/paytree_first_opt/{channel_id}/settlements"
-        resp = await self._http.post(path, json=dto.model_dump())
-        return CloseChannelResponseDTO.model_validate(resp.json())
-
-    async def open_paytree_second_opt_payment_channel(
-        self, dto: OpenChannelRequestDTO
-    ) -> PaytreeSecondOptOpenChannelResponseDTO:
-        resp = await self._http.post(
-            "/issuer/channels/paytree_second_opt", json=dto.model_dump()
-        )
-        return PaytreeSecondOptOpenChannelResponseDTO.model_validate(resp.json())
-
-    async def get_paytree_second_opt_payment_channel(
-        self, dto: GetPaymentChannelRequestDTO
-    ) -> PaytreeSecondOptPaymentChannelResponseDTO:
-        path = f"/issuer/channels/paytree_second_opt/{dto.channel_id}"
-        resp = await self._http.get(path)
-        return PaytreeSecondOptPaymentChannelResponseDTO.model_validate(resp.json())
-
-    async def settle_paytree_second_opt_payment_channel(
-        self,
-        channel_id: str,
-        dto: PaytreeSecondOptSettlementRequestDTO,
-    ) -> CloseChannelResponseDTO:
-        path = f"/issuer/channels/paytree_second_opt/{channel_id}/settlements"
+        path = f"/issuer/channels/paytree/first-opt/{channel_id}/settlements"
         resp = await self._http.post(path, json=dto.model_dump())
         return CloseChannelResponseDTO.model_validate(resp.json())
 

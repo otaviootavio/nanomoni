@@ -13,10 +13,10 @@ skinparam Nodesep 10
 skinparam Ranksep 10
 
 
-rectangle "Vendor Context" #E6FFE6 {
-    rectangle "Entry\n**main.py**" as entry #CCFFCC
+rectangle "Contexto do Vendedor" #E6FFE6 {
+    rectangle "Entrada\n**main.py**" as entry #CCFFCC
     
-    rectangle "API Layer" as api #E8F4F8 {
+    rectangle "Camada de API" as api #E8F4F8 {
         rectangle "api/vendor_api" {
             file "app.py\ndependencies.py" as api_files
             rectangle "routers/" {
@@ -25,7 +25,7 @@ rectangle "Vendor Context" #E6FFE6 {
         }
     }
     
-    rectangle "Application Layer" as app #FFF8DC {
+    rectangle "Camada de Aplicação" as app #FFF8DC {
         rectangle "application/vendor" {
             file "dtos.py\npayword_dtos.py\npaytree_dtos.py"
             rectangle "use_cases/" {
@@ -34,14 +34,14 @@ rectangle "Vendor Context" #E6FFE6 {
         }
     }
     
-    rectangle "Domain Layer" as domain #FFFACD {
+    rectangle "Camada de Domínio" as domain #FFFACD {
         rectangle "domain/vendor" {
             file "**entities.py**\nUser \nTask\nOffChainTx\nPaymentChannel" #FFFFE0
             file "user_repository.py\ntask_repository.py\npayment_channel_repository.py"
         }
     }
     
-    rectangle "Infrastructure Layer" as infra #E8F4F8 {
+    rectangle "Camada de Infraestrutura" as infra #E8F4F8 {
         rectangle "infrastructure/vendor" {
             file "user_repository_impl.py\ntask_repository_impl.py\npayment_channel_repository_impl.py\nvendor_client.py"
         }

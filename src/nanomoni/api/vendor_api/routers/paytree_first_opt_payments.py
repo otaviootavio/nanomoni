@@ -1,4 +1,4 @@
-"""PayTree First Opt payment API routes (Vendor)."""
+"""PayTree first-opt payment API routes (Vendor)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
 from prometheus_client import Counter, Gauge, Histogram
 
 from ....application.vendor.dtos import CloseChannelDTO
-from ....application.vendor.paytree_first_opt_dtos import (
-    PaytreeFirstOptPaymentResponseDTO,
+from ....application.vendor.paytree_dtos import (
+    PaytreePaymentResponseDTO,
     ReceivePaytreeFirstOptPaymentDTO,
 )
 from ....application.vendor.use_cases.paytree_first_opt_payment import (
@@ -22,31 +22,32 @@ from ..metrics import PAYMENT_DURATION_BUCKETS
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/channels/paytree_first_opt",
-    tags=["channels", "paytree_first_opt"],
+    prefix="/channels/paytree/first-opt", tags=["channels", "paytree-first-opt"]
 )
 
 paytree_first_opt_payment_requests_total = Counter(
     "paytree_first_opt_payment_requests_total",
-    "Total PayTree First Opt payment requests processed",
+    "Total PayTree first-opt payment requests processed",
     ["status"],
 )
+
 paytree_first_opt_payment_request_duration_milliseconds = Histogram(
     "paytree_first_opt_payment_request_duration_milliseconds",
-    "Wall time to process a PayTree First Opt payment request (ms)",
+    "Wall time to process a PayTree first-opt payment request (ms)",
     ["status"],
     buckets=PAYMENT_DURATION_BUCKETS,
 )
+
 paytree_first_opt_payment_requests_inprogress = Gauge(
     "paytree_first_opt_payment_requests_inprogress",
-    "Number of PayTree First Opt payment requests currently being processed",
+    "Number of PayTree first-opt payment requests currently being processed",
     multiprocess_mode="livesum",
 )
 
 
 @router.post(
     "/{channel_id}/payments",
-    response_model=PaytreeFirstOptPaymentResponseDTO,
+    response_model=PaytreePaymentResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
 async def receive_paytree_first_opt_payment(
@@ -55,8 +56,7 @@ async def receive_paytree_first_opt_payment(
     payment_service: PaytreeFirstOptPaymentService = Depends(
         get_paytree_first_opt_payment_service
     ),
-) -> PaytreeFirstOptPaymentResponseDTO:
-    """Receive and validate a PayTree First Opt payment from a client."""
+) -> PaytreePaymentResponseDTO:
     start_time = time.perf_counter()
     paytree_first_opt_payment_requests_inprogress.inc()
     try:
@@ -74,10 +74,8 @@ async def receive_paytree_first_opt_payment(
             status="client_error"
         ).observe(elapsed)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.exception(
-            "Internal server error while processing PayTree First Opt payment: %s", e
-        )
+    except Exception:
+        logger.exception("Failed to process PayTree first-opt payment")
         paytree_first_opt_payment_requests_total.labels(status="server_error").inc()
         elapsed = (time.perf_counter() - start_time) * 1000
         paytree_first_opt_payment_request_duration_milliseconds.labels(
@@ -85,7 +83,7 @@ async def receive_paytree_first_opt_payment(
         ).observe(elapsed)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error while processing PayTree First Opt payment",
+            detail="Failed to process PayTree first-opt payment",
         )
     finally:
         paytree_first_opt_payment_requests_inprogress.dec()
@@ -109,10 +107,7 @@ async def settle_paytree_first_opt_channel(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.exception(
-            "Internal server error while closing PayTree First Opt channel: %s", e
-        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error while closing PayTree First Opt channel",
+            detail=f"Failed to close PayTree first-opt channel: {str(e)}",
         )

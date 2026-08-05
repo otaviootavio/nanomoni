@@ -9,13 +9,22 @@ from pydantic import BaseModel, Field
 from nanomoni.domain.shared.serializers import CommonSerializersMixin
 
 
-class ReceivePaytreePaymentDTO(BaseModel):
-    """DTO for receiving a PayTree (Merkle proof) payment."""
+class ReceivePaytreeStdPaymentDTO(BaseModel):
+    """DTO for receiving a standard (full-proof) PayTree payment."""
 
     i: int = Field(..., ge=0, description="Monotonic PayTree index")
     leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="List of base64-encoded sibling hashes"
+    siblings_b64: list[str] = Field(..., description="Base64-encoded sibling hashes")
+
+
+class ReceivePaytreeFirstOptPaymentDTO(BaseModel):
+    """DTO for receiving a first-opt (pruned-proof) PayTree payment."""
+
+    i: int = Field(..., ge=0, description="Monotonic PayTree index")
+    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
+    siblings_b64: list[str] = Field(..., description="Base64-encoded sibling hashes")
+    paytree_max_i: int = Field(
+        ..., gt=0, description="Channel max_i (needed to compute node keys)"
     )
 
 

@@ -15,16 +15,9 @@ from nanomoni.application.vendor.payword_dtos import (
     PaywordPaymentResponseDTO,
 )
 from nanomoni.application.vendor.paytree_dtos import (
-    ReceivePaytreePaymentDTO,
-    PaytreePaymentResponseDTO,
-)
-from nanomoni.application.vendor.paytree_first_opt_dtos import (
+    ReceivePaytreeStdPaymentDTO,
     ReceivePaytreeFirstOptPaymentDTO,
-    PaytreeFirstOptPaymentResponseDTO,
-)
-from nanomoni.application.vendor.paytree_second_opt_dtos import (
-    ReceivePaytreeSecondOptPaymentDTO,
-    PaytreeSecondOptPaymentResponseDTO,
+    PaytreePaymentResponseDTO,
 )
 
 from tests.e2e.helpers.http import AiohttpResponse
@@ -171,166 +164,111 @@ class VendorTestClient:
         response.raise_for_status()
         assert response.status_code == 204
 
-    async def receive_paytree_payment(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+    async def receive_paytree_std_payment(
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> PaytreePaymentResponseDTO:
-        """Submit a PayTree payment to the vendor."""
-        dto = ReceivePaytreePaymentDTO(
+        """Submit a standard PayTree payment to the vendor."""
+        dto = ReceivePaytreeStdPaymentDTO(
             i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
         )
         response = await self._request(
             "POST",
-            f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+            f"{self.base_url}/vendor/channels/paytree/std/{channel_id}/payments",
             json=dto.model_dump(),
         )
-
         response.raise_for_status()
         return PaytreePaymentResponseDTO.model_validate(response.json())
 
-    async def receive_paytree_payment_raw(
-        self, channel_id: str, *, i: int, leaf_b64: str, siblings_b64: list[str]
+    async def receive_paytree_std_payment_raw(
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
     ) -> AiohttpResponse:
-        """
-        Submit a PayTree payment to the vendor without raising on error status.
-
-        Returns the raw HTTP response for error case testing.
-        """
-        dto = ReceivePaytreePaymentDTO(
+        """Submit a standard PayTree payment without raising on error status."""
+        dto = ReceivePaytreeStdPaymentDTO(
             i=i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
         )
         return await self._request(
             "POST",
-            f"{self.base_url}/vendor/channels/paytree/{channel_id}/payments",
+            f"{self.base_url}/vendor/channels/paytree/std/{channel_id}/payments",
             json=dto.model_dump(),
         )
-
-    async def request_channel_settlement_paytree(self, channel_id: str) -> None:
-        """Request closure of a PayTree channel."""
-        dto = CloseChannelDTO(channel_id=channel_id)
-        response = await self._request(
-            "POST",
-            f"{self.base_url}/vendor/channels/paytree/{channel_id}/closure-requests",
-            json=dto.model_dump(),
-        )
-
-        response.raise_for_status()
-        assert response.status_code == 204
 
     async def receive_paytree_first_opt_payment(
         self,
         channel_id: str,
         *,
         i: int,
-        max_i: int,
         leaf_b64: str,
         siblings_b64: list[str],
-    ) -> PaytreeFirstOptPaymentResponseDTO:
-        """Submit a PayTree First Opt payment to the vendor."""
+        paytree_max_i: int,
+    ) -> PaytreePaymentResponseDTO:
+        """Submit a first-opt PayTree payment to the vendor."""
         dto = ReceivePaytreeFirstOptPaymentDTO(
-            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            paytree_max_i=paytree_max_i,
         )
         response = await self._request(
             "POST",
-            f"{self.base_url}/vendor/channels/paytree_first_opt/{channel_id}/payments",
+            f"{self.base_url}/vendor/channels/paytree/first-opt/{channel_id}/payments",
             json=dto.model_dump(),
         )
-
         response.raise_for_status()
-        return PaytreeFirstOptPaymentResponseDTO.model_validate(response.json())
+        return PaytreePaymentResponseDTO.model_validate(response.json())
 
     async def receive_paytree_first_opt_payment_raw(
         self,
         channel_id: str,
         *,
         i: int,
-        max_i: int,
         leaf_b64: str,
         siblings_b64: list[str],
+        paytree_max_i: int,
     ) -> AiohttpResponse:
-        """
-        Submit a PayTree First Opt payment without raising on error status.
-
-        Returns the raw HTTP response for error case testing.
-        """
+        """Submit a first-opt PayTree payment without raising on error status."""
         dto = ReceivePaytreeFirstOptPaymentDTO(
-            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            paytree_max_i=paytree_max_i,
         )
         return await self._request(
             "POST",
-            f"{self.base_url}/vendor/channels/paytree_first_opt/{channel_id}/payments",
+            f"{self.base_url}/vendor/channels/paytree/first-opt/{channel_id}/payments",
             json=dto.model_dump(),
         )
+
+    async def request_channel_settlement_paytree_std(self, channel_id: str) -> None:
+        """Request closure of a standard PayTree channel."""
+        dto = CloseChannelDTO(channel_id=channel_id)
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/vendor/channels/paytree/std/{channel_id}/closure-requests",
+            json=dto.model_dump(),
+        )
+        response.raise_for_status()
+        assert response.status_code == 204
 
     async def request_channel_settlement_paytree_first_opt(
         self, channel_id: str
     ) -> None:
-        """Request closure of a PayTree First Opt channel."""
+        """Request closure of a first-opt PayTree channel."""
         dto = CloseChannelDTO(channel_id=channel_id)
         response = await self._request(
             "POST",
-            f"{self.base_url}/vendor/channels/paytree_first_opt/{channel_id}/closure-requests",
+            f"{self.base_url}/vendor/channels/paytree/first-opt/{channel_id}/closure-requests",
             json=dto.model_dump(),
         )
-
-        response.raise_for_status()
-        assert response.status_code == 204
-
-    async def receive_paytree_second_opt_payment(
-        self,
-        channel_id: str,
-        *,
-        i: int,
-        max_i: int,
-        leaf_b64: str,
-        siblings_b64: list[str],
-    ) -> PaytreeSecondOptPaymentResponseDTO:
-        """Submit a PayTree Second Opt payment to the vendor."""
-        dto = ReceivePaytreeSecondOptPaymentDTO(
-            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
-        )
-        response = await self._request(
-            "POST",
-            f"{self.base_url}/vendor/channels/paytree_second_opt/{channel_id}/payments",
-            json=dto.model_dump(),
-        )
-
-        response.raise_for_status()
-        return PaytreeSecondOptPaymentResponseDTO.model_validate(response.json())
-
-    async def receive_paytree_second_opt_payment_raw(
-        self,
-        channel_id: str,
-        *,
-        i: int,
-        max_i: int,
-        leaf_b64: str,
-        siblings_b64: list[str],
-    ) -> AiohttpResponse:
-        """
-        Submit a PayTree Second Opt payment without raising on error status.
-
-        Returns the raw HTTP response for error case testing.
-        """
-        dto = ReceivePaytreeSecondOptPaymentDTO(
-            i=i, max_i=max_i, leaf_b64=leaf_b64, siblings_b64=siblings_b64
-        )
-        return await self._request(
-            "POST",
-            f"{self.base_url}/vendor/channels/paytree_second_opt/{channel_id}/payments",
-            json=dto.model_dump(),
-        )
-
-    async def request_channel_settlement_paytree_second_opt(
-        self, channel_id: str
-    ) -> None:
-        """Request closure of a PayTree Second Opt channel."""
-        dto = CloseChannelDTO(channel_id=channel_id)
-        response = await self._request(
-            "POST",
-            f"{self.base_url}/vendor/channels/paytree_second_opt/{channel_id}/closure-requests",
-            json=dto.model_dump(),
-        )
-
         response.raise_for_status()
         assert response.status_code == 204
 

@@ -153,7 +153,7 @@ async def test_issuer_rejects_tampered_paytree_open_channel_signature(
     )
 
     # Then: Issuer rejects the request
-    response = await issuer_client.open_paytree_channel_raw(tampered_request)
+    response = await issuer_client.open_paytree_std_channel_raw(tampered_request)
     assert response.status_code == 400, "Should reject tampered PayTree signature"
     response_data = response.json()
     assert "signature" in response_data.get("detail", "").lower()

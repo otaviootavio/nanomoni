@@ -30,11 +30,8 @@ from ....crypto.certificates import (
     verify_signature_bytes,
     dto_to_canonical_json_bytes,
 )
-from ....crypto.paytree import (
-    b64_to_bytes,
-    compute_cumulative_owed_amount,
-    verify_paytree_proof,
-)
+from ...shared.paytree_proof import verify_paytree_proof_standard
+from ....crypto.paytree import b64_to_bytes, compute_cumulative_owed_amount
 from ....domain.issuer.entities import Account, PaytreePaymentChannel
 from ....domain.issuer.repositories import AccountRepository, PaymentChannelRepository
 
@@ -217,11 +214,12 @@ class PaytreeChannelService:
         except Exception as e:
             raise ValueError(f"Invalid PayTree root encoding: {e}") from e
 
-        if not verify_paytree_proof(
+        if not verify_paytree_proof_standard(
             i=dto.i,
             leaf_b64=dto.leaf_b64,
             siblings_b64=dto.siblings_b64,
             root_b64=channel.paytree_root_b64,
+            max_i=channel.paytree_max_i,
         ):
             raise ValueError("Invalid PayTree proof (root mismatch)")
 

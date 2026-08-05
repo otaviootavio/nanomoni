@@ -8,15 +8,11 @@ from nanomoni.application.issuer.dtos import (
 from nanomoni.client import (
     common,
     paytree,
-    paytree_first_opt,
-    paytree_second_opt,
     payword,
     signature,
 )
 from nanomoni.crypto.certificates import load_private_key_from_pem
 from nanomoni.crypto.paytree import Paytree
-from nanomoni.crypto.paytree_first_opt import PaytreeFirstOpt
-from nanomoni.crypto.paytree_second_opt import PaytreeSecondOpt
 from nanomoni.crypto.payword import Payword
 from nanomoni.envs.client_env import get_settings
 from nanomoni.infrastructure.http.http_client import HttpError
@@ -83,8 +79,6 @@ async def run_client_flow() -> None:
         final_cumulative_owed_amount: int
         payword_obj: Payword | None = None
         paytree_obj: Paytree | None = None
-        paytree_first_opt_obj: PaytreeFirstOpt | None = None
-        paytree_second_opt_obj: PaytreeSecondOpt | None = None
 
         if client_mode == "payword":
             payword_obj, payword_root_b64, payword_unit_value, payword_max_k = (
@@ -93,32 +87,12 @@ async def run_client_flow() -> None:
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, payword_unit_value
             )
-        elif client_mode == "paytree":
+        elif client_mode in ("paytree", "paytree_first_opt"):
             paytree_obj, paytree_root_b64, paytree_unit_value, paytree_max_i = (
                 paytree.init_commitment(settings, payment_count)
             )
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
                 client_mode, payments, paytree_unit_value
-            )
-        elif client_mode == "paytree_first_opt":
-            (
-                paytree_first_opt_obj,
-                paytree_first_opt_root_b64,
-                paytree_first_opt_unit_value,
-                paytree_first_opt_max_i,
-            ) = paytree_first_opt.init_commitment(settings, payment_count)
-            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
-                client_mode, payments, paytree_first_opt_unit_value
-            )
-        elif client_mode == "paytree_second_opt":
-            (
-                paytree_second_opt_obj,
-                paytree_second_opt_root_b64,
-                paytree_second_opt_unit_value,
-                paytree_second_opt_max_i,
-            ) = paytree_second_opt.init_commitment(settings, payment_count)
-            final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
-                client_mode, payments, paytree_second_opt_unit_value
             )
         else:
             final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
@@ -147,24 +121,14 @@ async def run_client_flow() -> None:
                 paytree_max_i,
             )
         elif client_mode == "paytree_first_opt":
-            open_dto = paytree_first_opt.build_open_channel_request(
+            open_dto = paytree.build_open_channel_request(
                 client_private_key,
                 settings.client_public_key_der_b64,
                 vendor_pk.public_key_der_b64,
                 channel_amount,
-                paytree_first_opt_root_b64,
-                paytree_first_opt_unit_value,
-                paytree_first_opt_max_i,
-            )
-        elif client_mode == "paytree_second_opt":
-            open_dto = paytree_second_opt.build_open_channel_request(
-                client_private_key,
-                settings.client_public_key_der_b64,
-                vendor_pk.public_key_der_b64,
-                channel_amount,
-                paytree_second_opt_root_b64,
-                paytree_second_opt_unit_value,
-                paytree_second_opt_max_i,
+                paytree_root_b64,
+                paytree_unit_value,
+                paytree_max_i,
             )
         else:
             open_dto = signature.build_open_channel_request(
@@ -212,9 +176,8 @@ async def run_client_flow() -> None:
         elif client_mode == "paytree":
             if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
-            # Type narrowing: mypy now knows paytree_obj is not None after the check
-            paytree_for_payments: Paytree = paytree_obj
-            await paytree.send_payments(
+            paytree_for_payments = paytree_obj
+            await paytree.send_std_payments(
                 vendor,
                 channel_id,
                 paytree_for_payments,
@@ -222,24 +185,13 @@ async def run_client_flow() -> None:
                 inter_payment_delay=delay,
             )
         elif client_mode == "paytree_first_opt":
-            if paytree_first_opt_obj is None:
+            if paytree_obj is None:
                 raise RuntimeError(PAYTREE_NOT_INITIALIZED)
-            paytree_first_opt_for_payments: PaytreeFirstOpt = paytree_first_opt_obj
-            await paytree_first_opt.send_payments(
+            paytree_for_payments = paytree_obj
+            await paytree.send_first_opt_payments(
                 vendor,
                 channel_id,
-                paytree_first_opt_for_payments,
-                payments,
-                inter_payment_delay=delay,
-            )
-        elif client_mode == "paytree_second_opt":
-            if paytree_second_opt_obj is None:
-                raise RuntimeError(PAYTREE_NOT_INITIALIZED)
-            paytree_second_opt_for_payments: PaytreeSecondOpt = paytree_second_opt_obj
-            await paytree_second_opt.send_payments(
-                vendor,
-                channel_id,
-                paytree_second_opt_for_payments,
+                paytree_for_payments,
                 payments,
                 inter_payment_delay=delay,
             )

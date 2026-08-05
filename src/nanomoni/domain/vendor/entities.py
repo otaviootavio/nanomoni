@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_serializer, EmailStr
 
 from ..shared.serializers import CommonSerializersMixin, DatetimeSerializerMixin
+from ..shared.proof_reference import PaymentScheme
 
 
 _sentinel = object()
@@ -134,55 +135,6 @@ class SignatureState(DatetimeSerializerMixin, BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class PaywordState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayWord payment state (monotonic counter + token)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    k: int = Field(..., ge=0, description="Monotonic PayWord counter")
-    token_b64: str = Field(..., description="Base64 token for this k (preimage)")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class PaytreeState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree payment state (monotonic index + Merkle proof)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    i: int = Field(..., ge=0, description="Monotonic PayTree index")
-    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="List of base64-encoded sibling hashes"
-    )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class PaytreeFirstOptState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree First Opt payment state (index + pruned proof + cache)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    i: int = Field(..., ge=0, description="Monotonic PayTree index")
-    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="Pruned list of base64-encoded sibling hashes"
-    )
-    last_verified_index: Optional[int] = Field(
-        None,
-        description="Most recently verified PayTree index",
-    )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class PaytreeSecondOptState(DatetimeSerializerMixin, BaseModel):
-    """Latest PayTree Second Opt payment state (index + pruned proof)."""
-
-    channel_id: str = Field(..., description="Payment channel identifier")
-    i: int = Field(..., ge=0, description="Monotonic PayTree index")
-    leaf_b64: str = Field(..., description="Base64-encoded leaf hash")
-    siblings_b64: list[str] = Field(
-        ..., description="Pruned list of base64-encoded sibling hashes"
-    )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
 class PaymentChannelBase(CommonSerializersMixin, BaseModel):
     """Base entity for a unidirectional client→vendor payment channel."""
 
@@ -210,33 +162,29 @@ class SignaturePaymentChannel(PaymentChannelBase):
         )
 
 
-class PaywordPaymentChannel(PaymentChannelBase):
-    """PayWord-enabled payment channel with hash-chain commitment."""
+class PaymentChannel(PaymentChannelBase):
+    """Unified proof-based payment channel (PayWord or PayTree).
 
-    payword_root_b64: str
-    payword_unit_value: int
-    payword_max_k: int
+    Replaces PaywordPaymentChannel and PaytreePaymentChannel. Crypto details
+    (leaf indices, hash counters, sibling hashes) are invisible here.
+    """
 
-
-class PaytreePaymentChannel(PaymentChannelBase):
-    """PayTree-enabled payment channel with Merkle tree commitment."""
-
-    paytree_root_b64: str
-    paytree_unit_value: int
-    paytree_max_i: int
+    commitment: str
+    scheme: PaymentScheme
+    max_steps: int
+    unit_value: int
+    last_proof_reference: Optional[int] = None
 
 
-class PaytreeFirstOptPaymentChannel(PaymentChannelBase):
-    """PayTree First Opt channel with Merkle tree commitment."""
+class PaymentState(DatetimeSerializerMixin, BaseModel):
+    """Unified payment state for proof-based channels.
 
-    paytree_first_opt_root_b64: str
-    paytree_first_opt_unit_value: int
-    paytree_first_opt_max_i: int
+    proof_fingerprint is the per-step idempotency key:
+    leaf_b64 for PayTree, token_b64 for PayWord.
+    """
 
-
-class PaytreeSecondOptPaymentChannel(PaymentChannelBase):
-    """PayTree Second Opt channel with Merkle tree commitment."""
-
-    paytree_second_opt_root_b64: str
-    paytree_second_opt_unit_value: int
-    paytree_second_opt_max_i: int
+    channel_id: str
+    proof_reference: int
+    cumulative_owed: int
+    proof_fingerprint: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

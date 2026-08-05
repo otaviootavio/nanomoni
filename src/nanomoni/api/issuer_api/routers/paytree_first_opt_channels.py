@@ -1,38 +1,37 @@
-"""PayTree First Opt channel API routes (Issuer)."""
+"""PayTree first-opt channel API routes (Issuer)."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ....application.issuer.dtos import (
-    CloseChannelResponseDTO,
     GetPaymentChannelRequestDTO,
     OpenChannelRequestDTO,
+    CloseChannelResponseDTO,
 )
-from ....application.issuer.paytree_first_opt_dtos import (
-    PaytreeFirstOptOpenChannelResponseDTO,
-    PaytreeFirstOptPaymentChannelResponseDTO,
-    PaytreeFirstOptSettlementRequestDTO,
+from ....application.issuer.paytree_dtos import (
+    PaytreeOpenChannelResponseDTO,
+    PaytreePaymentChannelResponseDTO,
+    PaytreeSettlementRequestDTO,
 )
-from ....application.issuer.use_cases.paytree_first_opt_channel import (
-    PaytreeFirstOptChannelService,
-)
+from ....application.issuer.use_cases.paytree_channel import PaytreeChannelService
 from ..dependencies import get_paytree_first_opt_channel_service
 
-router = APIRouter(tags=["channels", "paytree_first_opt"])
+
+router = APIRouter(
+    prefix="/channels/paytree/first-opt", tags=["channels", "paytree-first-opt"]
+)
 
 
 @router.post(
-    "/channels/paytree_first_opt",
-    response_model=PaytreeFirstOptOpenChannelResponseDTO,
+    "",
+    response_model=PaytreeOpenChannelResponseDTO,
     status_code=status.HTTP_201_CREATED,
 )
 async def open_paytree_first_opt_channel(
     payload: OpenChannelRequestDTO,
-    service: PaytreeFirstOptChannelService = Depends(
-        get_paytree_first_opt_channel_service
-    ),
-) -> PaytreeFirstOptOpenChannelResponseDTO:
+    service: PaytreeChannelService = Depends(get_paytree_first_opt_channel_service),
+) -> PaytreeOpenChannelResponseDTO:
     try:
         return await service.open_channel(payload)
     except ValueError as e:
@@ -40,16 +39,14 @@ async def open_paytree_first_opt_channel(
 
 
 @router.post(
-    "/channels/paytree_first_opt/{channel_id}/settlements",
+    "/{channel_id}/settlements",
     response_model=CloseChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
 async def settle_paytree_first_opt_channel(
     channel_id: str,
-    payload: PaytreeFirstOptSettlementRequestDTO,
-    service: PaytreeFirstOptChannelService = Depends(
-        get_paytree_first_opt_channel_service
-    ),
+    payload: PaytreeSettlementRequestDTO,
+    service: PaytreeChannelService = Depends(get_paytree_first_opt_channel_service),
 ) -> CloseChannelResponseDTO:
     try:
         return await service.settle_channel(channel_id, payload)
@@ -58,16 +55,14 @@ async def settle_paytree_first_opt_channel(
 
 
 @router.get(
-    "/channels/paytree_first_opt/{channel_id}",
-    response_model=PaytreeFirstOptPaymentChannelResponseDTO,
+    "/{channel_id}",
+    response_model=PaytreePaymentChannelResponseDTO,
     status_code=status.HTTP_200_OK,
 )
 async def get_paytree_first_opt_channel(
     channel_id: str,
-    service: PaytreeFirstOptChannelService = Depends(
-        get_paytree_first_opt_channel_service
-    ),
-) -> PaytreeFirstOptPaymentChannelResponseDTO:
+    service: PaytreeChannelService = Depends(get_paytree_first_opt_channel_service),
+) -> PaytreePaymentChannelResponseDTO:
     payload = GetPaymentChannelRequestDTO(channel_id=channel_id)
     try:
         return await service.get_channel(payload)

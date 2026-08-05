@@ -5,26 +5,26 @@ autonumber
 
 hide footbox
 
-actor "Client" as Client
-participant "Vendor API" as Vendor
-database "Vendor DB\n(Redis)" as VendorDB
+actor "Cliente" as Client
+participant "API do Vendedor" as Vendor
+database "BD do Vendedor\n(Redis)" as VendorDB
 
-loop for each subsequent payment
+loop para cada pagamento subsequente
 
-    Client -> Client: Build payment
+    Client -> Client: Construir pagamento
 
-    Client -> Vendor: Submit Payment
+    Client -> Vendor: Enviar pagamento
     activate Vendor
 
-    Vendor -> VendorDB: Fetch channel and payment
-    VendorDB --> Vendor: channel/payment data
+    Vendor -> VendorDB: Buscar canal e pagamento
+    VendorDB --> Vendor: dados do canal/pagamento
 
-    Vendor -> Vendor: Verify incoming payment
+    Vendor -> Vendor: Verificar pagamento recebido
 
-    Vendor -> VendorDB: Update payment
+    Vendor -> VendorDB: Atualizar pagamento
     VendorDB --> Vendor: OK
     
-    Vendor --> Client: payment confirmation
+    Vendor --> Client: confirmação do pagamento
     deactivate Vendor
 
 end

@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 # Single source of truth for this mode's latency-histogram bucket metric name,
 # consumed by pipeline/latency.py to build the steady-state latency box/ECDF/violin
 # queries instead of duplicating the string there.
-LATENCY_BUCKET_METRIC = "paytree_payment_request_duration_milliseconds_bucket"
+LATENCY_BUCKET_METRIC = "paytree_std_payment_request_duration_milliseconds_bucket"
 
 # Paytree-specific TPS metrics charts
 PAYTREE_CHARTS: List[Dict[str, Any]] = [
@@ -15,7 +15,7 @@ PAYTREE_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": 'rate(paytree_payment_requests_total{job="vendor-api", status="success"}[30s])',
+                "promql": 'rate(paytree_std_payment_requests_total{job="vendor-api", status="success"}[30s])',
                 "legend": "Paytree",
             },
         ],

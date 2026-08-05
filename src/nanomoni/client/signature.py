@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from asyncio import sleep
 from time import perf_counter
-from typing import TYPE_CHECKING
 
 from nanomoni.application.shared.payment_channel_payloads import (
     SignatureChannelPaymentPayload,
@@ -17,9 +16,7 @@ from nanomoni.crypto.certificates import (
     sign_bytes,
 )
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
-
-if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 
 def build_open_payload(

@@ -1,4 +1,4 @@
-"""Story: Vendor accepts exact-duplicate PayTree First Opt payment (same i, same proof)."""
+"""Story: Vendor accepts exact-duplicate PayTree first-opt payment (same i, same proof) (use case-based test)."""
 
 from __future__ import annotations
 
@@ -22,31 +22,34 @@ async def test_vendor_accepts_duplicate_paytree_first_opt_payment_same_i_same_pr
     await issuer_client.register_account(client.public_key_der_b64)
     await issuer_client.register_account(vendor_public_key_der_b64)
 
-    open_request, paytree = client.create_open_channel_request_paytree_first_opt(
+    max_i = 100
+    open_request, paytree = client.create_open_channel_request_paytree(
         vendor_public_key_der_b64,
         amount=100,
         unit_value=1,
-        max_i=100,
+        max_i=max_i,
     )
-    channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
+    channel_response = await issuer_client.open_paytree_first_opt_channel(
+        open_request
+    )
     channel_id = channel_response.channel_id
 
     i = 10
-    i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i, last_verified_index=None)
+    i_val, leaf_b64, siblings_b64 = paytree.payment_proof_first_opt(i, [])
 
     first = await vendor_client.receive_paytree_first_opt_payment(
         channel_id,
         i=i_val,
-        max_i=paytree.max_i,
         leaf_b64=leaf_b64,
         siblings_b64=siblings_b64,
+        paytree_max_i=max_i,
     )
     dup = await vendor_client.receive_paytree_first_opt_payment(
         channel_id,
         i=i_val,
-        max_i=paytree.max_i,
         leaf_b64=leaf_b64,
         siblings_b64=siblings_b64,
+        paytree_max_i=max_i,
     )
 
     assert first.channel_id == channel_id

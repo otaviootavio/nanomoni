@@ -12,10 +12,10 @@ skinparam Shadowing false
 skinparam Nodesep 10
 skinparam Ranksep 10
 
-rectangle "Issuer Context" #FFE6E6 {
-    rectangle "Entry\n**issuer_main.py**" as entry #FFCCCC
+rectangle "Contexto do Emissor" #FFE6E6 {
+    rectangle "Entrada\n**issuer_main.py**" as entry #FFCCCC
     
-    rectangle "API Layer" as api #E8F4F8 {
+    rectangle "Camada de API" as api #E8F4F8 {
         rectangle "api/issuer_api" {
             file "app.py\ndependencies.py" as api_files
             rectangle "routers/" {
@@ -24,7 +24,7 @@ rectangle "Issuer Context" #FFE6E6 {
         }
     }
     
-    rectangle "Application Layer" as app #FFF8DC {
+    rectangle "Camada de Aplicação" as app #FFF8DC {
         rectangle "application/issuer" {
             file "dtos.py\npayword_dtos.py\npaytree_dtos.py"
             rectangle "use_cases/" {
@@ -33,14 +33,14 @@ rectangle "Issuer Context" #FFE6E6 {
         }
     }
     
-    rectangle "Domain Layer" as domain #FFFACD {
+    rectangle "Camada de Domínio" as domain #FFFACD {
         rectangle "domain/issuer" {
             file "**entities.py**\nAccount\nPaymentChannel" #FFFFE0
             file "**repositories.py**\nAccountRepository\nPaymentChannelRepository" #FFFFE0
         }
     }
     
-    rectangle "Infrastructure Layer" as infra #E8F4F8 {
+    rectangle "Camada de Infraestrutura" as infra #E8F4F8 {
         rectangle "infrastructure/issuer" {
             file "account_repository_impl.py\npayment_channel_repository_impl.py\nissuer_client.py"
         }

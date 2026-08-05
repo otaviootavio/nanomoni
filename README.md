@@ -2,6 +2,15 @@
 
 ## Quickstart (pyenv + Poetry)
 
+#### PAREI AQUI
+
+
+1. Repositorio deveria ser merkle_tree_nodes_repository ao inves de estar relacionado com a primeira otimização
+2. Talvez reduzir o tamanho do serviço para o paytree, está muito gordo
+2.1 reduzir = adotar composição de classes
+
+###
+
 ### Prerequisites
 
 - [pyenv](https://github.com/pyenv/pyenv) installed
@@ -51,6 +60,36 @@ poetry env info --path
 ```
 
 Open the command palette with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>, type `Python: Select Interpreter` and add it.
+---
+
+## Local Development (fast reload)
+
+Run the app natively with Poetry — no Docker rebuild cycle. Redis runs as a Docker sidecar; the app runs on the host with uvicorn `--reload` (event-driven via `watchfiles`, already included in `uvicorn[standard]`).
+
+### 1) Start Redis sidecars
+
+```sh
+docker compose up -d redis-issuer redis-vendor
+```
+
+### 2) Run issuer and vendor (separate terminals)
+
+```sh
+# Terminal 1 — issuer on :8001
+source ./envs/issuer.env.dev.sh && poetry run python -m nanomoni.issuer_main
+
+# Terminal 2 — vendor on :8000
+source ./envs/vendor.env.dev.sh && poetry run python -m nanomoni.main
+```
+
+File changes trigger an automatic reload in ~200 ms. No image rebuilds needed.
+
+### 3) Stop Redis when done
+
+```sh
+docker compose stop redis-issuer redis-vendor
+```
+
 ---
 
 ## Docker Compose Setup
@@ -167,10 +206,10 @@ E2E tests are true end-to-end tests that exercise the full system via HTTP. They
 ```sh
 # 1. Start required services
 source ./envs/issuer.env.sh
-docker compose up -d issuer redis-issuer
+docker compose up issuer redis-issuer
 
 source ./envs/vendor.env.sh
-docker compose up -d vendor redis-vendor
+docker compose up vendor redis-vendor
 
 # 2. Wait for services to be ready, then run tests
 poetry run pytest -m e2e tests/e2e
