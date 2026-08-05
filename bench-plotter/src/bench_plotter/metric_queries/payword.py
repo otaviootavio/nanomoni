@@ -8,6 +8,10 @@ from typing import Any, Dict, List
 # queries instead of duplicating the string there.
 LATENCY_BUCKET_METRIC = "payword_payment_request_duration_milliseconds_bucket"
 
+# Single source of truth for this mode's payment counter, consumed by
+# saturation/aggregate.py to build the achieved-TPS query.
+PAYMENT_COUNTER_METRIC = "payword_payment_requests_total"
+
 # Payword-specific TPS metrics charts
 PAYWORD_CHARTS: List[Dict[str, Any]] = [
     {
@@ -15,7 +19,7 @@ PAYWORD_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": 'rate(payword_payment_requests_total{job="vendor-api", status="success"}[30s])',
+                "promql": f'rate({PAYMENT_COUNTER_METRIC}{{job="vendor-api", status="success"}}[10s])',
                 "legend": "Payword",
             },
         ],
@@ -25,15 +29,15 @@ PAYWORD_CHARTS: List[Dict[str, Any]] = [
         "section": "tps_metrics",
         "queries": [
             {
-                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
+                "promql": f'histogram_quantile(0.99, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[10s])) by (le))',
                 "legend": "Payword P99",
             },
             {
-                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
+                "promql": f'histogram_quantile(0.95, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[10s])) by (le))',
                 "legend": "Payword P95",
             },
             {
-                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[30s])) by (le))',
+                "promql": f'histogram_quantile(0.50, sum(rate({LATENCY_BUCKET_METRIC}{{job="vendor-api", status="success"}}[10s])) by (le))',
                 "legend": "Payword P50",
             },
         ],

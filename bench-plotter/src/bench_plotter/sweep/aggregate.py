@@ -9,17 +9,37 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 from bench_plotter.metric_queries import LATENCY_BUCKET_METRIC_BY_MODE
+
+# Re-exported (not used directly in this module beyond _series_by_mode) so
+# existing internal/test imports of these private names keep working now that
+# the implementation lives in the shared mode_style module.
+from bench_plotter.mode_style import KNOWN_MODES as _KNOWN_MODES  # noqa: F401
+from bench_plotter.mode_style import mode_style as _mode_style  # noqa: F401
+from bench_plotter.mode_style import series_by_mode as _series_by_mode
 from bench_plotter.pipeline.draw import draw_all
 from bench_plotter.pipeline.model import DrawTask
-from bench_plotter.plotting.common import PALETTE
 from bench_plotter.plotting.windowing import steady_state_samples
 from bench_plotter.prometheus_fetch import query_range
 from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
+
+# The saturation sweep's own analysis found that a client asked for more TPS than
+# it can sequentially deliver still exits 0 -- e.g. a 1024 target run_benchmark.sh
+# only reached ~528 TPS for `signature`. Dividing vendor CPU by the *target* would
+# then understate mcpu_per_payment, and by a different factor per mode (whichever
+# saturates hardest looks the most "efficient"), distorting the cross-mode
+# comparison this chart exists to make. Reusing the same rate + plateau
+# extraction the saturation sweep uses keeps both call sites agreeing on what
+# "achieved TPS" means.
+from bench_plotter.saturation.aggregate import (
+    achieved_tps_expr,
+    samples_from_payload,
+    sustained_rate,
+)
 
 # PromQL reused from metric_queries/common.py (Vendor CPU / Vendor Redis CPU).
 _VENDOR_CPU_EXPR = (
@@ -28,43 +48,30 @@ _VENDOR_CPU_EXPR = (
     '    job="cadvisor",\n'
     '    container_label_com_docker_compose_service="vendor",\n'
     '    image!=""\n'
-    "  }[30s])\n"
+    "  }[1m])\n"
     ")"
 )
 _VENDOR_REDIS_CPU_EXPR = (
     "rate(container_cpu_usage_seconds_total{"
-    'job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[30s])'
+    'job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[1m])'
+)
+_CLIENT_NETWORK_OUTPUT_EXPR = (
+    "sum(\n"
+    "  rate(container_network_transmit_bytes_total{\n"
+    '    job="cadvisor",\n'
+    '    container_label_com_docker_compose_service="client",\n'
+    '    image!=""\n'
+    "  }[1m])\n"
+    ") / 1024"
 )
 
 _MAX_CONCURRENCY = 8
-
-# Stable visual identity per payment mode (sorted-mode index into the palette).
-_MODE_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "*")
-_KNOWN_MODES = (
-    "paytree",
-    "paytree_first_opt",
-    "paytree_child_pair",
-    "payword",
-    "signature",
-)
-
-
-def _mode_style(mode: str) -> Dict[str, str]:
-    """Return ``{color, marker}`` for a payment mode (stable across charts)."""
-    try:
-        idx = _KNOWN_MODES.index(mode)
-    except ValueError:
-        idx = abs(hash(mode)) % len(PALETTE)
-    return {
-        "color": PALETTE[idx % len(PALETTE)],
-        "marker": _MODE_MARKERS[idx % len(_MODE_MARKERS)],
-    }
 
 
 def _latency_quantile_expr(metric: str, q: float) -> str:
     return (
         f"histogram_quantile({q}, sum(rate("
-        f'{metric}{{job="vendor-api", status="success"}}[30s])) by (le))'
+        f'{metric}{{job="vendor-api", status="success"}}[10s])) by (le))'
     )
 
 
@@ -121,24 +128,46 @@ async def _fetch_run_metrics(
     queries: Dict[str, str] = {
         "vendor_cpu": _VENDOR_CPU_EXPR,
         "vendor_redis_cpu": _VENDOR_REDIS_CPU_EXPR,
+        "client_net_output": _CLIENT_NETWORK_OUTPUT_EXPR,
     }
     if metric:
         queries["latency_p50"] = _latency_quantile_expr(metric, 0.50)
+    tps_expr = achieved_tps_expr(str(mode))
+    if tps_expr:
+        queries["achieved_tps"] = tps_expr
 
     keys = list(queries.keys())
     payloads = await asyncio.gather(
         *(_fetch_one(queries[k], start, end, sem) for k in keys)
     )
-    series = {k: _values_from_payload(p) for k, p in zip(keys, payloads)}
+    payload_by_key = dict(zip(keys, payloads))
+    series = {
+        k: _values_from_payload(p)
+        for k, p in payload_by_key.items()
+        if k != "achieved_tps"
+    }
 
     vendor_cpu_mean = _steady_mean(series.get("vendor_cpu", []))
     redis_cpu_mean = _steady_mean(series.get("vendor_redis_cpu", []))
     latency_p50 = _steady_mean(series.get("latency_p50", []))
+    client_net_output_mean = _steady_mean(series.get("client_net_output", []))
+
+    # Falls back to the target when achieved TPS can't be resolved (e.g. no
+    # counter for the mode, or too little data), rather than dropping the point.
+    achieved_tps = sustained_rate(
+        samples_from_payload(payload_by_key.get("achieved_tps"))
+    )
+    payments_per_second = achieved_tps if achieved_tps is not None else float(tps)
 
     mcpu_per_payment = None
-    if vendor_cpu_mean is not None and float(tps) > 0:
+    if vendor_cpu_mean is not None and payments_per_second > 0:
         # cores/payment * 1000 = milliCPU per payment
-        mcpu_per_payment = (vendor_cpu_mean / float(tps)) * 1000.0
+        mcpu_per_payment = (vendor_cpu_mean / payments_per_second) * 1000.0
+
+    client_net_output_kib_per_payment = None
+    if client_net_output_mean is not None and payments_per_second > 0:
+        # KiB/s / payments/s = KiB per payment
+        client_net_output_kib_per_payment = client_net_output_mean / payments_per_second
 
     return {
         "mode": mode,
@@ -147,6 +176,7 @@ async def _fetch_run_metrics(
         "vendor_cpu_mean": vendor_cpu_mean,
         "vendor_redis_cpu_mean": redis_cpu_mean,
         "mcpu_per_payment": mcpu_per_payment,
+        "client_net_output_kib_per_payment": client_net_output_kib_per_payment,
     }
 
 
@@ -154,39 +184,6 @@ async def _collect_scalars(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     sem = asyncio.Semaphore(_MAX_CONCURRENCY)
     results = await asyncio.gather(*(_fetch_run_metrics(run, sem) for run in runs))
     return [r for r in results if r is not None]
-
-
-def _series_by_mode(
-    scalars: List[Dict[str, Any]],
-    y_key: str,
-    label_suffix: str = "",
-    linestyle: str = "-",
-) -> List[Dict[str, Any]]:
-    """Group (tps, y) points by mode for one y-field, with stable mode styling."""
-    by_mode: Dict[str, List[Tuple[float, float]]] = {}
-    for row in scalars:
-        y = row.get(y_key)
-        if y is None:
-            continue
-        mode = row["mode"]
-        by_mode.setdefault(mode, []).append((row["tps"], float(y)))
-
-    series: List[Dict[str, Any]] = []
-    for mode in sorted(by_mode):
-        points = sorted(by_mode[mode], key=lambda p: p[0])
-        label = f"{mode}{label_suffix}" if label_suffix else mode
-        style = _mode_style(mode)
-        series.append(
-            {
-                "label": label,
-                "x_values": [p[0] for p in points],
-                "y_values": [p[1] for p in points],
-                "color": style["color"],
-                "marker": style["marker"],
-                "linestyle": linestyle,
-            }
-        )
-    return series
 
 
 def _latency_series(scalars: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -233,6 +230,12 @@ def build_aggregate_draw_tasks(
             "milliCPU per payment vs TPS",
             "mCPU / payment",
             _series_by_mode(scalars, "mcpu_per_payment"),
+        ),
+        (
+            "client_network_output_per_payment_vs_tps.png",
+            "Client network output per payment vs TPS",
+            "Network output (KiB) / payment",
+            _series_by_mode(scalars, "client_net_output_kib_per_payment"),
         ),
     ]
 

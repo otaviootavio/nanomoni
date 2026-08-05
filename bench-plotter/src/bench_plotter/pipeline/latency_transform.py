@@ -10,9 +10,15 @@ from typing import Any, Dict, List
 
 from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
 from bench_plotter.plotting.windowing import steady_state_samples
-from bench_plotter.plotting.histogram_math import histogram_to_samples
+from bench_plotter.plotting.histogram_math import (
+    histogram_moments,
+    histogram_quantile,
+    histogram_to_samples,
+)
 
 from .model import DrawTask, PlotJob, ResultCache
+
+_STATS_COLUMNS = ("mode", "mean_ms", "stddev_ms", "p50_ms", "p95_ms")
 
 
 def _le_sort_key(le: str) -> float:
@@ -162,4 +168,45 @@ def transform_latency_dist(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
             },
         )
     )
+    stats_rows = _stats_rows(dists)
+    if stats_rows:
+        tasks.append(
+            DrawTask(
+                fn_name="stats_table",
+                output_path=job.params["stats_path"],
+                kwargs={
+                    "col_labels": list(_STATS_COLUMNS),
+                    "rows": stats_rows,
+                    "title": (
+                        "Vendor Payment Latency (steady-state, "
+                        "estimated from histogram buckets)"
+                    ),
+                },
+            )
+        )
     return tasks
+
+
+def _stats_rows(dists: List[Dict[str, Any]]) -> List[List[Any]]:
+    """Per-mode mean/stddev/p50/p95 rows from the bucket distributions.
+
+    All four come from the same bucket CDF so they stay mutually consistent; that
+    makes them bucket-resolution estimates, so the p50 here can differ slightly
+    from the box plot's, which Prometheus computes server-side.
+    """
+    rows: List[List[Any]] = []
+    for dist in dists:
+        edges, cumulative = dist["edges"], dist["cum_fraction"]
+        mean, stddev = histogram_moments(edges, cumulative)
+        if mean is None:
+            continue
+        rows.append(
+            [
+                dist["label"],
+                mean,
+                stddev,
+                histogram_quantile(edges, cumulative, 0.50),
+                histogram_quantile(edges, cumulative, 0.95),
+            ]
+        )
+    return rows

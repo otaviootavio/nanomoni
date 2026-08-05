@@ -10,11 +10,11 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Input",
             },
             {
-                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Output",
             },
         ],
@@ -34,7 +34,7 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[30s])\n)',
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="issuer",\n    image!=""\n  }[1m])\n)',
                 "legend": "__auto",
             }
         ],
@@ -54,7 +54,7 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "issuer_resources",
         "queries": [
             {
-                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-issuer-1", image!=""}[30s])',
+                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-issuer-1", image!=""}[1m])',
                 "legend": "Redis Issuer CPU",
             }
         ],
@@ -64,11 +64,11 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "client_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Input",
             },
             {
-                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Output",
             },
         ],
@@ -88,7 +88,7 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "client_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[30s])\n)',
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="client",\n    image!=""\n  }[1m])\n)',
                 "legend": "__auto",
             }
         ],
@@ -98,11 +98,11 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_receive_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Input",
             },
             {
-                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[30s])\n) / 1024',
+                "promql": 'sum(\n  rate(container_network_transmit_bytes_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n) / 1024',
                 "legend": "Output",
             },
         ],
@@ -122,7 +122,7 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "queries": [
             {
-                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[30s])\n)',
+                "promql": 'sum(\n  rate(container_cpu_usage_seconds_total{\n    job="cadvisor",\n    container_label_com_docker_compose_service="vendor",\n    image!=""\n  }[1m])\n)',
                 "legend": "__auto",
             }
         ],
@@ -142,7 +142,7 @@ COMMON_CHARTS: List[Dict[str, Any]] = [
         "section": "vendor_resources",
         "queries": [
             {
-                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[30s])',
+                "promql": 'rate(container_cpu_usage_seconds_total{job="cadvisor", name="nanomoni-redis-vendor-1", image!=""}[1m])',
                 "legend": "Redis Vendor CPU",
             }
         ],

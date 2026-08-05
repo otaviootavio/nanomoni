@@ -36,7 +36,9 @@ def create_steady_state_boxplot(
         print(f"No steady-state samples for box plot: {title}")
         return
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    # Long mode names (e.g. "paytree_first_opt") collide at a fixed width once
+    # there are more than a handful of boxes, so scale width with box count.
+    fig, ax = plt.subplots(figsize=(max(8, 1.8 * len(data)), 6))
     positions = list(range(1, len(data) + 1))
     # Fliers are omitted: with the low variance typical of these metrics the IQR
     # is tiny, so most points render as fliers even though they aren't anomalies.
@@ -72,7 +74,7 @@ def create_precomputed_boxplot(
     if not stats:
         print(f"No stats for box plot: {title}")
         return
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(max(8, 1.8 * len(stats)), 6))
     ax.bxp(stats, showfliers=False)
     ax.set_xticks(list(range(1, len(stats) + 1)))
     ax.set_xticklabels([f"{s.get('label', '')}\nmed {s['med']:.3g}" for s in stats])

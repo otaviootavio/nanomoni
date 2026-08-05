@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 from .model import DrawTask, PlotJob, ResultCache
 from .series_runs import runs_from_series
 from .latency_transform import transform_latency_box, transform_latency_dist
+from .per_payment_table_transform import transform_per_payment_table
 from .steady_state_transform import transform_steady_state
 
 
@@ -59,6 +60,7 @@ _DISPATCH = {
     "steady_state": transform_steady_state,
     "latency_box": transform_latency_box,
     "latency_dist": transform_latency_dist,
+    "per_payment_table": transform_per_payment_table,
 }
 
 

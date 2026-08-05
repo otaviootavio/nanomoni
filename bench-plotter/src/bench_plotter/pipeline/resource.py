@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .model import PlotJob
 from .plan_common import legend_and_names, overlay_job, specs_for
@@ -17,6 +17,12 @@ _STEADY_STATE_PREFIXES = (
     "Client CPU Usage",
     "Client Network",
 )
+
+# The one target whose steady-state rate, divided by the payment rate that drove
+# it, is a meaningful per-payment quantity: what the client transmits is the
+# payment requests themselves, so KiB/s over payments/s is the average request
+# size on the wire.
+_PER_PAYMENT_TARGET = ("Client Network (KiB/s)", "Output")
 
 
 def build_resource_jobs(
@@ -76,4 +82,45 @@ def build_resource_jobs(
                         },
                     )
                 )
+            if (title, legend_format) == _PER_PAYMENT_TARGET:
+                job = _per_payment_job(
+                    output_path=str(section_dir / f"{stem}_per_payment.png"),
+                    section=section,
+                    series=series,
+                    resolved=resolved,
+                    intervals=intervals,
+                )
+                if job is not None:
+                    jobs.append(job)
     return jobs
+
+
+def _per_payment_job(
+    *,
+    output_path: str,
+    section: str,
+    series: List[Dict[str, Any]],
+    resolved: List[Dict[str, Any]],
+    intervals: List[Dict[str, Any]],
+) -> Optional[PlotJob]:
+    """The per-payment request-size job, or ``None`` without a payment rate.
+
+    Needs each interval's ``tps`` to divide by; callers that build a plan from
+    intervals lacking it (the pipeline is usable standalone, not only from a
+    sweep) simply get no such job rather than a table of blanks.
+    """
+    tps_by_mode = {
+        iv["mode"]: float(iv["tps"])
+        for iv in intervals
+        if iv.get("mode") and iv.get("tps")
+    }
+    if not tps_by_mode:
+        return None
+    return PlotJob(
+        kind="per_payment_table",
+        title="Client egress per payment (steady-state mean / target TPS)",
+        output_path=output_path,
+        section=section,
+        specs=[r["spec"] for r in resolved],
+        params={"series": series, "tps_by_mode": tps_by_mode},
+    )

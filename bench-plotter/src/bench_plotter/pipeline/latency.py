@@ -21,12 +21,12 @@ _QUANTILES = [0.05, 0.25, 0.50, 0.75, 0.95]
 def _box_expr(metric: str, q: float) -> str:
     return (
         f"histogram_quantile({q}, sum(rate("
-        f'{metric}{{job="vendor-api", status="success"}}[30s])) by (le))'
+        f'{metric}{{job="vendor-api", status="success"}}[10s])) by (le))'
     )
 
 
 def _dist_expr(metric: str) -> str:
-    return f'sum(rate({metric}{{job="vendor-api", status="success"}}[30s])) by (le)'
+    return f'sum(rate({metric}{{job="vendor-api", status="success"}}[10s])) by (le)'
 
 
 def build_latency_jobs(
@@ -87,6 +87,10 @@ def build_latency_jobs(
                     "entries": dist_entries,
                     "ecdf_path": str(tps_dir / "vendor_payment_latency_ecdf.png"),
                     "violin_path": str(tps_dir / "vendor_payment_latency_violin.png"),
+                    # The box plot's five quantiles say nothing about the mean or
+                    # the spread around it; both come off the same buckets these
+                    # distribution figures are built from.
+                    "stats_path": str(tps_dir / "vendor_payment_latency_stats.png"),
                 },
             )
         )

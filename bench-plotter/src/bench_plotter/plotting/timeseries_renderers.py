@@ -6,7 +6,17 @@ from typing import Any, List, Dict
 
 import matplotlib.pyplot as plt
 
-from .common import save_figure
+from bench_plotter.mode_style import MODE_MARKERS
+
+from .common import PALETTE, save_figure
+
+# One marker per point, at a sparse stride: a marker on every raw Prometheus
+# sample would be an unreadable smear, but the shape still needs to appear
+# often enough to tell series apart without relying on color alone (this
+# benchmark's convention -- see mode_style.MODE_MARKERS). Color + marker is
+# the full identity encoding here -- there is only one dimension (series),
+# so linestyle stays fixed rather than cycling too and double-encoding it.
+_MARKER_EVERY = 15
 
 
 def create_multi_line_plot(
@@ -20,8 +30,6 @@ def create_multi_line_plot(
         print("No series provided for multi-series plotting")
         return
     fig, ax = plt.subplots(figsize=(12, 8))
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
-    linestyles = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
     max_value = 0.0
     for idx, series in enumerate(series_list):
         timestamps = series.get("timestamps", [])
@@ -38,8 +46,8 @@ def create_multi_line_plot(
             continue
 
         start_time = float(timestamps[0])
-        color = colors[idx % len(colors)]
-        linestyle = linestyles[idx % len(linestyles)]
+        color = PALETTE[idx % len(PALETTE)]
+        marker = MODE_MARKERS[idx % len(MODE_MARKERS)]
 
         plot_elapsed = [float(ts) - start_time for ts in timestamps]
         plot_values = values
@@ -49,7 +57,9 @@ def create_multi_line_plot(
             plot_values,
             color=color,
             linewidth=2,
-            linestyle=linestyle,
+            marker=marker,
+            markevery=_MARKER_EVERY,
+            markersize=7,
             label=label,
         )
         max_value = max(max_value, max(valid_values))

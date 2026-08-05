@@ -35,11 +35,18 @@ Everything below is specific to the box the sweep runs on: an AMD EPYC 9224
 (Zen 4), 24 cores and 48 threads on a single socket, presented as one NUMA node.
 Its cores are grouped into L3/CCX clusters of six — `6-11`, `12-17`, `18-23`,
 and so on — and each physical core exposes an SMT sibling at `N+24`. The
-`docker-compose.yml` pinning follows that topology deliberately: the vendor sits
-on core `6` next to its Redis on `7`, the issuer on `8` beside its Redis on `9`,
-so each service shares an L3 with its own datastore. The load generator runs on
-core `12`, a separate CCX, so it never competes with the services it drives, and
-the entire monitoring stack is banished to `18-23`. The kernel is 6.8, which
+The `docker-compose.yml` pinning gives the vendor as much of that machine as it
+can take without contending with anything that would distort the measurement: it
+holds `1-10,19-20`, twelve physical cores, one per uvicorn worker. What is left out
+is deliberate — `11` and `18` for its own Redis, `12-14,21` for the load generator,
+`16` and `17` for the issuer and its Redis, `22-23` for the monitoring stack, and
+`0` plus `15` for housekeeping and interrupts. Those exclusions are the reason the vendor is
+pinned at all rather than left unconstrained: `cpuset` cannot reserve a core, so
+an unpinned vendor would spread straight onto them, and time stolen from a
+sequential client loop reads back as vendor latency that no plot can attribute
+correctly. The split between the two sides follows one rule — the vendor gets at
+least three cores per client core, here twelve against four — so the ceiling a sweep
+finds belongs to the server and not to the generator. The kernel is 6.8, which
 matters later because it ships the EEVDF scheduler in place of CFS.
 
 ## What the plots are actually showing
@@ -107,7 +114,7 @@ Disabling it holds the hot cores in C1 at most, which they exit in a
 microsecond, so a request never again pays the 800-microsecond wake-up.
 
 ```bash
-for c in 6 7 8 9 12 18 19 20 21 22 23; do
+for c in $(seq 1 23); do
   echo 1 | sudo tee /sys/devices/system/cpu/cpu$c/cpuidle/state2/disable
 done
 ```
@@ -150,18 +157,31 @@ point of the benchmark — is unaffected.
 ### Pin interrupts away from the hot cores
 
 Steering every IRQ onto the housekeeping cores keeps interrupt handling off the
-cores running the services.
+cores running the services. Growing the vendor to ten cores shrank that
+housekeeping set to two, `0` and `15`, which is why core `0` is excluded from the
+vendor in the first place — the boot CPU is the one core the kernel is least
+willing to give up, so it is the natural place to send the interrupts.
 
 ```bash
-# per-IRQ files take a core list (0-5); default_smp_affinity takes a hex mask
-# (cores 0-5 = 0b111111 = 3f)
-for irq in /proc/irq/*/smp_affinity_list; do echo 0-5 | sudo tee "$irq" 2>/dev/null; done
-echo 3f | sudo tee /proc/irq/default_smp_affinity
+# per-IRQ files take a core list; default_smp_affinity takes a hex mask
+# cores 0 and 15 = bit 0 | bit 15 = 8001
+for irq in /proc/irq/*/smp_affinity_list; do echo 0,15 | sudo tee "$irq" 2>/dev/null; done
+echo 8001 | sudo tee /proc/irq/default_smp_affinity
 ```
 
-**Pros:** removes interrupt jitter from the benchmark cores; no reboot; cheap.
-**Cons:** concentrates all interrupt load on `0-5`, so those cores must stay free
-for housekeeping; some IRQs pin back to their default on device or driver reload.
+Two cores is thin for a machine-wide IRQ load, but less thin than it looks for
+this benchmark: the traffic never crosses a physical NIC. Client, vendor, and
+issuer talk over a Docker bridge, where packet processing happens in softirq
+context on the CPU that queued the packet rather than through a device interrupt,
+and `smp_affinity` has no say over that. What this step actually removes is the
+unrelated device and timer interrupt noise, which two cores absorb comfortably.
+
+**Pros:** removes interrupt jitter from the vendor and client cores; no reboot;
+cheap.
+**Cons:** concentrates all device interrupt load on `0` and `15`, so those two
+must stay out of every service `cpuset`; some IRQs pin back to their default on
+device or driver reload; it does nothing for the bridge softirq work, which stays
+on the sending core by construction.
 
 ### Isolate the cores at the kernel level
 
@@ -183,6 +203,25 @@ across reboots by construction.
 **Cons:** requires a reboot; the isolated cores leave the general pool, and their
 RCU and timer work piles onto the housekeeping cores, which must be sized to
 absorb it; a mistake in the core list is only caught after the reboot.
+
+The list above predates the current pinning. What it should isolate now is the
+vendor and client cores together with their SMT siblings, leaving the housekeeping
+pair, the datastores, and the monitoring cores in the general pool to absorb the
+offloaded RCU and timer work:
+
+```
+isolcpus=1-14,25-38 nohz_full=1-14,25-38 rcu_nocbs=1-14,25-38 processor.max_cstate=1 nmi_watchdog=0 transparent_hugepage=never
+```
+
+Core `0` stays out on purpose. It is the boot CPU, several kernel facilities
+assume it is schedulable, and it is where the interrupt step above sends the IRQs.
+
+One trap comes with this step rather than from it. `isolcpus` makes an *unpinned*
+container worse off than a pinned one: the scheduler will not balance onto
+isolated cores, so a service with no `cpuset` is confined to the housekeeping
+cores instead of running anywhere. Dropping the vendor's `cpuset` to "give it
+every core" would, on an isolated boot, silently hand it the fewest — and nothing
+in the logs would say so.
 
 ### Disable SMT
 
@@ -218,33 +257,76 @@ dedicated, isolated bench box and never on anything exposed.
 Every host knob above only matters on the exact cores the containers run on, and
 `docker-compose.yml` is what decides that. The two layers are complementary:
 Docker gives *placement*, the host tuning gives *exclusivity and idle behavior*
-on the same cores. The pinning is already correct — `cpuset` puts the vendor on
-`6` beside its Redis on `7`, the issuer on `8` beside its Redis on `9` so each
-service shares an L3 with its own datastore, the load generator on `12` in a
-separate CCX, and the monitoring stack out on `18-23`. Every command in this
-document targets those same core numbers for exactly that reason. There are,
-however, three things the compose file cannot do on its own.
+on the same cores. The pinning is already correct — `cpuset` puts the vendor's twelve
+workers on `1-10,19-20` beside its Redis on `11` and `18`, the load generator's four
+processes on `12-14,21`, the issuer on `16` beside its Redis on `17`, and the
+monitoring stack out on `22-23`. Every command in this document targets those same core numbers for
+exactly that reason. There are, however, four things the compose file cannot do
+on its own.
 
-The first is exclusivity. `cpuset: "6"` keeps *that container* from wandering off
-core 6, but it does nothing to stop the kernel, another container, or a stray
-process from also scheduling onto core 6. Only `isolcpus` genuinely reserves a
+The first is exclusivity. `cpuset` keeps *that container* from wandering off its
+cores, but it does nothing to stop the kernel, another container, or a stray
+process from also scheduling onto them. Only `isolcpus` genuinely reserves a
 core, which is why the Docker pinning and the kernel-level isolation are two
 halves of the same fix rather than alternatives.
 
-The second is the SMT sibling. Pinning to hardware thread 6 leaves its sibling
+The second is one process per core. A `cpuset` of ten cores holding ten uvicorn
+workers still lets the scheduler shuffle those workers among the ten, and a worker
+that lands on a different core arrives with a cold L3. Affinity is per process, so
+this one is settled inside the container: `VENDOR_PIN_WORKERS_TO_CORES` has each
+worker claim a core of the `cpuset` for its lifetime as it starts up, and
+`CLIENT_PIN_PROCESSES_TO_CORES` does the same for the generator's processes. Claims
+are exclusive, so a `cpuset` smaller than the worker count leaves the surplus
+workers unpinned rather than doubled up — the startup log says which core each one
+took, or that it got none.
+
+Pinning only decides *where* a worker runs; work still has to reach it, and that
+is the other half of the same problem. Uvicorn's own multi-worker mode has every
+worker accept from one shared listening socket and lets the kernel pick, which is
+not the round-robin one might assume: measured with 40 client connections over ten
+workers, the spread was 1 to 7 connections per worker, the loaded ones sat at
+84-91% of their single core, two sat below 10%, and the vendor plateaued at 5400
+TPS while looking half idle at 5.5 of 10 cores. So the vendor instead runs one
+single-worker server per port, `VENDOR_API_PORT` upward, one listening socket
+each, and the load generator dials port `base + (client index % CLIENT_VENDOR_PORT_COUNT)`.
+Because a keep-alive connection is served end to end by the worker that accepted
+it, choosing the port chooses the worker: the same 40 clients then landed exactly
+4 per worker, all ten between 81% and 91%, for 8.6 of 10 cores and 6800 TPS. Keep
+`CLIENT_VENDOR_PORT_COUNT` equal to `VENDOR_API_WORKERS` and the virtual-client
+count a multiple of it, or the arithmetic reintroduces the imbalance it removes.
+`scripts/probe-worker-connections.py` prints the per-worker connection and CPU
+split that cadvisor's container total hides.
+
+The third is the SMT sibling. Pinning to hardware thread 6 leaves its sibling
 30 — the other thread on the same physical core, sharing its execution units —
 free for anything to land on, and whatever lands there steals throughput from
 the vendor unpredictably. Docker has no way to express "reserve the sibling
 too," so this is handled at the host level by naming the `+24` siblings in the
 C-state and isolation steps, or by disabling SMT outright.
 
-The third is Redis persistence. Both Redis containers run `--appendonly yes`, so
+The fourth is Redis persistence. Both Redis containers run `--appendonly yes`, so
 the AOF `fsync` (default `everysec`) is a periodic background disk write sitting
 on the critical path — a source of occasional latency spikes unrelated to the
 payment logic. If durability is not part of what the benchmark measures,
 `--save "" --appendonly no` removes it entirely; if it is, `--appendfsync no`
 lets the OS flush on its own schedule and at least takes the `fsync` off the
 timed path.
+
+Keeping the AOF costs a core, which is why `redis-vendor` holds two. The rewrite
+is done by a forked child, and a fork inherits the `cpuset`: on a single core it
+competed head to head with the one thread that serves payments. Measured under
+`paytree_child_pair`, the core was pegged at 100% while `redis-server` itself
+accounted for only half of it — two `redis-server` processes sat on that core, the
+second appearing only for the duration of the run. Serving a payment costs Redis
+about 105 µs of CPU (two round-trips: one `MGET`, then one `EVALSHA` whose 72 µs
+covers all the writes, of which the `SET`/`ZADD`/`GET` calls are only ~23 µs), so
+the ceiling that reads back as "Redis is saturated" was mostly rewrite work. The
+second core comes from the monitoring block rather than from the vendor or the
+generator, and landing in another L3 is a feature: the rewrite streams the whole
+dataset and would otherwise evict the serving thread's cache. The other half of
+this is not a tuning knob at all — nothing deletes keys after a run, so the sweep
+flushes both datastores before each one, otherwise the rewrite each mode pays for
+is sized by every mode that ran before it.
 
 Two smaller notes: there are no `mem_limit`s, which is fine here — 257 GB free on
 a single NUMA node means no memory pressure and no cross-node variance to worry

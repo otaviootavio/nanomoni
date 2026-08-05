@@ -31,7 +31,17 @@ from bench_plotter.plotting.distribution_renderers import (
     create_precomputed_boxplot,
     create_bucket_ecdf,
 )
-from bench_plotter.plotting.sweep_renderers import create_sweep_line_plot
+from bench_plotter.plotting.sweep_renderers import (
+    create_delta_table,
+    create_identity_comparison_plot,
+    create_sweep_line_plot,
+)
+from bench_plotter.plotting.flame_renderer import create_flame_graph
+from bench_plotter.plotting.profile_bar_renderer import (
+    create_macro_micro_bar,
+    create_macro_micro_table,
+)
+from bench_plotter.plotting.table_renderer import create_stats_table
 
 # Stable string names -> existing draw functions. The names are the contract
 # stored in ``DrawTask.fn_name``; the plan/transform stages emit these and the
@@ -45,6 +55,12 @@ DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
     "precomputed_box": create_precomputed_boxplot,
     "bucket_ecdf": create_bucket_ecdf,
     "sweep_line": create_sweep_line_plot,
+    "identity_comparison": create_identity_comparison_plot,
+    "delta_table": create_delta_table,
+    "stats_table": create_stats_table,
+    "flame_graph": create_flame_graph,
+    "profile_macro_micro_bar": create_macro_micro_bar,
+    "profile_macro_micro_table": create_macro_micro_table,
 }
 
 

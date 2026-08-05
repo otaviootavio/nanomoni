@@ -3,16 +3,30 @@
 from typing import Any, Dict, Iterable, List
 
 from .common import get_common_charts
-from .signature import get_signature_charts, LATENCY_BUCKET_METRIC as _SIGNATURE_METRIC
-from .payword import get_payword_charts, LATENCY_BUCKET_METRIC as _PAYWORD_METRIC
-from .paytree import get_paytree_charts, LATENCY_BUCKET_METRIC as _PAYTREE_METRIC
+from .signature import (
+    get_signature_charts,
+    LATENCY_BUCKET_METRIC as _SIGNATURE_METRIC,
+    PAYMENT_COUNTER_METRIC as _SIGNATURE_COUNTER,
+)
+from .payword import (
+    get_payword_charts,
+    LATENCY_BUCKET_METRIC as _PAYWORD_METRIC,
+    PAYMENT_COUNTER_METRIC as _PAYWORD_COUNTER,
+)
+from .paytree import (
+    get_paytree_charts,
+    LATENCY_BUCKET_METRIC as _PAYTREE_METRIC,
+    PAYMENT_COUNTER_METRIC as _PAYTREE_COUNTER,
+)
 from .paytree_first_opt import (
     get_paytree_first_opt_charts,
     LATENCY_BUCKET_METRIC as _PAYTREE_FIRST_OPT_METRIC,
+    PAYMENT_COUNTER_METRIC as _PAYTREE_FIRST_OPT_COUNTER,
 )
 from .paytree_child_pair import (
     get_paytree_child_pair_charts,
     LATENCY_BUCKET_METRIC as _PAYTREE_CHILD_PAIR_METRIC,
+    PAYMENT_COUNTER_METRIC as _PAYTREE_CHILD_PAIR_COUNTER,
 )
 
 # Single source of truth for mode -> latency-histogram bucket metric name,
@@ -24,6 +38,16 @@ LATENCY_BUCKET_METRIC_BY_MODE: Dict[str, str] = {
     "paytree": _PAYTREE_METRIC,
     "paytree_first_opt": _PAYTREE_FIRST_OPT_METRIC,
     "paytree_child_pair": _PAYTREE_CHILD_PAIR_METRIC,
+}
+
+# mode -> success-counter metric name, consumed by saturation/aggregate.py to
+# build the achieved-TPS query for whichever modes a sweep actually ran.
+PAYMENT_COUNTER_METRIC_BY_MODE: Dict[str, str] = {
+    "signature": _SIGNATURE_COUNTER,
+    "payword": _PAYWORD_COUNTER,
+    "paytree": _PAYTREE_COUNTER,
+    "paytree_first_opt": _PAYTREE_FIRST_OPT_COUNTER,
+    "paytree_child_pair": _PAYTREE_CHILD_PAIR_COUNTER,
 }
 
 # mode -> chart getter: the one place that knows how to turn a mode name into
