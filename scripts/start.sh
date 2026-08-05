@@ -1,3 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+
 docker compose up -d alloy pyroscope cadvisor grafana prometheus
 
 sleep 5
