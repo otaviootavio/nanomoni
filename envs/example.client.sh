@@ -8,8 +8,38 @@ export ISSUER_BASE_URL="http://issuer:8001/api/v1"
 # export VENDOR_BASE_URL="http://localhost:8000/api/v1"
 # export ISSUER_BASE_URL="http://localhost:8001/api/v1"
 
-# Client private key (PEM format) dynamically generated (unless already provided)
-export CLIENT_PRIVATE_KEY_PEM="$(openssl ecparam -genkey -name secp256k1 | openssl pkcs8 -topk8 -nocrypt)"
+# Number of independent virtual clients (own keypair + channel + payment loop)
+# the runner drives concurrently in-process via asyncio.gather. Only controls
+# how many keys are generated below -- the runner derives its client count
+# from len(CLIENT_PRIVATE_KEY_PEMS), not from this variable directly.
+CLIENT_VIRTUAL_CLIENTS="${CLIENT_VIRTUAL_CLIENTS:-1}"
+
+# OS processes the virtual clients above are dealt across (round-robin). One
+# event loop saturates one core, so this -- not CLIENT_VIRTUAL_CLIENTS -- is what
+# lets the generator use more than one core. Keep it equal to the number of cores
+# in the client's cpuset in docker-compose.yml.
+export CLIENT_PROCESSES=1
+
+# Fix each of those processes to one core of the cpuset (1:1). Leave "false"
+# outside benchmarks.
+export CLIENT_PIN_PROCESSES_TO_CORES="false"
+
+# Consecutive vendor ports to spread virtual clients over, one per vendor worker
+# (keep equal to VENDOR_API_WORKERS). 1 sends everything to the port in
+# VENDOR_BASE_URL.
+export CLIENT_VENDOR_PORT_COUNT=1
+
+# Client private keys (PEM format), one per virtual client, freshly generated
+# every time this script runs, as a JSON array. CLIENT_PAYMENT_COUNT and
+# CLIENT_TARGET_TPS below are split evenly across them; CLIENT_PAYMENT_COUNT
+# must be divisible by CLIENT_VIRTUAL_CLIENTS.
+_client_keys_json="[]"
+for _ in $(seq 1 "$CLIENT_VIRTUAL_CLIENTS"); do
+  _pem="$(openssl ecparam -genkey -name secp256k1 | openssl pkcs8 -topk8 -nocrypt)"
+  _client_keys_json="$(jq -n --argjson arr "$_client_keys_json" --arg pem "$_pem" '$arr + [$pem]')"
+done
+export CLIENT_PRIVATE_KEY_PEMS="$_client_keys_json"
+unset _client_keys_json _pem
 
 export CLIENT_PAYMENT_COUNT=5000
 

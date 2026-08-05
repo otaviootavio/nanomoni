@@ -22,6 +22,10 @@ class Settings(BaseModel):
     api_debug: bool
     api_workers: int
     api_cors_origins: list[str]
+    # Pin each Uvicorn worker to a single core of the container's cpuset, so the
+    # kernel cannot migrate it mid-run. Only meaningful when the cpuset has at
+    # least as many cores as there are workers.
+    pin_workers_to_cores: bool = False
 
     app_name: str
     app_version: str
@@ -100,6 +104,7 @@ def get_settings() -> Settings:
     api_cors_origins_str = os.environ.get("VENDOR_API_CORS_ORIGINS")
     api_port_str = os.environ.get("VENDOR_API_PORT")
     api_workers_str = os.environ.get("VENDOR_API_WORKERS")
+    pin_workers_str = os.environ.get("VENDOR_PIN_WORKERS_TO_CORES")
 
     vendor_private_key_pem = os.environ.get("VENDOR_PRIVATE_KEY_PEM")
     issuer_base_url = os.environ.get("ISSUER_BASE_URL")
@@ -114,6 +119,7 @@ def get_settings() -> Settings:
     api_debug = (api_debug_str or "false").lower() == "true"
     api_workers = int(api_workers_str) if api_workers_str is not None else 1
     api_cors_origins = api_cors_origins_str.split(",") if api_cors_origins_str else []
+    pin_workers_to_cores = (pin_workers_str or "false").lower() == "true"
 
     app_name = os.environ.get("VENDOR_APP_NAME") or "NanoMoni"
     app_version = os.environ.get("VENDOR_APP_VERSION") or "0.1.0"
@@ -145,6 +151,7 @@ def get_settings() -> Settings:
         api_debug=api_debug,
         api_workers=api_workers,
         api_cors_origins=api_cors_origins,
+        pin_workers_to_cores=pin_workers_to_cores,
         app_name=app_name,
         app_version=app_version,
         issuer_base_url=issuer_base_url,

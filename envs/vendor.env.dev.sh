@@ -19,6 +19,10 @@ export VENDOR_API_DEBUG="true"
 export VENDOR_API_CORS_ORIGINS="*"
 export VENDOR_API_WORKERS="1"
 
+# Off for local dev: with no cpuset the single worker would be pinned to an
+# arbitrary core of the whole machine.
+export VENDOR_PIN_WORKERS_TO_CORES="false"
+
 # Prometheus (dev throwaway path — metrics not collected locally)
 export PROMETHEUS_MULTIPROC_DIR="/tmp/prometheus_vendor_dev"
 

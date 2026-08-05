@@ -20,6 +20,7 @@ from prometheus_client import (
 )
 
 from ...application.vendor.dtos import VendorPublicKeyDTO
+from ...cpu_affinity import pin_to_own_core
 from ...envs.vendor_env import get_settings, register_vendor_with_issuer
 from ...infrastructure.scripts import VENDOR_SCRIPTS
 from .dependencies import get_key_value_store_dependency
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Runs once per Uvicorn worker process, which is the only place a worker can
+    # claim a core for itself: the parent process forks before any of this.
+    if settings.pin_workers_to_cores:
+        pin_to_own_core(label="vendor worker")
+
     # Shared issuer HTTP session (reused across requests; closed on shutdown).
     app.state.issuer_session = aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=10.0)

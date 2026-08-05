@@ -30,6 +30,41 @@ async def test_owned_session_is_closed_on_aclose() -> None:
 
 
 @pytest.mark.asyncio
+async def test_connection_limit_caps_the_owned_pool() -> None:
+    """A limit of 1 is what keeps a virtual client on a single Uvicorn worker."""
+    client = AsyncHttpClient("http://example.test", connection_limit=1)
+    try:
+        connector = client._client.connector
+        assert connector is not None
+        assert connector.limit == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_pool_is_unbounded_without_a_connection_limit() -> None:
+    client = AsyncHttpClient("http://example.test")
+    try:
+        connector = client._client.connector
+        assert connector is not None
+        assert connector.limit != 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_borrowed_session_ignores_connection_limit() -> None:
+    shared = aiohttp.ClientSession()
+    try:
+        client = AsyncHttpClient(
+            "http://example.test", session=shared, connection_limit=1
+        )
+        assert client._client is shared
+    finally:
+        await shared.close()
+
+
+@pytest.mark.asyncio
 async def test_async_with_does_not_close_shared_session() -> None:
     shared = aiohttp.ClientSession()
     try:

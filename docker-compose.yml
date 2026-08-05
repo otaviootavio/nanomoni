@@ -1,12 +1,17 @@
 services:
   client:
+    # 4 cores reservados, um por processo (CLIENT_PROCESSES=4), fora do cpuset do
+    # vendor -- o payment loop e sequencial, entao preempcao aqui vira latencia
+    # aparente do vendor. 12-14 sao CCX2 (L3 12-17,36-41); 21 vem do bloco de
+    # monitoramento para acompanhar os 12 cores do vendor e manter o 3:1.
+    cpuset: "12-14,21"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.client
     environment:
       VENDOR_BASE_URL: ${VENDOR_BASE_URL}
       ISSUER_BASE_URL: ${ISSUER_BASE_URL}
-      CLIENT_PRIVATE_KEY_PEM: ${CLIENT_PRIVATE_KEY_PEM}
+      CLIENT_PRIVATE_KEY_PEMS: ${CLIENT_PRIVATE_KEY_PEMS}
       CLIENT_PAYMENT_COUNT: ${CLIENT_PAYMENT_COUNT}
       CLIENT_CHANNEL_AMOUNT: ${CLIENT_CHANNEL_AMOUNT}
       CLIENT_PAYMENT_MODE: ${CLIENT_PAYMENT_MODE}
@@ -16,10 +21,15 @@ services:
       CLIENT_PAYTREE_MAX_I: ${CLIENT_PAYTREE_MAX_I}
       CLIENT_TARGET_TPS: ${CLIENT_TARGET_TPS}
       CLIENT_RAMP_DELAY_SEC: ${CLIENT_RAMP_DELAY_SEC}
+      CLIENT_PROCESSES: ${CLIENT_PROCESSES}
+      CLIENT_PIN_PROCESSES_TO_CORES: ${CLIENT_PIN_PROCESSES_TO_CORES}
+      CLIENT_VENDOR_PORT_COUNT: ${CLIENT_VENDOR_PORT_COUNT}
     networks:
       - app-network
 
   issuer:
+    # CCX2 (L3 12-17,36-41): mesmo L3 que redis-issuer
+    cpuset: "16"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.issuer
@@ -42,6 +52,16 @@ services:
       - app-network
 
   vendor:
+    # 12 cores fisicos, um por worker (VENDOR_API_WORKERS=12), fixados 1:1 por
+    # VENDOR_PIN_WORKERS_TO_CORES. Invariante do layout: o vendor recebe no
+    # minimo 3 cores por core do client (aqui 12:4). O resto da maquina esta
+    # reservado aos vizinhos que nao podem sofrer contencao -- redis-vendor
+    # (11,18), client (12-14,21), issuer (16), redis-issuer (17), monitoramento
+    # (22-23) -- e ao housekeeping em 0 (boot CPU) e 15, que recebem as IRQs (ver
+    # tuning.md). 19-20 saem do bloco de monitoramento e ficam em outro L3 (CCX3)
+    # que 1-10: cada worker e um processo independente com sua propria conexao,
+    # entao nao compartilham working set e a distancia de L3 nao os acopla.
+    cpuset: "1-10,19-20"
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.vendor
@@ -53,12 +73,19 @@ services:
       VENDOR_API_DEBUG: ${VENDOR_API_DEBUG}
       VENDOR_API_CORS_ORIGINS: ${VENDOR_API_CORS_ORIGINS}
       VENDOR_API_WORKERS: ${VENDOR_API_WORKERS}
+      VENDOR_PIN_WORKERS_TO_CORES: ${VENDOR_PIN_WORKERS_TO_CORES}
       VENDOR_APP_NAME: ${VENDOR_APP_NAME}
       VENDOR_APP_VERSION: ${VENDOR_APP_VERSION}
       VENDOR_PRIVATE_KEY_PEM: ${VENDOR_PRIVATE_KEY_PEM}
       ISSUER_BASE_URL: ${ISSUER_BASE_URL}
       PROMETHEUS_MULTIPROC_DIR: ${PROMETHEUS_MULTIPROC_DIR}
     ports:
+      # Only the first worker's port is published: the others (8001..8009 inside
+      # the container, one listening socket per worker) would collide on the host
+      # with the issuer on 8001 and the client's metrics on 8002. Nothing needs
+      # them from the host -- the client dials vendor:800N over the compose
+      # network, and Prometheus keeps scraping :8000, where /metrics aggregates
+      # every worker through PROMETHEUS_MULTIPROC_DIR.
       - 8000:8000
     depends_on:
       - redis-vendor
@@ -66,36 +93,65 @@ services:
       - app-network
 
   redis-vendor:
+    # 11 e CCX1 (L3 6-11,30-35), mesmo L3 que os workers do vendor em 6-10: core
+    # reservado porque o Redis e single-threaded. O segundo core existe para o
+    # filho de rewrite do AOF, que e um fork e herda este cpuset: com um core so,
+    # ele disputava de igual para igual com a thread que atende os pagamentos e
+    # saturava o core (medido: 100% no core, metade dele so o rewrite). Vem do
+    # bloco de monitoramento (CCX3, 22-23 agora) e nao do vendor ou do client,
+    # que estao no caminho medido -- e ficar em outro L3 e desejavel, porque o
+    # rewrite varre o dataset inteiro e despejaria o L3 da thread que atende.
+    cpuset: "11,18"
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6379:6379
     volumes:
-      - redis_vendor_data:/data
+      - ./.data/redis-vendor:/data
     networks:
       - app-network
 
   redis-issuer:
+    # CCX2 (L3 12-17,36-41): mesmo L3 que o issuer (core dedicado)
+    cpuset: "17"
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - 6380:6379
     volumes:
-      - redis_issuer_data:/data
+      - ./.data/redis-issuer:/data
     networks:
       - app-network
 
   pyroscope:
+    # CCX3 (L3 18-23,42-47): monitoramento longe do caminho crítico. O bloco cedeu
+    # 18 ao redis-vendor, 19-20 ao vendor e 21 ao client, e ficou com 22-23.
+    cpuset: "22-23"
     image: grafana/pyroscope:latest
     command: ["server", "--http-address=:4040"]
     ports:
       - 4040:4040
+    # These three paths are where Pyroscope actually writes (it does not use
+    # /var/lib/pyroscope), and its image declares all three as VOLUME. Left
+    # unnamed, Docker gives each container run a *fresh anonymous* volume, so
+    # recreating the container silently starts from an empty profile store --
+    # that is how the 20260803_192658 run's profiles were lost, and an empty
+    # store reads back as a valid all-zero profile rather than as an error.
+    # Named volumes are reused across recreation. Unlike the bind mounts
+    # elsewhere in this file, they also inherit the image's uid 10001 ownership;
+    # a fresh host directory would be root-owned and Pyroscope could not write
+    # to it. Still destroyed by `docker compose down -v`.
     volumes:
-      - pyroscope_data:/var/lib/pyroscope
+      - pyroscope-data:/data
+      - pyroscope-compactor:/data-compactor
+      - pyroscope-metastore:/data-metastore
     networks:
       - app-network
 
   grafana:
+    # CCX3 (L3 18-23,42-47): monitoramento longe do caminho crítico. O bloco cedeu
+    # 18 ao redis-vendor, 19-20 ao vendor e 21 ao client, e ficou com 22-23.
+    cpuset: "22-23"
     image: grafana/grafana:latest
     ports:
       - 3000:3000
@@ -103,7 +159,7 @@ services:
       - prometheus
       - pyroscope
     volumes:
-      - grafana_data:/var/lib/grafana
+      - ./.data/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/etc/grafana/dashboards
     environment:
@@ -114,6 +170,9 @@ services:
       - app-network
 
   alloy:
+    # CCX3 (L3 18-23,42-47): monitoramento longe do caminho crítico. O bloco cedeu
+    # 18 ao redis-vendor, 19-20 ao vendor e 21 ao client, e ficou com 22-23.
+    cpuset: "22-23"
     image: grafana/alloy:latest
     volumes:
       - ./alloy.config:/etc/alloy/alloy.config:ro
@@ -129,6 +188,10 @@ services:
       - app-network
 
   cadvisor:
+    # CCX3 (L3 18-23,42-47): cadvisor é o vizinho mais barulhento; longe do vendor.
+    # Sobrou 22-23 depois que o bloco cedeu 18 ao redis-vendor, 19-20 ao vendor e
+    # 21 ao client.
+    cpuset: "22-23"
     image: gcr.io/cadvisor/cadvisor:latest
     ports:
       - 8080:8080
@@ -144,11 +207,14 @@ services:
       - app-network
 
   prometheus:
+    # CCX3 (L3 18-23,42-47): monitoramento longe do caminho crítico. O bloco cedeu
+    # 18 ao redis-vendor, 19-20 ao vendor e 21 ao client, e ficou com 22-23.
+    cpuset: "22-23"
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
+      - ./.data/prometheus:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -158,8 +224,6 @@ networks:
   app-network:
 
 volumes:
-  redis_vendor_data:
-  redis_issuer_data:
-  pyroscope_data:
-  grafana_data:
-  prometheus_data:
+  pyroscope-data:
+  pyroscope-compactor:
+  pyroscope-metastore:

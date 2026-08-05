@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from nanomoni.application.issuer.dtos import (
     GetPaymentChannelRequestDTO,
@@ -28,6 +29,37 @@ _VALID_MODES = {
     "paytree_first_opt",
     "paytree_child_pair",
 }
+
+
+def vendor_url_for_worker(base_url: str, index: int, port_count: int) -> str:
+    """Return ``base_url`` with its port shifted to the worker serving ``index``.
+
+    The vendor runs one listening socket per worker on consecutive ports, so
+    choosing a port is choosing a worker. Spreading virtual clients round-robin
+    over ``port_count`` ports gives every worker the same number of clients,
+    which the shared accept queue of a single socket does not.
+
+    ``port_count`` of 1 (or a base URL with no explicit port) returns the URL
+    unchanged, so single-worker setups need no special casing.
+    """
+    if port_count <= 1:
+        return base_url
+
+    split = urlsplit(base_url)
+    if split.port is None or split.hostname is None:
+        return base_url
+
+    port = split.port + index % port_count
+    host = split.hostname
+    if ":" in host:  # urlsplit strips IPv6 brackets; a netloc needs them back
+        host = f"[{host}]"
+    netloc = f"{host}:{port}"
+    if split.username:
+        credentials = split.username
+        if split.password:
+            credentials = f"{credentials}:{split.password}"
+        netloc = f"{credentials}@{netloc}"
+    return urlunsplit(split._replace(netloc=netloc))
 
 
 def validate_mode(mode: str) -> ClientMode:

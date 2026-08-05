@@ -13,6 +13,14 @@ from urllib.request import Request, urlopen
 import aiohttp
 
 
+# Mirrors the vendor's timeout_keep_alive (see nanomoni.main). aiohttp drops a
+# pooled connection after 15s idle by default, and a reconnect is accepted by
+# whichever worker wins the race -- so a dedicated connection needs to survive
+# idle gaps for as long as the server is willing to hold it, or the affinity it
+# exists to provide quietly disappears.
+DEDICATED_CONNECTION_KEEPALIVE_S = 120.0
+
+
 class HttpError(Exception):
     """Base error for HTTP client operations."""
 
@@ -272,6 +280,10 @@ class AsyncHttpClient:
 
     If ``session`` is provided, this client borrows it and will not close it in
     ``aclose`` / ``__aexit__`` (caller owns the connection pool / keep-alive).
+
+    ``connection_limit`` caps the size of the pool this client owns; it is
+    ignored when a session is borrowed. Set it to 1 to make every request travel
+    over the same connection.
     """
 
     def __init__(
@@ -280,6 +292,7 @@ class AsyncHttpClient:
         timeout: float = 10.0,
         *,
         session: aiohttp.ClientSession | None = None,
+        connection_limit: int | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = aiohttp.ClientTimeout(total=timeout)
@@ -287,7 +300,17 @@ class AsyncHttpClient:
             self._client = session
             self._owns_session = False
         else:
-            self._client = aiohttp.ClientSession(timeout=self._timeout)
+            connector = (
+                None
+                if connection_limit is None
+                else aiohttp.TCPConnector(
+                    limit=connection_limit,
+                    keepalive_timeout=DEDICATED_CONNECTION_KEEPALIVE_S,
+                )
+            )
+            self._client = aiohttp.ClientSession(
+                timeout=self._timeout, connector=connector
+            )
             self._owns_session = True
 
     def _url(self, path: str) -> str:
@@ -383,23 +406,41 @@ class AsyncHttpClient:
         else:
             auth_obj = auth
         url = self._url(path)
-        try:
-            async with self._client.request(
-                method,
-                url,
-                json=json,
-                headers=headers,
-                params=params,
-                timeout=timeout,
-                auth=auth_obj,
-                cookies=cookies,
-            ) as resp:
-                content = await resp.read()
-                response = HttpResponse(status_code=resp.status, content=content)
-        except asyncio.TimeoutError as e:
-            raise HttpRequestError(f"Request failed: {method} {url}", cause=e) from e
-        except aiohttp.ClientError as e:
-            raise HttpRequestError(f"Request failed: {method} {url}", cause=e) from e
+        # A connection idle in the pool can be closed by the server's keep-alive
+        # timeout right as we try to reuse it (e.g. after a long client-side
+        # computation between requests, such as building a large PayTree).
+        # aiohttp surfaces that as ServerDisconnectedError before any bytes are
+        # written, so the request never reached the server; retry once, which
+        # forces a fresh connection since the stale one is evicted on failure.
+        attempts = 2
+        for attempt in range(attempts):
+            try:
+                async with self._client.request(
+                    method,
+                    url,
+                    json=json,
+                    headers=headers,
+                    params=params,
+                    timeout=timeout,
+                    auth=auth_obj,
+                    cookies=cookies,
+                ) as resp:
+                    content = await resp.read()
+                    response = HttpResponse(status_code=resp.status, content=content)
+                break
+            except aiohttp.ServerDisconnectedError as e:
+                if attempt == attempts - 1:
+                    raise HttpRequestError(
+                        f"Request failed: {method} {url}", cause=e
+                    ) from e
+            except asyncio.TimeoutError as e:
+                raise HttpRequestError(
+                    f"Request failed: {method} {url}", cause=e
+                ) from e
+            except aiohttp.ClientError as e:
+                raise HttpRequestError(
+                    f"Request failed: {method} {url}", cause=e
+                ) from e
 
         if response.status_code >= 400:
             raise HttpResponseError(response)
