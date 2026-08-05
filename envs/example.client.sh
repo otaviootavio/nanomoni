@@ -29,9 +29,9 @@ export CLIENT_PIN_PROCESSES_TO_CORES="false"
 # VENDOR_BASE_URL.
 export CLIENT_VENDOR_PORT_COUNT=1
 
-# Client private keys (PEM format), one per virtual client, dynamically
-# generated as a JSON array (unless already provided). CLIENT_PAYMENT_COUNT
-# and CLIENT_TARGET_TPS below are split evenly across them; CLIENT_PAYMENT_COUNT
+# Client private keys (PEM format), one per virtual client, freshly generated
+# every time this script runs, as a JSON array. CLIENT_PAYMENT_COUNT and
+# CLIENT_TARGET_TPS below are split evenly across them; CLIENT_PAYMENT_COUNT
 # must be divisible by CLIENT_VIRTUAL_CLIENTS.
 _client_keys_json="[]"
 for _ in $(seq 1 "$CLIENT_VIRTUAL_CLIENTS"); do

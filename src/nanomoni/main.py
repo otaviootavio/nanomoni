@@ -84,7 +84,11 @@ def _serve_one_worker_per_port(host: str, base_port: int, count: int) -> int:
     for proc in procs:
         proc.start()
 
+    shutdown_requested = False
+
     def shutdown(signum: int, frame: FrameType | None) -> None:
+        nonlocal shutdown_requested
+        shutdown_requested = True
         for proc in procs:
             if proc.is_alive():
                 proc.terminate()
@@ -93,11 +97,15 @@ def _serve_one_worker_per_port(host: str, base_port: int, count: int) -> int:
     signal.signal(signal.SIGINT, shutdown)
 
     wait([proc.sentinel for proc in procs])
+    # A worker exiting without shutdown() having been asked for is a dropped
+    # port, even if that worker's own exit code was 0 -- the whole set must
+    # still report failure so a container orchestrator doesn't read this as a
+    # clean stop.
+    status = 0 if shutdown_requested else 1
     for proc in procs:
         if proc.is_alive():
             proc.terminate()
 
-    status = 0
     for proc in procs:
         proc.join()
         # terminate() shows up as -SIGTERM; that is this function doing its job.

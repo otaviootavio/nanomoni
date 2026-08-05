@@ -1,5 +1,7 @@
 envs/*.env.sh
-.data/
+.data/*
+!.data/prometheus/
+!.data/prometheus/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

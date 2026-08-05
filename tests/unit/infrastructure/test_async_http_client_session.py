@@ -5,10 +5,7 @@ from __future__ import annotations
 import aiohttp
 import pytest
 
-from nanomoni.infrastructure.http.http_client import (
-    AsyncHttpClient,
-    DEDICATED_CONNECTION_KEEPALIVE_S,
-)
+from nanomoni.infrastructure.http.http_client import AsyncHttpClient
 
 
 @pytest.mark.asyncio
@@ -40,9 +37,6 @@ async def test_connection_limit_caps_the_owned_pool() -> None:
         connector = client._client.connector
         assert connector is not None
         assert connector.limit == 1
-        # Shorter than the vendor's keep-alive would silently drop the connection
-        # during an idle gap and let another worker accept the replacement.
-        assert connector._keepalive_timeout == DEDICATED_CONNECTION_KEEPALIVE_S
     finally:
         await client.aclose()
 

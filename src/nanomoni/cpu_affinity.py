@@ -13,7 +13,7 @@ import fcntl
 import os
 from typing import IO
 
-LOCK_DIR = "/tmp/nanomoni-cpu-pins"
+LOCK_DIR = "/tmp/nanomoni-cpu-pins"  # noqa: S108 -- container-local by design, see module docstring
 
 # The kernel releases an flock when the holder exits, which is exactly the
 # lifetime we want -- but only for as long as the fd stays open, so the handles

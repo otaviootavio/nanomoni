@@ -50,7 +50,10 @@ def vendor_url_for_worker(base_url: str, index: int, port_count: int) -> str:
         return base_url
 
     port = split.port + index % port_count
-    netloc = f"{split.hostname}:{port}"
+    host = split.hostname
+    if ":" in host:  # urlsplit strips IPv6 brackets; a netloc needs them back
+        host = f"[{host}]"
+    netloc = f"{host}:{port}"
     if split.username:
         credentials = split.username
         if split.password:

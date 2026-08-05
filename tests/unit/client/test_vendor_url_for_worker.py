@@ -41,3 +41,9 @@ def test_url_without_an_explicit_port_is_left_untouched() -> None:
 def test_credentials_survive_the_port_change() -> None:
     url = vendor_url_for_worker("http://user:pw@vendor:8000/api/v1", 2, 10)
     assert url == "http://user:pw@vendor:8002/api/v1"
+
+
+def test_ipv6_host_keeps_its_brackets() -> None:
+    """urlsplit strips IPv6 brackets from .hostname; the netloc needs them back."""
+    url = vendor_url_for_worker("http://[::1]:8000/api/v1", 3, 10)
+    assert url == "http://[::1]:8003/api/v1"
