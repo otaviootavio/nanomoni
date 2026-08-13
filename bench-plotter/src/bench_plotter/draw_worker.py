@@ -40,6 +40,7 @@ from bench_plotter.plotting.flame_renderer import create_flame_graph
 from bench_plotter.plotting.profile_bar_renderer import (
     create_macro_micro_bar,
     create_macro_micro_table,
+    create_per_payment_bar,
 )
 from bench_plotter.plotting.table_renderer import create_stats_table
 
@@ -61,6 +62,7 @@ DRAW_REGISTRY: Dict[str, Callable[..., None]] = {
     "flame_graph": create_flame_graph,
     "profile_macro_micro_bar": create_macro_micro_bar,
     "profile_macro_micro_table": create_macro_micro_table,
+    "per_payment_bar": create_per_payment_bar,
 }
 
 

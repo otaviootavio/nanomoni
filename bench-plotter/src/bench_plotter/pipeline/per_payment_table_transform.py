@@ -30,8 +30,9 @@ _COLUMNS = (
 _BYTES_PER_KIB = 1024.0
 
 
-def transform_per_payment_table(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
-    """Build the per-payment request-size table from a cached rate series."""
+def _per_payment_rows(job: PlotJob, cache: ResultCache) -> List[List[Any]]:
+    """Shared (mode, tps, KiB/s, KiB/payment, bytes/payment) rows for both the
+    table and bar-chart renderings of this job's cached rate series."""
     runs = runs_from_series(job.params["series"], cache)
     tps_by_mode: Dict[str, Any] = job.params["tps_by_mode"]
 
@@ -53,7 +54,12 @@ def transform_per_payment_table(job: PlotJob, cache: ResultCache) -> List[DrawTa
                 kib_per_payment * _BYTES_PER_KIB,
             ]
         )
+    return rows
 
+
+def transform_per_payment_table(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
+    """Build the per-payment request-size table from a cached rate series."""
+    rows = _per_payment_rows(job, cache)
     if not rows:
         print(f"No steady-state samples for per-payment table: {job.title}")
         return []
@@ -67,5 +73,28 @@ def transform_per_payment_table(job: PlotJob, cache: ResultCache) -> List[DrawTa
                 "rows": rows,
                 "title": job.title,
             },
+        )
+    ]
+
+
+def transform_per_payment_bar(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
+    """Build the per-payment request-size bar chart from a cached rate series.
+
+    One bar per mode (KiB/payment), sorted descending so the mode putting the
+    most bytes on the wire per payment reads first, left to right.
+    """
+    rows = _per_payment_rows(job, cache)
+    if not rows:
+        print(f"No steady-state samples for per-payment bar chart: {job.title}")
+        return []
+    records = [
+        {"mode": mode, "kib_per_payment": kib_per_payment}
+        for mode, _tps, _kib_s, kib_per_payment, _bytes in rows
+    ]
+    return [
+        DrawTask(
+            fn_name="per_payment_bar",
+            output_path=job.output_path,
+            kwargs={"records": records, "title": job.title},
         )
     ]

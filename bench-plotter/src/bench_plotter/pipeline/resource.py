@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .model import PlotJob
 from .plan_common import legend_and_names, overlay_job, specs_for
@@ -83,31 +83,34 @@ def build_resource_jobs(
                     )
                 )
             if (title, legend_format) == _PER_PAYMENT_TARGET:
-                job = _per_payment_job(
-                    output_path=str(section_dir / f"{stem}_per_payment.png"),
-                    section=section,
-                    series=series,
-                    resolved=resolved,
-                    intervals=intervals,
+                jobs.extend(
+                    _per_payment_jobs(
+                        table_path=str(section_dir / f"{stem}_per_payment.png"),
+                        bar_path=str(section_dir / f"{stem}_per_payment_bar.png"),
+                        section=section,
+                        series=series,
+                        resolved=resolved,
+                        intervals=intervals,
+                    )
                 )
-                if job is not None:
-                    jobs.append(job)
     return jobs
 
 
-def _per_payment_job(
+def _per_payment_jobs(
     *,
-    output_path: str,
+    table_path: str,
+    bar_path: str,
     section: str,
     series: List[Dict[str, Any]],
     resolved: List[Dict[str, Any]],
     intervals: List[Dict[str, Any]],
-) -> Optional[PlotJob]:
-    """The per-payment request-size job, or ``None`` without a payment rate.
+) -> List[PlotJob]:
+    """The per-payment request-size table + bar chart jobs, or ``[]`` without a
+    payment rate.
 
     Needs each interval's ``tps`` to divide by; callers that build a plan from
     intervals lacking it (the pipeline is usable standalone, not only from a
-    sweep) simply get no such job rather than a table of blanks.
+    sweep) simply get no such jobs rather than a table/chart of blanks.
     """
     tps_by_mode = {
         iv["mode"]: float(iv["tps"])
@@ -115,12 +118,24 @@ def _per_payment_job(
         if iv.get("mode") and iv.get("tps")
     }
     if not tps_by_mode:
-        return None
-    return PlotJob(
-        kind="per_payment_table",
-        title="Client egress per payment (steady-state mean / target TPS)",
-        output_path=output_path,
-        section=section,
-        specs=[r["spec"] for r in resolved],
-        params={"series": series, "tps_by_mode": tps_by_mode},
-    )
+        return []
+    specs = [r["spec"] for r in resolved]
+    params = {"series": series, "tps_by_mode": tps_by_mode}
+    return [
+        PlotJob(
+            kind="per_payment_table",
+            title="Client egress per payment (steady-state mean / target TPS)",
+            output_path=table_path,
+            section=section,
+            specs=specs,
+            params=params,
+        ),
+        PlotJob(
+            kind="per_payment_bar",
+            title="Client egress per payment by mode (steady-state mean / target TPS)",
+            output_path=bar_path,
+            section=section,
+            specs=specs,
+            params=params,
+        ),
+    ]

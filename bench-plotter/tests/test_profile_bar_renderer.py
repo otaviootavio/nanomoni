@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 from bench_plotter.plotting.profile_bar_renderer import (
     create_macro_micro_bar,
     create_macro_micro_table,
+    create_per_payment_bar,
 )
 
 
@@ -22,13 +23,11 @@ def _record(mode: str, tps: float, **overrides: float) -> Dict[str, Any]:
         "crypto_time_s": 2.0,
         "db_read_time_s": 1.2,
         "db_write_time_s": 0.8,
-        "serialize_time_s": 1.0,
         "other_time_s": 3.0,
         "profile_payments": 8000.0,
         "crypto_ms_per_payment": 0.25,
         "db_read_ms_per_payment": 0.15,
         "db_write_ms_per_payment": 0.1,
-        "serialize_ms_per_payment": 0.125,
         "other_ms_per_payment": 0.375,
     }
     base.update(overrides)
@@ -61,7 +60,6 @@ class TestCreateMacroMicroBar:
             crypto_ms_per_payment=None,
             db_read_ms_per_payment=None,
             db_write_ms_per_payment=None,
-            serialize_ms_per_payment=None,
             other_ms_per_payment=None,
         )
         out = tmp_path / "profile_macro_micro_tps200.png"
@@ -92,10 +90,46 @@ class TestCreateMacroMicroTable:
         assert float(row["crypto_time_s"]) == 2.0
         assert float(row["db_read_time_s"]) == 1.2
         assert float(row["db_write_time_s"]) == 0.8
-        assert float(row["serialize_time_s"]) == 1.0
 
     def test_no_records_writes_nothing(self, tmp_path: Path) -> None:
         out = tmp_path / "profile_macro_micro_table.png"
         create_macro_micro_table([], output_path=str(out))
         assert not out.exists()
         assert not out.with_suffix(".csv").exists()
+
+
+class TestCreatePerPaymentBar:
+    def test_writes_one_bar_per_mode(self, tmp_path: Path) -> None:
+        records: List[Dict[str, Any]] = [
+            {"mode": "payword", "kib_per_payment": 1.0},
+            {"mode": "paytree", "kib_per_payment": 3.0},
+        ]
+        out = tmp_path / "per_payment_bar.png"
+        create_per_payment_bar(records, output_path=str(out))
+        assert out.exists()
+
+    def test_no_records_writes_nothing(self, tmp_path: Path) -> None:
+        out = tmp_path / "per_payment_bar.png"
+        create_per_payment_bar([], output_path=str(out))
+        assert not out.exists()
+
+    def test_records_missing_the_value_are_skipped(self, tmp_path: Path) -> None:
+        out = tmp_path / "per_payment_bar.png"
+        create_per_payment_bar(
+            [{"mode": "payword", "kib_per_payment": None}], output_path=str(out)
+        )
+        assert not out.exists()
+
+    def test_value_key_and_y_axis_label_override(self, tmp_path: Path) -> None:
+        records: List[Dict[str, Any]] = [
+            {"mode": "payword", "bytes_per_payment": 5.2},
+            {"mode": "paytree", "bytes_per_payment": 2.3},
+        ]
+        out = tmp_path / "bytes_per_payment_bar.png"
+        create_per_payment_bar(
+            records,
+            output_path=str(out),
+            value_key="bytes_per_payment",
+            y_axis_label="Bytes / payment",
+        )
+        assert out.exists()

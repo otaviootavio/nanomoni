@@ -24,6 +24,11 @@ _DB_READ_COLOR = "#7db8ef"
 _DB_WRITE_COLOR = "#1f5fae"
 _OTHER_COLOR = "#b0b0b0"
 
+# Single neutral fill for single-series bar charts (no per-category meaning to
+# encode in color, so a hue-differentiated palette would only distract from
+# the bar heights, which are the actual comparison).
+_NEUTRAL_BAR_COLOR = "#5b7a99"
+
 # Label colour per segment fill: on top of the fill, chosen for contrast against
 # it; beside the bar, a darkened version of the fill so a label sitting outside
 # still says which segment it belongs to.
@@ -103,7 +108,7 @@ def _label_segments(
                 format_cell(value),
                 ha="center",
                 va="center",
-                fontsize=9,
+                fontsize=11,
                 fontweight="bold",
                 color=_INSIDE_TEXT_COLOR[color],
             )
@@ -114,7 +119,7 @@ def _label_segments(
             format_cell(value),
             ha="left",
             va="center",
-            fontsize=9,
+            fontsize=11,
             fontweight="bold",
             color=_OUTSIDE_TEXT_COLOR[color],
         )
@@ -124,6 +129,7 @@ def create_macro_micro_bar(
     records: List[Dict[str, Any]],
     title: str = "Vendor CPU time per payment: macro vs micro by mode",
     output_path: str = "profile_macro_micro.png",
+    show_title: bool = True,
 ) -> None:
     """Stacked bar per mode (crypto/db read/db write/other) for one TPS
     level.
@@ -155,7 +161,8 @@ def create_macro_micro_bar(
 
     rows = {r["mode"]: r for r in usable}
     totals_by_mode = {
-        m: sum(float(r[field]) for _, field, _ in _BAR_SEGMENTS) for m, r in rows.items()
+        m: sum(float(r[field]) for _, field, _ in _BAR_SEGMENTS)
+        for m, r in rows.items()
     }
     # Descending by total CPU time per payment, so the costliest mode -- the one
     # this chart exists to flag -- reads first, left to right.
@@ -172,7 +179,8 @@ def create_macro_micro_bar(
         running = [b + v for b, v in zip(running, segment_values)]
     totals = running
 
-    fig, ax = plt.subplots(figsize=(max(7, 1.8 * len(modes)), 6.5))
+    fig_width = max(7, 1.8 * len(modes))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_width * 3 / 4))
     for (label, _, color), segment_values, bottom in zip(
         _BAR_SEGMENTS, values, bottoms
     ):
@@ -196,30 +204,33 @@ def create_macro_micro_bar(
             format_cell(total),
             ha="center",
             va="bottom",
-            fontsize=10,
+            fontsize=12,
             fontweight="bold",
         )
 
     ax.set_xticks(x)
     ax.set_xticklabels(modes, rotation=30, ha="right")
-    ax.set_ylabel("CPU time per payment (µs)", fontsize=14)
+    ax.set_ylabel("CPU time per payment (µs)")
     # Margin wide enough for a beside-the-bar label on the last mode too.
     ax.set_xlim(-0.5 - _BAR_WIDTH / 2, len(modes) - 0.5 + _BAR_WIDTH)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.tick_params(axis="both", which="major", labelsize=11)
+    # One step below the rc tick default: long mode names (e.g.
+    # "paytree_first_opt") rotated 30 degrees collide at the full size.
+    ax.tick_params(axis="both", which="major", labelsize=13)
     # Headroom for the per-bar totals, which sit just above the tallest bar.
     if tallest > 0:
         ax.set_ylim(bottom=0, top=tallest * 1.1)
     # The legend goes above the axes, between them and the title: inside the
     # axes it covers the tallest bar, which is the one the chart is about.
     ax.legend(
-        loc="lower center",
-        bbox_to_anchor=(0.5, 1.0),
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.0),
         ncol=len(_BAR_SEGMENTS),
         frameon=False,
-        fontsize=10,
+        fontsize=12,
     )
-    ax.set_title(title, fontsize=15, pad=32)
+    if show_title:
+        ax.set_title(title, fontsize=18, pad=32)
 
     save_figure(fig, output_path)
     print(f"Macro/micro bar chart saved to: {output_path}")
@@ -229,6 +240,7 @@ def create_macro_micro_table(
     records: List[Dict[str, Any]],
     title: str = "Vendor CPU time by mode and TPS",
     output_path: str = "profile_macro_micro_table.png",
+    show_title: bool = True,
 ) -> None:
     """Write the combined (tps, mode) data as both a CSV and a rendered table PNG."""
     if not records:
@@ -244,5 +256,66 @@ def create_macro_micro_table(
         + [format_cell(row.get(field)) for field in _CSV_FIELDS[2:]]
         for row in sorted_rows
     ]
-    render_table_figure(_CSV_FIELDS, cell_text, title, output_path)
+    render_table_figure(_CSV_FIELDS, cell_text, title, output_path, show_title=show_title)
     print(f"Macro/micro table saved to: {output_path} (data: {csv_path})")
+
+
+def create_per_payment_bar(
+    records: List[Dict[str, Any]],
+    title: str = "Client egress per payment by mode",
+    output_path: str = "client_network_kib_s_output_per_payment_bar.png",
+    value_key: str = "kib_per_payment",
+    y_axis_label: str = "KiB / payment",
+    show_title: bool = True,
+) -> None:
+    """One bar per mode: a per-payment quantity, sorted descending.
+
+    ``records`` entries need ``mode`` and ``value_key``; records missing
+    either are dropped (nothing to plot). Sorting descending puts the mode
+    with the largest per-payment value first, left to right -- the
+    comparison this chart exists to make. Every bar shares one neutral
+    fill: color carries no extra meaning here (there is exactly one value per
+    mode), so varying it per bar would only distract from the height
+    comparison. ``value_key`` / ``y_axis_label`` default to the client-egress
+    use this was written for; other per-payment metrics (e.g. Redis memory
+    delta in bytes/payment) pass their own.
+    """
+    usable = [r for r in records if r.get("mode") and r.get(value_key) is not None]
+    if not usable:
+        print(f"No per-payment records for bar chart: {title}")
+        return
+
+    usable = sorted(usable, key=lambda r: float(r[value_key]), reverse=True)
+    modes = [r["mode"] for r in usable]
+    values = [float(r[value_key]) for r in usable]
+
+    x = list(range(len(modes)))
+    fig_width = max(7, 1.8 * len(modes))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_width * 3 / 4))
+    ax.bar(x, values, width=_BAR_WIDTH, color=_NEUTRAL_BAR_COLOR)
+
+    tallest = max(values) if values else 0.0
+    for xi, value in zip(x, values):
+        ax.text(
+            xi,
+            value + tallest * 0.015,
+            format_cell(value),
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(modes, rotation=30, ha="right")
+    ax.set_ylabel(y_axis_label)
+    ax.set_xlim(-0.5 - _BAR_WIDTH / 2, len(modes) - 0.5 + _BAR_WIDTH)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.tick_params(axis="both", which="major", labelsize=13)
+    if tallest > 0:
+        ax.set_ylim(bottom=0, top=tallest * 1.1)
+    if show_title:
+        ax.set_title(title, fontsize=18, pad=20)
+
+    save_figure(fig, output_path)
+    print(f"Per-payment bar chart saved to: {output_path}")
