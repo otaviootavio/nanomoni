@@ -403,7 +403,6 @@ def generate_profile_outputs(
     output_dir: str,
     workers: int | None = None,
     parallel: bool = True,
-    show_title: bool = True,
 ) -> List[str]:
     """Build and render per-run flame graphs + the aggregate comparison chart."""
     try:
@@ -413,9 +412,7 @@ def generate_profile_outputs(
         return []
     if not tasks:
         return []
-    written, failures = draw_all(
-        tasks, workers=workers, parallel=parallel, show_title=show_title
-    )
+    written, failures = draw_all(tasks, workers=workers, parallel=parallel)
     for f in failures:
         print(f"Profile draw failed for {f['output_path']}: {f['error']}")
     return written
