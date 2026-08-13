@@ -22,13 +22,11 @@ def _record(mode: str, tps: float, **overrides: float) -> Dict[str, Any]:
         "crypto_time_s": 2.0,
         "db_read_time_s": 1.2,
         "db_write_time_s": 0.8,
-        "serialize_time_s": 1.0,
         "other_time_s": 3.0,
         "profile_payments": 8000.0,
         "crypto_ms_per_payment": 0.25,
         "db_read_ms_per_payment": 0.15,
         "db_write_ms_per_payment": 0.1,
-        "serialize_ms_per_payment": 0.125,
         "other_ms_per_payment": 0.375,
     }
     base.update(overrides)
@@ -61,7 +59,6 @@ class TestCreateMacroMicroBar:
             crypto_ms_per_payment=None,
             db_read_ms_per_payment=None,
             db_write_ms_per_payment=None,
-            serialize_ms_per_payment=None,
             other_ms_per_payment=None,
         )
         out = tmp_path / "profile_macro_micro_tps200.png"
@@ -92,7 +89,6 @@ class TestCreateMacroMicroTable:
         assert float(row["crypto_time_s"]) == 2.0
         assert float(row["db_read_time_s"]) == 1.2
         assert float(row["db_write_time_s"]) == 0.8
-        assert float(row["serialize_time_s"]) == 1.0
 
     def test_no_records_writes_nothing(self, tmp_path: Path) -> None:
         out = tmp_path / "profile_macro_micro_table.png"
