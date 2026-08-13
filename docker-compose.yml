@@ -137,14 +137,16 @@ services:
     # recreating the container silently starts from an empty profile store --
     # that is how the 20260803_192658 run's profiles were lost, and an empty
     # store reads back as a valid all-zero profile rather than as an error.
-    # Named volumes are reused across recreation. Unlike the bind mounts
-    # elsewhere in this file, they also inherit the image's uid 10001 ownership;
-    # a fresh host directory would be root-owned and Pyroscope could not write
-    # to it. Still destroyed by `docker compose down -v`.
+    # Bind-mounted (like redis/grafana/prometheus below) so the data survives
+    # container recreation, not just `docker compose down -v`. The image runs
+    # as uid 10001 (see its Dockerfile), which can't write to a bind mount
+    # Docker creates fresh (root-owned) -- these three host directories are
+    # pre-created world-writable for the same reason the other bind-mounted
+    # ones here are, sidestepping the uid match entirely.
     volumes:
-      - pyroscope-data:/data
-      - pyroscope-compactor:/data-compactor
-      - pyroscope-metastore:/data-metastore
+      - ./.data/pyroscope-data:/data
+      - ./.data/pyroscope-compactor:/data-compactor
+      - ./.data/pyroscope-metastore:/data-metastore
     networks:
       - app-network
 
@@ -222,8 +224,3 @@ services:
 
 networks:
   app-network:
-
-volumes:
-  pyroscope-data:
-  pyroscope-compactor:
-  pyroscope-metastore:
