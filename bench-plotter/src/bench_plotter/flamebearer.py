@@ -11,10 +11,20 @@ sampleRate``); for the ``process_cpu:...:nanoseconds`` profile type,
 
 The same function name can appear as both an ancestor and a descendant of
 itself in one call path (confirmed live: a router-level ``receive_payment``
-directly wraps a use-case ``receive_payment``). A node's ``total_ticks``
-already includes its descendants', so naively summing every node with a given
-name double-counts that case. ``sum_ticks_by_name``/``sum_ticks_within`` only
-count the **outermost** occurrence of a name along each root-to-leaf path.
+directly wraps a use-case ``receive_payment``, and a store's own ``mget``
+wraps redis-py's ``mget``). A node's ``total_ticks`` already includes its
+descendants', so naively summing every node with a given name double-counts
+that case. ``sum_ticks_by_name``/``sum_ticks_within`` only count the
+**outermost** occurrence of a name along each root-to-leaf path.
+
+``iter_levels``/``focus_on`` feed the flame-graph renderer, which highlights
+frames by name lookup, independent of tree position. Left alone, that paints
+the inner ``mget`` the same color as the outer one -- visually implying the
+read is counted twice even though the sum above only counts the outer node's
+``total_ticks`` once. Both functions take an optional ``shadow_names`` and tag
+each row with a ``shadowed`` flag, computed with the same outermost-occurrence
+rule, so the renderer can render a shadowed frame as a plain "other" frame
+instead of re-highlighting it.
 """
 
 from __future__ import annotations
@@ -87,22 +97,56 @@ def build_tree(payload: Dict[str, Any]) -> FlameNode:
     return root
 
 
+def _shadowed(node: FlameNode, closed: FrozenSet[str], target: FrozenSet[str]) -> bool:
+    return node.name in target and node.name in closed
+
+
+def _close(node: FlameNode, closed: FrozenSet[str], target: FrozenSet[str]) -> FrozenSet[str]:
+    return closed | {node.name} if node.name in target else closed
+
+
 def iter_levels(
     payload: Dict[str, Any],
-) -> List[List[Tuple[int, int, int, int, str]]]:
-    """Per-depth list of ``(start, end, total_ticks, self_ticks, name)`` spans.
+    shadow_names: Iterable[str] = (),
+) -> List[List[Tuple[int, int, int, int, str, bool]]]:
+    """Per-depth list of ``(start, end, total_ticks, self_ticks, name, shadowed)``
+    spans.
 
     For consumers (e.g. the flame-graph renderer) that only need each row's
     horizontal extent and resolved name, not the linked :class:`FlameNode` tree.
+
+    ``shadowed`` is True for a node whose name is in ``shadow_names`` and
+    already occurred on an ancestor along this root-to-leaf path -- the same
+    condition ``sum_ticks_by_name`` uses to skip re-counting it. Empty by
+    default, so existing callers that don't pass ``shadow_names`` get
+    ``shadowed=False`` on every row.
     """
-    fb = payload["flamebearer"]
-    names = fb["names"]
+    target = frozenset(shadow_names)
+    root = build_tree(payload)
+    rows_by_depth: Dict[int, List[Tuple[int, int, int, int, str, bool]]] = {}
+
+    def walk(node: FlameNode, depth: int, closed: FrozenSet[str]) -> None:
+        rows_by_depth.setdefault(depth, []).append(
+            (
+                node.start,
+                node.end,
+                node.total_ticks,
+                node.self_ticks,
+                node.name,
+                _shadowed(node, closed, target),
+            )
+        )
+        new_closed = _close(node, closed, target)
+        for child in node.children:
+            walk(child, depth + 1, new_closed)
+
+    walk(root, 0, frozenset())
+    if not rows_by_depth:
+        return []
+    max_depth = max(rows_by_depth)
     return [
-        [
-            (rn.start, rn.end, rn.total, rn.self_ticks, names[rn.name_idx])
-            for rn in _parse_level(level)
-        ]
-        for level in fb["levels"]
+        sorted(rows_by_depth.get(depth, []), key=lambda r: r[0])
+        for depth in range(max_depth + 1)
     ]
 
 
@@ -156,8 +200,10 @@ def sum_ticks_within(nodes: List[FlameNode], names: Iterable[str]) -> Dict[str, 
 
 
 def focus_on(
-    payload: Dict[str, Any], name: str
-) -> Tuple[List[List[Tuple[int, int, int, int, str]]], int]:
+    payload: Dict[str, Any],
+    name: str,
+    shadow_names: Iterable[str] = (),
+) -> Tuple[List[List[Tuple[int, int, int, int, str, bool]]], int]:
     """Re-root the call tree at every outermost occurrence of ``name``.
 
     A full process flame graph spends most of its depth on framework/event-loop
@@ -165,22 +211,26 @@ def focus_on(
     just the subtree(s) under a given function (e.g. ``run_endpoint_function``)
     makes the graph legible. Each occurrence (one per request handled in the
     window) is tiled left-to-right starting at depth 0, in the same
-    ``(start, end, total_ticks, self_ticks, name)`` row shape :func:`iter_levels`
-    returns, so the flame-graph renderer needs no separate code path.
+    ``(start, end, total_ticks, self_ticks, name, shadowed)`` row shape
+    :func:`iter_levels` returns, so the flame-graph renderer needs no separate
+    code path. See :func:`iter_levels` for what ``shadowed``/``shadow_names``
+    mean; each occurrence's own subtree is walked independently, so a name
+    shadowed inside one occurrence has no bearing on another.
 
     Returns ``([], 0)`` if ``name`` doesn't occur in this profile.
     """
+    target = frozenset(shadow_names)
     root = build_tree(payload)
     occurrences = outermost_nodes(root, name)
     if not occurrences:
         return [], 0
 
-    rows_by_depth: Dict[int, List[Tuple[int, int, int, int, str]]] = {}
+    rows_by_depth: Dict[int, List[Tuple[int, int, int, int, str, bool]]] = {}
     cursor = 0
     for occurrence in occurrences:
         shift = cursor - occurrence.start
 
-        def collect(node: FlameNode, depth: int) -> None:
+        def collect(node: FlameNode, depth: int, closed: FrozenSet[str]) -> None:
             rows_by_depth.setdefault(depth, []).append(
                 (
                     node.start + shift,
@@ -188,12 +238,14 @@ def focus_on(
                     node.total_ticks,
                     node.self_ticks,
                     node.name,
+                    _shadowed(node, closed, target),
                 )
             )
+            new_closed = _close(node, closed, target)
             for child in node.children:
-                collect(child, depth + 1)
+                collect(child, depth + 1, new_closed)
 
-        collect(occurrence, 0)
+        collect(occurrence, 0, frozenset())
         cursor += occurrence.total_ticks
 
     max_depth = max(rows_by_depth)
