@@ -90,7 +90,12 @@ run_mode() {
     OVERALL_STATUS=1
   fi
   log "=== [$mode] finished: $result (window ${start}ms -> ${end}ms) ==="
-  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"virtual_clients\":$BENCHMARK_VIRTUAL_CLIENTS,\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
+  # drain_sec is recorded because the plotter cannot recover it from the window
+  # alone: it reads back the *settled* Redis footprint as the median over these
+  # trailing seconds. Reducing with the peak instead would score whatever
+  # transient the run's teardown happened to produce (see _settled_value in
+  # bench_plotter/sweep/aggregate.py).
+  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"virtual_clients\":$BENCHMARK_VIRTUAL_CLIENTS,\"status\":\"$result\",\"drain_sec\":$DRAIN_TIME,\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
 }
 
 run_signature() {

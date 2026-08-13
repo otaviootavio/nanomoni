@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 import pytest
 
@@ -174,6 +174,100 @@ class TestMcpuPerPaymentUsesAchievedTps:
 
         assert result is not None
         assert result["mcpu_per_payment"] == pytest.approx((vendor_cpu / 64.0) * 1000.0)
+
+
+class TestRedisMemoryUsesSettledNotPeak:
+    """The delta must score the dataset a run leaves behind, not its teardown peak.
+
+    paytree_first_opt settlement briefly pushes Redis RSS far above what it
+    retains, for less than one cadvisor scrape. Reducing with max turned a flat
+    ~423 bytes/payment into a 421..856 sawtooth across the 20260806 sweep.
+    """
+
+    # 5s steps starting at t=1s: flat baseline, a linear climb, one settlement
+    # spike, then a 60s drain plateau. The spike falls inside the drain window,
+    # so this also pins that the median shrugs off a lone outlier there.
+    _VALUES = (
+        [10.0] * 4 + [10.0 + 5.0 * i for i in range(1, 19)] + [260.0] + [100.0] * 12
+    )
+
+    @classmethod
+    def _memory_run(
+        cls, **extra: Any
+    ) -> Tuple[Dict[str, Any], List[Tuple[float, float]]]:
+        points = [(1.0 + i * 5.0, v) for i, v in enumerate(cls._VALUES)]
+        run: Dict[str, Any] = {
+            "mode": "paytree_first_opt",
+            "tps": 256,
+            "total_requests": 1000,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(points[-1][0] * 1_000),
+            },
+        }
+        run.update(extra)
+        return run, points
+
+    def _collect(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        run: Dict[str, Any],
+        points: List[Tuple[float, float]],
+    ) -> Dict[str, Any]:
+        async def fake_query_range(
+            *, query: str, start_unix: float, end_unix: float, step: str | None = None
+        ) -> Dict[str, Any]:
+            if "container_memory_working_set_bytes" in query:
+                return _matrix_payload(points)
+            return _matrix_payload([])
+
+        monkeypatch.setattr(sweep_aggregate, "query_range", fake_query_range)
+
+        async def _go() -> Any:
+            return await _fetch_run_metrics(run, asyncio.Semaphore(1))
+
+        result = asyncio.run(_go())
+        assert result is not None
+        return result
+
+    def test_settles_on_drain_plateau_ignoring_spike(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run, points = self._memory_run(drain_sec=60)
+        result = self._collect(monkeypatch, run, points)
+
+        assert result["vendor_redis_memory_baseline_mib"] == pytest.approx(10.0)
+        assert result["vendor_redis_memory_settled_mib"] == pytest.approx(100.0)
+        assert result["vendor_redis_memory_delta_mib"] == pytest.approx(90.0)
+        # The 260 spike would have scored 250 MiB -- nearly 3x the truth.
+        assert result["vendor_redis_memory_delta_mib"] != pytest.approx(250.0)
+
+    def test_falls_back_to_window_fraction_without_drain_sec(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Timing files written before drain_sec existed must still avoid the peak.
+        run, points = self._memory_run()
+        result = self._collect(monkeypatch, run, points)
+        assert result["vendor_redis_memory_delta_mib"] == pytest.approx(90.0)
+
+    def test_delta_is_never_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Baseline is the floor over the whole window, tail included, so a run
+        # that ends below where it started cannot produce a negative delta.
+        points = [
+            (1.0 + i * 5.0, v) for i, v in enumerate([50.0, 40.0, 30.0, 20.0] * 2)
+        ]
+        run = {
+            "mode": "signature",
+            "tps": 16,
+            "total_requests": 100,
+            "drain_sec": 20,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(points[-1][0] * 1_000),
+            },
+        }
+        result = self._collect(monkeypatch, run, points)
+        assert result["vendor_redis_memory_delta_mib"] >= 0.0
 
 
 class TestSweepLineRenderer:
