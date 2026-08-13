@@ -7,7 +7,7 @@ from typing import Any, List, Dict
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from .common import PALETTE, save_figure
+from .common import FIGSIZE_STD, PALETTE, save_figure
 from .windowing import steady_state_samples, steady_state_long_frame
 
 
@@ -16,6 +16,7 @@ def create_steady_state_boxplot(
     title: str = "Steady-state distribution",
     output_path: str = "boxplot.png",
     y_axis_label: str = "Value",
+    show_title: bool = True,
 ) -> None:
     """Box plot of the stabilized (plateau) samples, one box per mode.
 
@@ -37,8 +38,10 @@ def create_steady_state_boxplot(
         return
 
     # Long mode names (e.g. "paytree_first_opt") collide at a fixed width once
-    # there are more than a handful of boxes, so scale width with box count.
-    fig, ax = plt.subplots(figsize=(max(8, 1.8 * len(data)), 6))
+    # there are more than a handful of boxes, so scale width with box count;
+    # height follows width at 4:3 rather than a flat constant.
+    fig_width = max(8, 1.8 * len(data))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_width * 3 / 4))
     positions = list(range(1, len(data) + 1))
     # Fliers are omitted: with the low variance typical of these metrics the IQR
     # is tiny, so most points render as fliers even though they aren't anomalies.
@@ -50,11 +53,13 @@ def create_steady_state_boxplot(
         f"{label}\nmed {sorted(samples)[len(samples) // 2]:.3g}"
         for label, samples in zip(labels, data)
     ]
-    ax.set_xticklabels(tick_labels)
-    ax.set_ylabel(y_axis_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+    # Rotated + right-aligned so long mode names (e.g. "paytree_first_opt") don't
+    # collide with their neighbors at a fixed horizontal layout.
+    ax.set_xticklabels(tick_labels, rotation=30, ha="right")
+    ax.set_ylabel(y_axis_label)
+    if show_title:
+        ax.set_title(title)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.tick_params(axis="both", which="major", labelsize=12)
     save_figure(fig, output_path)
     print(f"Box plot saved to: {output_path}")
 
@@ -64,6 +69,7 @@ def create_precomputed_boxplot(
     title: str = "Distribution",
     output_path: str = "boxplot.png",
     y_axis_label: str = "Value",
+    show_title: bool = True,
 ) -> None:
     """Render a box plot from pre-computed per-box statistics (matplotlib ``bxp``).
 
@@ -74,14 +80,21 @@ def create_precomputed_boxplot(
     if not stats:
         print(f"No stats for box plot: {title}")
         return
-    fig, ax = plt.subplots(figsize=(max(8, 1.8 * len(stats)), 6))
+    fig_width = max(8, 1.8 * len(stats))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_width * 3 / 4))
     ax.bxp(stats, showfliers=False)
     ax.set_xticks(list(range(1, len(stats) + 1)))
-    ax.set_xticklabels([f"{s.get('label', '')}\nmed {s['med']:.3g}" for s in stats])
-    ax.set_ylabel(y_axis_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+    # Rotated + right-aligned so long mode names (e.g. "paytree_first_opt") don't
+    # collide with their neighbors at a fixed horizontal layout.
+    ax.set_xticklabels(
+        [f"{s.get('label', '')}\nmed {s['med']:.3g}" for s in stats],
+        rotation=30,
+        ha="right",
+    )
+    ax.set_ylabel(y_axis_label)
+    if show_title:
+        ax.set_title(title)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.tick_params(axis="both", which="major", labelsize=12)
     save_figure(fig, output_path)
     print(f"Box plot saved to: {output_path}")
 
@@ -91,6 +104,7 @@ def create_bucket_ecdf(
     title: str = "Distribution (ECDF)",
     output_path: str = "ecdf.png",
     value_label: str = "Value",
+    show_title: bool = True,
 ) -> None:
     """Exact step ECDF drawn straight from Prometheus histogram buckets.
 
@@ -104,7 +118,7 @@ def create_bucket_ecdf(
     if not valid:
         print(f"No bucket data for ECDF: {title}")
         return
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=FIGSIZE_STD)
     for idx, d in enumerate(valid):
         color = PALETTE[idx % len(PALETTE)]
         ax.plot(
@@ -115,13 +129,13 @@ def create_bucket_ecdf(
             color=color,
             label=d.get("label", f"Series {idx + 1}"),
         )
-    ax.set_xlabel(value_label, fontsize=14)
-    ax.set_ylabel("Cumulative proportion", fontsize=14)
+    ax.set_xlabel(value_label)
+    ax.set_ylabel("Cumulative proportion")
     ax.set_ylim(0, 1.02)
-    ax.set_title(title, fontsize=16)
+    if show_title:
+        ax.set_title(title)
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=12)
-    ax.tick_params(axis="both", which="major", labelsize=12)
+    ax.legend(loc="upper left", ncol=len(valid), frameon=False)
     save_figure(fig, output_path)
     print(f"ECDF plot saved to: {output_path}")
 
@@ -132,6 +146,7 @@ def create_ecdf_plot(
     output_path: str = "ecdf.png",
     value_label: str = "Value",
     trim: bool = True,
+    show_title: bool = True,
 ) -> None:
     """Empirical CDF of the samples, one curve per mode.
 
@@ -144,13 +159,27 @@ def create_ecdf_plot(
     if df.empty:
         print(f"No steady-state samples for ECDF: {title}")
         return
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=FIGSIZE_STD)
     sns.ecdfplot(data=df, x="value", hue="mode", hue_order=order, ax=ax)
-    ax.set_xlabel(value_label, fontsize=14)
-    ax.set_ylabel("Cumulative proportion", fontsize=14)
-    ax.set_title(title, fontsize=16)
+    ax.set_xlabel(value_label)
+    ax.set_ylabel("Cumulative proportion")
+    if show_title:
+        ax.set_title(title)
     ax.grid(True, alpha=0.3)
-    ax.tick_params(axis="both", which="major", labelsize=12)
+    # seaborn's hue legend builds its own Legend object directly rather than
+    # labeling axes artists, so ax.get_legend_handles_labels() finds nothing --
+    # a bare ax.legend() call here would silently replace it with an empty one.
+    # Pull the handles/labels it already built and redraw with our placement.
+    if ax.legend_ is not None:
+        handles = ax.legend_.legend_handles
+        labels = [t.get_text() for t in ax.legend_.get_texts()]
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            loc="upper left",
+            ncol=len(order),
+            frameon=False,
+        )
     save_figure(fig, output_path)
     print(f"ECDF plot saved to: {output_path}")
 
@@ -161,6 +190,7 @@ def create_violin_plot(
     output_path: str = "violin.png",
     value_label: str = "Value",
     trim: bool = True,
+    show_title: bool = True,
 ) -> None:
     """Violin plot of the samples, one violin per mode.
 
@@ -173,7 +203,7 @@ def create_violin_plot(
     if df.empty:
         print(f"No steady-state samples for violin plot: {title}")
         return
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=FIGSIZE_STD)
     # hue=mode + legend=False colors each violin from the categorical palette;
     # this is the seaborn >=0.13 idiom (a bare ``palette`` is deprecated there).
     # cut=0 keeps the density within the observed data range: these metrics
@@ -190,9 +220,9 @@ def create_violin_plot(
         ax=ax,
     )
     ax.set_xlabel("")
-    ax.set_ylabel(value_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+    ax.set_ylabel(value_label)
+    if show_title:
+        ax.set_title(title)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.tick_params(axis="both", which="major", labelsize=12)
     save_figure(fig, output_path)
     print(f"Violin plot saved to: {output_path}")

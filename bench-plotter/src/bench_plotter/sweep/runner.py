@@ -61,6 +61,7 @@ def generate_sweep_plots(
     output_root: str = "plots",
     workers: int | None = None,
     parallel: bool = True,
+    show_title: bool = True,
 ) -> List[str]:
     """Generate per-config + aggregate plots for a TPS sweep. Returns PNG paths."""
     server_ts, all_runs = _load_timing(timing_path)
@@ -94,6 +95,7 @@ def generate_sweep_plots(
                     output_dir=str(cfg_dir),
                     workers=workers,
                     parallel=parallel,
+                    show_title=show_title,
                 )
             )
 
@@ -105,6 +107,7 @@ def generate_sweep_plots(
             output_dir=str(base),
             workers=workers,
             parallel=parallel,
+            show_title=show_title,
         )
     )
     # Best-effort: a down/unreachable Pyroscope must not fail the rest of the
@@ -116,6 +119,7 @@ def generate_sweep_plots(
             output_dir=str(base),
             workers=workers,
             parallel=parallel,
+            show_title=show_title,
         )
     )
     print(f"Sweep wrote {len(written)} plot(s) under '{base}'")

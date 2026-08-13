@@ -24,6 +24,11 @@ PALETTE = [
     "#e34948",
 ]
 
+# Shared 4:3 figure sizes for charts with no data-driven dimension (item-count
+# or depth driven charts derive their own size instead -- see each renderer).
+FIGSIZE_STD = (8, 6)
+FIGSIZE_WIDE = (12, 9)
+
 _THEME_APPLIED = False
 
 
@@ -43,11 +48,11 @@ def apply_paper_theme() -> None:
         rc={
             "figure.dpi": 300,
             "savefig.dpi": 300,
-            "axes.titlesize": 16,
-            "axes.labelsize": 14,
-            "xtick.labelsize": 12,
-            "ytick.labelsize": 12,
-            "legend.fontsize": 12,
+            "axes.titlesize": 20,
+            "axes.labelsize": 17,
+            "xtick.labelsize": 14,
+            "ytick.labelsize": 14,
+            "legend.fontsize": 14,
             "grid.alpha": 0.3,
         },
     )

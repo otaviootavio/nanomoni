@@ -45,10 +45,19 @@ def render_table_figure(
     output_path: str,
     *,
     bold_first_column: bool = False,
+    show_title: bool = True,
 ) -> None:
     """Render already-formatted cell strings as a table PNG."""
     fig_height = 0.4 * (len(cell_text) + 1) + 0.9
-    fig, ax = plt.subplots(figsize=(max(8, 1.9 * len(col_labels)), fig_height))
+    # A table with few columns but long names/values (e.g. "redis_memory_delta_mib")
+    # needs more than the per-column floor below, or the longest cell clips against
+    # its neighbor -- so width also scales with the longest cell seen anywhere.
+    all_cells = [str(c) for c in col_labels] + [
+        str(v) for row in cell_text for v in row
+    ]
+    max_cell_len = max((len(s) for s in all_cells), default=0)
+    fig_width = max(8, 1.9 * len(col_labels), 0.5 * max_cell_len)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.axis("off")
     # bbox stretches the table to fill the axes; the default loc="center" keeps it
     # at its intrinsic (small) size and leaves the rest of the figure blank.
@@ -59,7 +68,7 @@ def render_table_figure(
         cellLoc="center",
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(12)
     table.auto_set_column_width(list(range(len(col_labels))))
     for (row, col), cell in table.get_celld().items():
         if row == 0:
@@ -67,7 +76,8 @@ def render_table_figure(
             cell.set_facecolor(_HEADER_COLOR)
         elif col == 0 and bold_first_column:
             cell.set_text_props(weight="bold")
-    ax.set_title(title, fontsize=14, pad=14)
+    if show_title:
+        ax.set_title(title, fontsize=17, pad=14)
 
     save_figure(fig, output_path)
 
@@ -95,6 +105,7 @@ def create_stats_table(
     rows: Sequence[Sequence[Any]],
     title: str = "Statistics",
     output_path: str = "table.png",
+    show_title: bool = True,
 ) -> None:
     """Write ``rows`` as both a CSV (raw values) and a table PNG (formatted)."""
     if not rows:
@@ -103,6 +114,11 @@ def create_stats_table(
     csv_path = write_table_csv(col_labels, rows, output_path)
     cell_text: List[List[str]] = [[format_cell(v) for v in row] for row in rows]
     render_table_figure(
-        col_labels, cell_text, title, output_path, bold_first_column=True
+        col_labels,
+        cell_text,
+        title,
+        output_path,
+        bold_first_column=True,
+        show_title=show_title,
     )
     print(f"Table saved to: {output_path} (data: {csv_path})")

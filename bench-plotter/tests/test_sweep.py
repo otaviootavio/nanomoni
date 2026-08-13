@@ -11,7 +11,10 @@ import pytest
 
 from bench_plotter.draw_worker import DRAW_REGISTRY
 from bench_plotter.plotting.common import PALETTE
-from bench_plotter.plotting.sweep_renderers import create_sweep_line_plot
+from bench_plotter.plotting.sweep_renderers import (
+    create_identity_comparison_plot,
+    create_sweep_line_plot,
+)
 from bench_plotter.plotting.windowing import steady_state_samples
 from bench_plotter.sweep import aggregate as sweep_aggregate
 from bench_plotter.sweep.aggregate import (
@@ -226,6 +229,67 @@ class TestSweepLineRenderer:
         )
         assert out.exists()
         assert out.stat().st_size > 0
+
+    def test_x_true_log_writes_png(self, tmp_path: Path) -> None:
+        out = tmp_path / "x_true_log.png"
+        create_sweep_line_plot(
+            series_list=[
+                {
+                    "label": "paytree",
+                    "x_values": [4800, 9600, 19200, 38400],
+                    "y_values": [2.0, 3.0, 5.0, 8.0],
+                },
+            ],
+            title="Bytes per payment vs total payments",
+            output_path=str(out),
+            x_axis_label="Total payments",
+            y_axis_label="Bytes / payment",
+            x_log_base=2,
+            x_true_log=True,
+        )
+        assert out.exists()
+        assert out.stat().st_size > 0
+
+
+class TestIdentityComparisonRenderer:
+    def test_writes_png_and_stays_square_with_many_series(self, tmp_path: Path) -> None:
+        # 5 series + the identity line is this chart's typical real-world
+        # count; a single-row legend at that count once stretched the whole
+        # (deliberately square) figure into a squashed wide rectangle -- the
+        # legend must wrap instead, so the saved figure stays roughly square.
+        series_list = [
+            {
+                "label": mode,
+                "x_values": [16, 32, 64, 128, 256],
+                "y_values": [v * (idx + 1) for v in (10, 20, 40, 80, 160)],
+            }
+            for idx, mode in enumerate(
+                [
+                    "paytree",
+                    "paytree_child_pair",
+                    "paytree_first_opt",
+                    "payword",
+                    "signature",
+                ]
+            )
+        ]
+        out = tmp_path / "identity.png"
+        create_identity_comparison_plot(series_list, output_path=str(out))
+        assert out.exists()
+
+        from PIL import Image
+
+        with Image.open(out) as img:
+            width, height = img.size
+        aspect = width / height
+        assert 0.8 <= aspect <= 1.6, (
+            f"expected a roughly square figure, got {width}x{height}"
+        )
+
+    def test_no_series_writes_nothing(self, tmp_path: Path) -> None:
+        out = tmp_path / "identity.png"
+        create_identity_comparison_plot([], output_path=str(out))
+        assert not out.exists()
 
 
 class TestModeStyle:

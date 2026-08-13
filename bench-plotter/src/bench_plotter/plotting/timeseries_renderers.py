@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from bench_plotter.mode_style import MODE_MARKERS
 
-from .common import PALETTE, save_figure
+from .common import FIGSIZE_WIDE, PALETTE, save_figure
 
 # One marker per point, at a sparse stride: a marker on every raw Prometheus
 # sample would be an unreadable smear, but the shape still needs to appear
@@ -24,13 +24,15 @@ def create_multi_line_plot(
     title: str = "Time Series Comparison",
     output_path: str = "line_plot.png",
     y_axis_label: str = "Value",
+    show_title: bool = True,
 ) -> None:
     """Plot the raw Prometheus points, one line per series (no extra smoothing)."""
     if not series_list:
         print("No series provided for multi-series plotting")
         return
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
     max_value = 0.0
+    drawn_count = 0
     for idx, series in enumerate(series_list):
         timestamps = series.get("timestamps", [])
         values = series.get("values", [])
@@ -63,12 +65,29 @@ def create_multi_line_plot(
             label=label,
         )
         max_value = max(max_value, max(valid_values))
-    ax.set_xlabel("Time (s)", fontsize=14)
-    ax.set_ylabel(y_axis_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+        drawn_count += 1
+    ax.set_xlabel("Time (s)", fontsize=20)
+    ax.set_ylabel(y_axis_label, fontsize=20)
+    ax.tick_params(axis="both", which="major", labelsize=17)
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=12)
-    ax.tick_params(axis="both", which="major", labelsize=12)
+    # The legend lives above the axes -- this chart's series are raw time
+    # series that can spike anywhere, including right at the top, and an
+    # inside-axes legend once crowded a peak that reached the y-limit's
+    # headroom. Capped at 3/row so it wraps instead of forcing every mode
+    # into one wide row; the title's large pad reserves room for the (up to
+    # two-row) legend between it and the axes, so neither ever overlaps the
+    # other or the data. Font sizes here are the shared convention every
+    # vs-TPS chart (sweep_renderers.create_sweep_line_plot /
+    # create_identity_comparison_plot) matches too.
+    ax.legend(
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.0),
+        ncol=min(3, max(1, drawn_count)),
+        fontsize=20,
+        frameon=False,
+    )
+    if show_title:
+        ax.set_title(title, fontsize=24, pad=135)
     top_limit = 1.0 if max_value <= 0 else max_value * 1.1
     ax.set_ylim(bottom=0, top=top_limit)
     ax.set_xlim(left=0)

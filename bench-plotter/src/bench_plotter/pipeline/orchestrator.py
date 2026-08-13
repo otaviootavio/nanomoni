@@ -35,11 +35,13 @@ def generate_plots_from_intervals(
     output_dir: str = "plots",
     workers: int | None = None,
     parallel: bool = True,
+    show_title: bool = True,
 ) -> List[str]:
     """Generate all plots for a list of successful intervals. Returns PNG paths.
 
     ``workers`` caps the draw pool (default: all CPUs); ``parallel=False`` draws
-    serially for debugging.
+    serially for debugging. ``show_title`` controls whether rendered figures
+    get a title.
     """
     if not intervals:
         print("No successful intervals to plot")
@@ -63,7 +65,9 @@ def generate_plots_from_intervals(
     print(f"Prepared {len(tasks)} figure(s)")
 
     # 4. draw (process pool)
-    written, draw_failures = draw_all(tasks, workers=workers, parallel=parallel)
+    written, draw_failures = draw_all(
+        tasks, workers=workers, parallel=parallel, show_title=show_title
+    )
 
     _report_failures(fetch_failures, draw_failures)
     print(f"Wrote {len(written)} plot(s) to '{output_dir}'")
