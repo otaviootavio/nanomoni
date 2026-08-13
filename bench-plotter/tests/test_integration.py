@@ -50,6 +50,7 @@ def _run_capturing_draw(intervals: List[Dict[str, Any]]) -> Set[str]:
         tasks: List[DrawTask],
         workers: Optional[int] = None,
         parallel: bool = True,
+        show_title: bool = True,
     ) -> tuple[List[str], List[dict]]:
         captured.extend(t.output_path for t in tasks)
         return [t.output_path for t in tasks], []

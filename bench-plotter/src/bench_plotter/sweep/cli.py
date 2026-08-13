@@ -7,6 +7,16 @@ import sys
 from pathlib import Path
 
 
+def bool_flag(value: str) -> bool:
+    """argparse ``type`` validator for ``--title``: accepts only 'true'/'false'."""
+    lowered = value.strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    raise argparse.ArgumentTypeError(f"expected 'true' or 'false', got {value!r}")
+
+
 def positive_int(value: str) -> int:
     """argparse ``type`` validator: a strictly-positive integer.
 
@@ -48,6 +58,12 @@ def main() -> None:
         action="store_true",
         help="Render figures serially (debugging)",
     )
+    parser.add_argument(
+        "--title",
+        type=bool_flag,
+        required=True,
+        help="'true' or 'false': whether rendered figures get a title",
+    )
     args = parser.parse_args()
 
     intervals_path = Path(args.intervals)
@@ -65,6 +81,7 @@ def main() -> None:
         output_root=str(args.output),
         workers=args.workers,
         parallel=not args.no_parallel,
+        show_title=args.title,
     )
     print(f"Sweep complete: {len(written)} plot(s) written")
 

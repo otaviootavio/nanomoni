@@ -41,15 +41,21 @@ def series_by_mode(
     y_key: str,
     label_suffix: str = "",
     linestyle: str = "-",
+    x_key: str = "tps",
 ) -> List[Dict[str, Any]]:
-    """Group (tps, y) points by mode for one y-field, with stable mode styling."""
+    """Group (x, y) points by mode for one y-field, with stable mode styling.
+
+    ``x_key`` defaults to "tps" (every vs-TPS chart) but can be any other
+    numeric scalar field (e.g. "total_requests" for a vs-total-payments chart).
+    """
     by_mode: Dict[str, List[Tuple[float, float]]] = {}
     for row in scalars:
         y = row.get(y_key)
-        if y is None:
+        x = row.get(x_key)
+        if y is None or x is None:
             continue
         mode = row["mode"]
-        by_mode.setdefault(mode, []).append((row["tps"], float(y)))
+        by_mode.setdefault(mode, []).append((float(x), float(y)))
 
     series: List[Dict[str, Any]] = []
     for mode in sorted(by_mode):

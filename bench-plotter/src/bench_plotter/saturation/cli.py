@@ -7,6 +7,16 @@ import sys
 from pathlib import Path
 
 
+def bool_flag(value: str) -> bool:
+    """argparse ``type`` validator for ``--title``: accepts only 'true'/'false'."""
+    lowered = value.strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    raise argparse.ArgumentTypeError(f"expected 'true' or 'false', got {value!r}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -24,6 +34,12 @@ def main() -> None:
         default="plots",
         help="Root output directory (default: plots); timestamp subdir is created inside",
     )
+    parser.add_argument(
+        "--title",
+        type=bool_flag,
+        required=True,
+        help="'true' or 'false': whether rendered figures get a title",
+    )
     args = parser.parse_args()
 
     intervals_path = Path(args.intervals)
@@ -39,6 +55,7 @@ def main() -> None:
     written, _summary = generate_saturation_report(
         timing_path=str(intervals_path),
         output_root=str(args.output),
+        show_title=args.title,
     )
     print(f"Saturation report complete: {len(written)} file(s) written")
 
