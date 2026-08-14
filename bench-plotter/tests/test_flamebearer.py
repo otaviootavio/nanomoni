@@ -78,8 +78,30 @@ class TestIterLevels:
     def test_resolves_names_and_spans(self) -> None:
         levels = iter_levels(_payload())
         assert levels[2] == [
-            (0, 80, 80, 0, "receive_payment"),
-            (80, 100, 20, 20, "idle"),
+            (0, 80, 80, 0, "receive_payment", False),
+            (80, 100, 20, 20, "idle", False),
+        ]
+
+    def test_marks_nested_occurrence_as_shadowed(self) -> None:
+        # depth 3's "receive_payment" (0-30) is nested inside depth 2's (0-80)
+        # -- the same shape a store's own mget wrapping redis-py's own mget
+        # has. Only the inner occurrence is shadowed; the outer one and
+        # unrelated names are not.
+        levels = iter_levels(_payload(), shadow_names=["receive_payment"])
+        assert levels[2] == [
+            (0, 80, 80, 0, "receive_payment", False),
+            (80, 100, 20, 20, "idle", False),
+        ]
+        assert levels[3] == [
+            (0, 30, 30, 0, "receive_payment", True),
+            (30, 50, 20, 20, "get_by_id", False),
+        ]
+
+    def test_no_shadow_names_marks_nothing(self) -> None:
+        levels = iter_levels(_payload())
+        assert levels[3] == [
+            (0, 30, 30, 0, "receive_payment", False),
+            (30, 50, 20, 20, "get_by_id", False),
         ]
 
 
@@ -168,19 +190,43 @@ class TestFocusOn:
         assert total_ticks == 60  # 30 + 30, the two occurrences
 
         assert levels[0] == [
-            (0, 30, 30, 10, "run_endpoint_function"),
-            (30, 60, 30, 5, "run_endpoint_function"),
+            (0, 30, 30, 10, "run_endpoint_function", False),
+            (30, 60, 30, 5, "run_endpoint_function", False),
         ]
         assert levels[1] == [
-            (0, 20, 20, 15, "receive_payment"),
-            (30, 55, 25, 15, "receive_payment"),
+            (0, 20, 20, 15, "receive_payment", False),
+            (30, 55, 25, 15, "receive_payment", False),
         ]
         assert levels[2] == [
-            (0, 5, 5, 5, "verify"),
-            (30, 40, 10, 10, "verify"),
+            (0, 5, 5, 5, "verify", False),
+            (30, 40, 10, 10, "verify", False),
         ]
 
     def test_missing_name_returns_empty(self) -> None:
         levels, total_ticks = focus_on(_focus_payload(), "does_not_exist")
         assert levels == []
         assert total_ticks == 0
+
+    def test_marks_name_nested_inside_the_focused_subtree_as_shadowed(self) -> None:
+        # Reproduces a store's own "mget" wrapping redis-py's own "mget" one
+        # level below the focused endpoint: within a single
+        # run_endpoint_function occurrence, "receive_payment" here wraps a
+        # same-named nested call, mirroring _FOCUS_LEVELS' first occurrence
+        # shape but naming the child after its parent.
+        names = ["total", "outer", "run_endpoint_function", "mget", "mget"]
+        levels_raw = [
+            [0, 30, 0, 0],
+            [0, 30, 0, 1],
+            [0, 30, 5, 2],
+            [0, 25, 5, 3],
+            [0, 20, 20, 4],
+        ]
+        payload = {
+            "flamebearer": {"names": names, "levels": levels_raw},
+            "metadata": {"sampleRate": 10.0},
+        }
+        levels, _total_ticks = focus_on(
+            payload, "run_endpoint_function", shadow_names=["mget"]
+        )
+        assert levels[1] == [(0, 25, 25, 5, "mget", False)]
+        assert levels[2] == [(0, 20, 20, 20, "mget", True)]

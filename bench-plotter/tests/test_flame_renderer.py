@@ -67,6 +67,20 @@ class TestCreateFlameGraph:
         assert out.exists()
         assert out.stat().st_size > 0
 
+    def test_highlighted_and_grey_frames_both_render(self, tmp_path: Path) -> None:
+        # "verify" is wide enough to label and is highlighted; "idle" is wide
+        # enough to label and is not -- exercises both branches of the
+        # per-frame font/contrast split without asserting matplotlib internals.
+        out = tmp_path / "flame.png"
+        create_flame_graph(
+            _payload(),
+            output_path=str(out),
+            highlight={"verify": "#eda100"},
+            focus=None,
+        )
+        assert out.exists()
+        assert out.stat().st_size > 0
+
     def test_focus_none_renders_full_tree(self, tmp_path: Path) -> None:
         out = tmp_path / "flame.png"
         create_flame_graph(_payload(), output_path=str(out), focus=None)
