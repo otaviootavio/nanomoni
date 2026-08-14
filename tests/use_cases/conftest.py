@@ -56,7 +56,7 @@ async def issuer_account_repository() -> AsyncGenerator[
 ]:
     repo = InMemoryAccountRepository()
     yield repo
-    repo.clear()
+    await repo.clear()
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ async def issuer_payment_channel_repository() -> AsyncGenerator[
     repo = InMemoryIssuerPaymentChannelRepository()
     await repo.initialize()
     yield repo
-    repo.clear()
+    await repo.clear()
 
 
 # ============================================================================
@@ -81,21 +81,21 @@ async def vendor_payment_repositories() -> AsyncGenerator[
     repos = create_vendor_payment_repositories()
     await initialize_vendor_payment_repositories(repos)
     yield repos
-    repos.clear()
+    await repos.clear()
 
 
 @pytest.fixture
 async def user_repository() -> AsyncGenerator[InMemoryUserRepository, None]:
     repo = InMemoryUserRepository()
     yield repo
-    repo.clear()
+    await repo.clear()
 
 
 @pytest.fixture
 async def task_repository() -> AsyncGenerator[InMemoryTaskRepository, None]:
     repo = InMemoryTaskRepository()
     yield repo
-    repo.clear()
+    await repo.clear()
 
 
 # ============================================================================

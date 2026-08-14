@@ -45,9 +45,9 @@ class VendorPaymentRepositories:
     payment: PaymentRepository
     store: InMemoryKeyValueStore
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
-        self.store.clear()
+        await self.store.clear()
 
 
 def create_vendor_payment_repositories() -> VendorPaymentRepositories:
@@ -75,9 +75,9 @@ class InMemoryAccountRepository(AccountRepositoryImpl):
         super().__init__(store)
         self._store = store
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
-        self._store.clear()
+        await self._store.clear()
 
 
 class InMemoryIssuerPaymentChannelRepository(IssuerPaymentChannelRepositoryImpl):
@@ -93,9 +93,9 @@ class InMemoryIssuerPaymentChannelRepository(IssuerPaymentChannelRepositoryImpl)
         """Initialize the repository by registering scripts."""
         await _register_issuer_scripts(self._store)
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
-        self._store.clear()
+        await self._store.clear()
 
 
 class InMemoryUserRepository(UserRepositoryImpl):
@@ -106,9 +106,9 @@ class InMemoryUserRepository(UserRepositoryImpl):
         super().__init__(store)
         self._store = store
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
-        self._store.clear()
+        await self._store.clear()
 
 
 class InMemoryTaskRepository(TaskRepositoryImpl):
@@ -119,6 +119,6 @@ class InMemoryTaskRepository(TaskRepositoryImpl):
         super().__init__(store)
         self._store = store
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """Clear all data (useful for test teardown)."""
-        self._store.clear()
+        await self._store.clear()
