@@ -8,6 +8,7 @@ import pytest
 
 from bench_plotter.pipeline.model import PlotJob, QuerySpec, ResultCache
 from bench_plotter.pipeline.per_payment_table_transform import (
+    transform_per_payment_bar,
     transform_per_payment_table,
 )
 
@@ -66,3 +67,26 @@ class TestTransformPerPaymentTable:
     def test_missing_payload_yields_no_task(self) -> None:
         spec = QuerySpec("client_egress", 0.0, 100.0)
         assert transform_per_payment_table(_job(spec, {"payword": 256.0}), {}) == []
+
+
+class TestTransformPerPaymentBar:
+    def test_divides_egress_rate_by_the_payment_rate(self) -> None:
+        spec = QuerySpec("client_egress", 0.0, 100.0)
+        cache: ResultCache = {spec: _payload([512.0] * 8)}
+
+        tasks = transform_per_payment_bar(_job(spec, {"payword": 256.0}), cache)
+
+        assert len(tasks) == 1
+        assert tasks[0].fn_name == "per_payment_bar"
+        (record,) = tasks[0].kwargs["records"]
+        assert record["mode"] == "payword"
+        assert record["kib_per_payment"] == pytest.approx(2.0)
+
+    def test_mode_without_a_known_tps_is_skipped(self) -> None:
+        spec = QuerySpec("client_egress", 0.0, 100.0)
+        cache: ResultCache = {spec: _payload([512.0] * 8)}
+        assert transform_per_payment_bar(_job(spec, {}), cache) == []
+
+    def test_missing_payload_yields_no_task(self) -> None:
+        spec = QuerySpec("client_egress", 0.0, 100.0)
+        assert transform_per_payment_bar(_job(spec, {"payword": 256.0}), {}) == []

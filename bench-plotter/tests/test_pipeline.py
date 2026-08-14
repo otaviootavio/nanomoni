@@ -95,6 +95,9 @@ PAYWORD_CONTRACT = {
 # Dividing a rate by the payment rate that drove it needs the run's tps, which
 # only a sweep-built plan carries.
 PER_PAYMENT_PATH = "client_resources/client_network_kib_s_output_per_payment.png"
+PER_PAYMENT_BAR_PATH = (
+    "client_resources/client_network_kib_s_output_per_payment_bar.png"
+)
 
 
 class TestBuildPlan:
@@ -104,6 +107,10 @@ class TestBuildPlan:
     def test_per_payment_table_only_when_intervals_carry_tps(self) -> None:
         assert PER_PAYMENT_PATH not in _plan_paths(["payword"])
         assert PER_PAYMENT_PATH in _plan_paths(["payword"], tps=256)
+
+    def test_per_payment_bar_only_when_intervals_carry_tps(self) -> None:
+        assert PER_PAYMENT_BAR_PATH not in _plan_paths(["payword"])
+        assert PER_PAYMENT_BAR_PATH in _plan_paths(["payword"], tps=256)
 
     def test_only_present_modes_are_queried(self) -> None:
         # A payword-only plan must not reference other modes' metrics.
