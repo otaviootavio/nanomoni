@@ -3,9 +3,9 @@ combined CSV + rendered table image across every (tps, mode) cell.
 
 x-axis = mode, sorted descending by total CPU time per payment so the
 costliest mode reads first. Stacked bar segments = crypto / db read / db
-write / serialize / other (unaccounted) CPU time per payment within that
-mode's endpoint handler, in microseconds. The CSV keeps the underlying
-absolute seconds and per-payment milliseconds.
+write / other (unaccounted) CPU time per payment within that mode's endpoint
+handler, in microseconds. The CSV keeps the underlying absolute seconds and
+per-payment milliseconds.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ _CRYPTO_COLOR = "#eda100"
 # what used to be one db segment, and the shared hue keeps that readable.
 _DB_READ_COLOR = "#7db8ef"
 _DB_WRITE_COLOR = "#1f5fae"
-_SERIALIZE_COLOR = "#7b4ea3"
 _OTHER_COLOR = "#b0b0b0"
 
 # Label colour per segment fill: on top of the fill, chosen for contrast against
@@ -32,14 +31,12 @@ _INSIDE_TEXT_COLOR = {
     _CRYPTO_COLOR: "black",
     _DB_READ_COLOR: "black",
     _DB_WRITE_COLOR: "white",
-    _SERIALIZE_COLOR: "white",
     _OTHER_COLOR: "black",
 }
 _OUTSIDE_TEXT_COLOR = {
     _CRYPTO_COLOR: "#8a5e00",
     _DB_READ_COLOR: "#2a78d6",
     _DB_WRITE_COLOR: _DB_WRITE_COLOR,
-    _SERIALIZE_COLOR: _SERIALIZE_COLOR,
     _OTHER_COLOR: "#5f5f5f",
 }
 
@@ -65,7 +62,6 @@ _BAR_SEGMENTS = (
     ("crypto (verify)", "crypto_ms_per_payment", _CRYPTO_COLOR),
     ("db read (mget)", "db_read_ms_per_payment", _DB_READ_COLOR),
     ("db write (run_script)", "db_write_ms_per_payment", _DB_WRITE_COLOR),
-    ("serialize", "serialize_ms_per_payment", _SERIALIZE_COLOR),
     ("other", "other_ms_per_payment", _OTHER_COLOR),
 )
 
@@ -78,13 +74,11 @@ _CSV_FIELDS = [
     "crypto_time_s",
     "db_read_time_s",
     "db_write_time_s",
-    "serialize_time_s",
     "other_time_s",
     "profile_payments",
     "crypto_ms_per_payment",
     "db_read_ms_per_payment",
     "db_write_ms_per_payment",
-    "serialize_ms_per_payment",
     "other_ms_per_payment",
 ]
 
@@ -131,8 +125,8 @@ def create_macro_micro_bar(
     title: str = "Vendor CPU time per payment: macro vs micro by mode",
     output_path: str = "profile_macro_micro.png",
 ) -> None:
-    """Stacked bar per mode (crypto/db read/db write/serialize/other) for one
-    TPS level.
+    """Stacked bar per mode (crypto/db read/db write/other) for one TPS
+    level.
 
     Bars are CPU microseconds **per payment** rather than the run's absolute
     seconds. A mode's absolute total scales with however many payments its

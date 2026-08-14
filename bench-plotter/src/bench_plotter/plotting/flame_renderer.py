@@ -4,8 +4,7 @@ Pyroscope's own ``/render?format=png`` is not implemented by the deployed
 server version (confirmed live: it silently falls back to JSON), so the image
 is built here with matplotlib -- one horizontal row per call-tree depth via
 ``ax.broken_barh``, root at the top. Frames matching a target function name
-(crypto / db read / db write / serialize, per mode -- see
-``profiling.mode_functions``)
+(crypto / db read / db write, per mode -- see ``profiling.mode_functions``)
 are colored to match the aggregate macro/micro bar chart's legend; everything
 else is neutral grey. Labels are skipped on frames narrower than a fixed
 fraction of the total width, the standard flamegraph convention -- a real
@@ -47,7 +46,6 @@ from .profile_bar_renderer import (
     _CRYPTO_COLOR,
     _DB_READ_COLOR,
     _DB_WRITE_COLOR,
-    _SERIALIZE_COLOR,
 )
 
 _OTHER_COLOR = "#cfcfcf"
@@ -72,9 +70,9 @@ def create_flame_graph(
 ) -> None:
     """Draw one flame graph PNG from a Pyroscope flamebearer payload.
 
-    ``highlight`` maps a function name to a hex color (crypto/db/serialize
-    functions for the mode this profile belongs to); unmatched frames render
-    neutral grey.
+    ``highlight`` maps a function name to a hex color (crypto/db functions
+    for the mode this profile belongs to); unmatched frames render neutral
+    grey.
     ``focus`` (default ``"run_endpoint_function"``) crops the graph to that
     function's outermost occurrence(s) instead of rendering the full process
     stack; pass ``None`` to render the whole tree from the true root.
@@ -167,7 +165,6 @@ def create_flame_graph(
         mpatches.Patch(color=_CRYPTO_COLOR, label="crypto (verify)"),
         mpatches.Patch(color=_DB_READ_COLOR, label="db read (mget)"),
         mpatches.Patch(color=_DB_WRITE_COLOR, label="db write (run_script)"),
-        mpatches.Patch(color=_SERIALIZE_COLOR, label="serialize"),
         mpatches.Patch(color=_OTHER_COLOR, label="other"),
     ]
     fig.legend(

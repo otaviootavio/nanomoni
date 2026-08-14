@@ -18,7 +18,6 @@ from bench_plotter.plotting.profile_bar_renderer import (
     _CRYPTO_COLOR,
     _DB_READ_COLOR,
     _DB_WRITE_COLOR,
-    _SERIALIZE_COLOR,
 )
 
 # A signature-mode request: the endpoint calls crypto, a repository read that
@@ -98,10 +97,11 @@ def _run(
 class TestExtractRecord:
     def test_computes_macro_micro_split(self) -> None:
         # sampleRate=10: ticks/10 = seconds. crypto=10, db read=mget(12) with
-        # the nested mget(8) counted once, db write=run_script(10), serialize=3,
-        # other = 80 - 10 - 12 - 10 - 3 = 45. The repository frames themselves
-        # (get_by_channel_id, save_payment) are not a bucket of their own, so
-        # their non-I/O, non-marshalling time falls into other.
+        # the nested mget(8) counted once, db write=run_script(10),
+        # other = 80 - 10 - 12 - 10 = 48. The repository frames themselves
+        # (get_by_channel_id, save_payment) and their marshalling
+        # (model_dump_json) are not a bucket of their own, so that time falls
+        # into other.
         record = _extract_record(_payload(), "signature", 200.0)
         assert record["total_time_s"] == pytest.approx(10.0)
         assert record["run_endpoint_time_s"] == pytest.approx(10.0)
@@ -109,8 +109,7 @@ class TestExtractRecord:
         assert record["crypto_time_s"] == pytest.approx(1.0)
         assert record["db_read_time_s"] == pytest.approx(1.2)
         assert record["db_write_time_s"] == pytest.approx(1.0)
-        assert record["serialize_time_s"] == pytest.approx(0.3)
-        assert record["other_time_s"] == pytest.approx(4.5)
+        assert record["other_time_s"] == pytest.approx(4.8)
 
     def test_unknown_mode_raises(self) -> None:
         with pytest.raises(KeyError):
@@ -118,12 +117,13 @@ class TestExtractRecord:
 
 
 class TestHighlightForMode:
-    def test_maps_crypto_db_and_serialize_functions_to_shared_colors(self) -> None:
+    def test_maps_crypto_and_db_functions_to_shared_colors(self) -> None:
         highlight = _highlight_for_mode("signature")
         assert highlight["verify_signature_bytes"] == _CRYPTO_COLOR
         assert highlight["mget"] == _DB_READ_COLOR
         assert highlight["run_script"] == _DB_WRITE_COLOR
-        assert highlight["model_dump_json"] == _SERIALIZE_COLOR
+        # No longer its own category -- falls to the flame graph's grey "other".
+        assert "model_dump_json" not in highlight
 
 
 async def _call(run: Dict[str, Any]) -> Any:
@@ -213,8 +213,7 @@ class TestFetchRunProfile:
         assert record["crypto_ms_per_payment"] == pytest.approx(1.0 / 9000 * 1000)
         assert record["db_read_ms_per_payment"] == pytest.approx(1.2 / 9000 * 1000)
         assert record["db_write_ms_per_payment"] == pytest.approx(1.0 / 9000 * 1000)
-        assert record["serialize_ms_per_payment"] == pytest.approx(0.3 / 9000 * 1000)
-        assert record["other_ms_per_payment"] == pytest.approx(4.5 / 9000 * 1000)
+        assert record["other_ms_per_payment"] == pytest.approx(4.8 / 9000 * 1000)
 
     @patch(_QUERY_RANGE, new_callable=AsyncMock)
     @patch(_RENDER, new_callable=AsyncMock)
@@ -274,7 +273,7 @@ class TestBuildProfileDrawTasks:
         assert len(by_fn["profile_macro_micro_table"]) == 1
 
         # Absolute and per-payment vs-TPS line charts, per micro category.
-        categories = ("crypto", "db_read", "db_write", "serialize", "other")
+        categories = ("crypto", "db_read", "db_write", "other")
         assert len(by_fn["sweep_line"]) == 2 * len(categories)
         line_paths = {t.output_path for t in by_fn["sweep_line"]}
         for category in categories:

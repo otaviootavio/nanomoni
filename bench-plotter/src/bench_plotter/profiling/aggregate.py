@@ -47,7 +47,6 @@ from bench_plotter.plotting.profile_bar_renderer import (
     _CRYPTO_COLOR,
     _DB_READ_COLOR,
     _DB_WRITE_COLOR,
-    _SERIALIZE_COLOR,
 )
 from bench_plotter.profiling.mode_functions import (
     MODE_FUNCTIONS,
@@ -64,7 +63,6 @@ _PER_PAYMENT_FIELDS = {
     "crypto_time_s": "crypto_ms_per_payment",
     "db_read_time_s": "db_read_ms_per_payment",
     "db_write_time_s": "db_write_ms_per_payment",
-    "serialize_time_s": "serialize_ms_per_payment",
     "other_time_s": "other_ms_per_payment",
 }
 
@@ -85,14 +83,13 @@ def _extract_record(payload: Dict[str, Any], mode: str, tps: float) -> Dict[str,
     macro_ticks = sum(n.total_ticks for n in endpoint_nodes)
 
     # The db buckets are measured at the store primitives (reads and writes go
-    # through different ones) and serialization happens in the repositories
-    # around those calls, so the four micro buckets are disjoint subtrees of the
-    # endpoint and need no netting out of one another. other is the residual of
-    # macro: framework, request/response handling, repository bookkeeping and
-    # the issuer round trip.
+    # through different ones), so the three micro buckets are disjoint subtrees
+    # of the endpoint and need no netting out of one another. other is the
+    # residual of macro: framework, request/response handling, serialization,
+    # repository bookkeeping and the issuer round trip.
     micro_ticks = sum_ticks_within(
         endpoint_nodes,
-        cfg["crypto"] + cfg["db_read"] + cfg["db_write"] + cfg["serialize"],
+        cfg["crypto"] + cfg["db_read"] + cfg["db_write"],
     )
 
     def bucket_ticks(names: List[str]) -> int:
@@ -101,10 +98,9 @@ def _extract_record(payload: Dict[str, Any], mode: str, tps: float) -> Dict[str,
     crypto_ticks = bucket_ticks(cfg["crypto"])
     db_read_ticks = bucket_ticks(cfg["db_read"])
     db_write_ticks = bucket_ticks(cfg["db_write"])
-    serialize_ticks = bucket_ticks(cfg["serialize"])
     other_ticks = max(
         0,
-        macro_ticks - crypto_ticks - db_read_ticks - db_write_ticks - serialize_ticks,
+        macro_ticks - crypto_ticks - db_read_ticks - db_write_ticks,
     )
 
     return {
@@ -116,7 +112,6 @@ def _extract_record(payload: Dict[str, Any], mode: str, tps: float) -> Dict[str,
         "crypto_time_s": seconds(crypto_ticks),
         "db_read_time_s": seconds(db_read_ticks),
         "db_write_time_s": seconds(db_write_ticks),
-        "serialize_time_s": seconds(serialize_ticks),
         "other_time_s": seconds(other_ticks),
         "payload": payload,
     }
@@ -241,7 +236,6 @@ def _highlight_for_mode(mode: str) -> Dict[str, str]:
     highlight = {name: _CRYPTO_COLOR for name in cfg["crypto"]}
     highlight.update({name: _DB_READ_COLOR for name in cfg["db_read"]})
     highlight.update({name: _DB_WRITE_COLOR for name in cfg["db_write"]})
-    highlight.update({name: _SERIALIZE_COLOR for name in cfg["serialize"]})
     return highlight
 
 
@@ -310,7 +304,7 @@ def build_profile_draw_tasks(
                     "records": rows,
                     "title": (
                         f"Vendor CPU time per payment: macro (endpoint) vs micro "
-                        f"(crypto/db read/db write/serialize) by mode "
+                        f"(crypto/db read/db write) by mode "
                         f"(tps={int(tps)})"
                     ),
                 },
@@ -355,12 +349,6 @@ def build_profile_draw_tasks(
             "CPU time (s)",
         ),
         (
-            "serialize_time_s",
-            "serialize_time_vs_tps.png",
-            "Serialize (dump/validate/json) time",
-            "CPU time (s)",
-        ),
-        (
             "other_time_s",
             "other_time_vs_tps.png",
             "Other (unaccounted) time",
@@ -382,12 +370,6 @@ def build_profile_draw_tasks(
             "db_write_ms_per_payment",
             "db_write_time_per_payment_vs_tps.png",
             "DB write (run_script) time per payment",
-            "CPU time per payment (ms)",
-        ),
-        (
-            "serialize_ms_per_payment",
-            "serialize_time_per_payment_vs_tps.png",
-            "Serialize (dump/validate/json) time per payment",
             "CPU time per payment (ms)",
         ),
         (
