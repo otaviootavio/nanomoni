@@ -168,7 +168,7 @@ fi
 
 # Best-effort plot generation: do not override the benchmark exit status.
 log "Generating sweep plots from benchmark_timing.json"
-if poetry run python -m bench_plotter.sweep benchmark_timing.json; then
+if poetry run python -m bench_plotter.sweep benchmark_timing.json --title true; then
   log "Sweep plots generated successfully"
 else
   log "Sweep plot generation failed (benchmark exit status unchanged)"

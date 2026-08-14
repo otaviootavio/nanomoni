@@ -2,17 +2,43 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+import math
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FuncFormatter
 
-from .common import PALETTE, save_figure
-from .table_renderer import render_table_figure, write_table_csv
+from .common import FIGSIZE_WIDE, PALETTE, save_figure
+from .table_renderer import format_cell, render_table_figure, write_table_csv
 
 _LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
 _MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
+
+
+def _log_value_formatter(v: float, _pos: Any) -> str:
+    """Tick formatter for a log-scale axis that labels each tick with its raw
+    value (via the same 3-sig-fig ``format_cell`` used in every companion
+    table), not its exponent -- so the chart's numbers read directly against
+    a table sharing the same units, and a sub-1 value (e.g. 0.25 MB) prints
+    as ``0.25``, not as a misleadingly negative exponent."""
+    return format_cell(v)
+
+
+def _exponent_only_formatter(base: int) -> Callable[[float, Any], str]:
+    """Tick formatter for a log-scale axis that labels each tick with the bare
+    exponent (e.g. ``12`` for ``2**12``), not the raw value -- for an axis
+    like total payments, whose ticks are all large, all positive integers and
+    not read against a raw-unit table, spelling out 4096, 8192, ... 4194304
+    is just noise next to the exponent that already says everything (the
+    axis label already notes the base, so the ``2^`` prefix on every tick
+    would only repeat it)."""
+
+    def _fmt(v: float, _pos: Any) -> str:
+        exponent = round(math.log(float(v), base))
+        return str(exponent)
+
+    return _fmt
 
 
 def _aligned_error_bars(
@@ -47,6 +73,10 @@ def create_sweep_line_plot(
     output_path: str = "sweep_line.png",
     x_axis_label: str = "TPS",
     y_axis_label: str = "Value",
+    x_log_base: Optional[int] = None,
+    x_true_log: bool = False,
+    y_log_base: Optional[int] = None,
+    show_title: bool = True,
 ) -> None:
     """Plot one or more series of (x, y) points against TPS.
 
@@ -55,14 +85,42 @@ def create_sweep_line_plot(
     ``color``, ``linestyle``, ``marker``, and absolute error bounds
     ``y_low`` / ``y_high`` (drawn as asymmetric error bars). Missing style keys
     fall back to the index-based palette / linestyle / marker cycle.
+
+    ``x_log_base``, when given without ``x_true_log``, treats the x-values as
+    a doubling sweep and plots them by *rank* (0, 1, 2, ...) on a plain linear
+    axis starting at 0, rather than by raw value -- a real doubling sweep is
+    already evenly spaced by rank, so this avoids both the raw values'
+    crowding on a linear axis and a true log axis's left margin gap before
+    the first point. The axis label notes the ``2^X`` growth pattern;
+    ``x_log_base`` only controls that note's base, not the plotted scale.
+
+    ``x_true_log``, combined with ``x_log_base``, switches the x-axis itself
+    to a real log scale of that base instead of the rank-remap above --
+    ticked at each power of the base and labelled by the bare exponent (the
+    axis label's ``2^X`` note, shared with the rank-remap case, is what says
+    a tick reading ``12`` means ``2**12``), not the raw value: unlike
+    ``y_log_base`` below, this axis's ticks are not read against a
+    companion table's raw units, so spelling out every large tick value in
+    full would only add noise the exponent already resolves. Use this when
+    the axis needs to be read as an actual quantity (e.g. total payments)
+    rather than just evenly spaced ranks.
+
+    ``y_log_base``, when given, switches the y-axis itself to a log scale of
+    that base, ticked at each power of the base but labelled with the raw
+    value at that tick (not the exponent) -- y-values here are not a
+    controlled doubling sweep the way x-values are, so unlike ``x_log_base``
+    this does change the plotted scale. Labelling by raw value keeps a chart
+    using this readable against a companion table in the same units.
     """
     if not series_list:
         print("No series provided for sweep line plot")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=FIGSIZE_WIDE)
     max_value = 0.0
-    any_drawn = False
+    all_x: List[float] = []
+    all_y: List[float] = []
+    prepared: List[Dict[str, Any]] = []
 
     for idx, series in enumerate(series_list):
         x_values = series.get("x_values", [])
@@ -77,6 +135,11 @@ def create_sweep_line_plot(
         for i, (x, y) in enumerate(zip(x_values, y_values)):
             if x is None or y is None:
                 continue
+            # Log scales cannot place non-positive points at all.
+            if x_log_base and float(x) <= 0:
+                continue
+            if y_log_base and float(y) <= 0:
+                continue
             lo = y_low[i] if y_low is not None and i < len(y_low) else None
             hi = y_high[i] if y_high is not None and i < len(y_high) else None
             triples.append((float(x), float(y), lo, hi))
@@ -87,15 +150,52 @@ def create_sweep_line_plot(
         ys = [t[1] for t in triples]
         lows = [t[2] for t in triples]
         highs = [t[3] for t in triples]
+        all_x.extend(xs)
+        all_y.extend(ys)
+        prepared.append(
+            {
+                "idx": idx,
+                "label": label,
+                "xs": xs,
+                "ys": ys,
+                "lows": lows,
+                "highs": highs,
+                "has_bounds": y_low is not None and y_high is not None,
+                "color": series.get("color"),
+                "linestyle": series.get("linestyle"),
+                "marker": series.get("marker"),
+            }
+        )
 
-        color = series.get("color") or PALETTE[idx % len(PALETTE)]
-        linestyle = series.get("linestyle") or _LINESTYLES[idx % len(_LINESTYLES)]
-        marker = series.get("marker") or _MARKERS[idx % len(_MARKERS)]
+    if not prepared:
+        plt.close(fig)
+        print("No drawable points for sweep line plot")
+        return
+
+    # Rank-remap x to plain integer steps *before* plotting -- a doubling
+    # sweep is already evenly spaced by rank, so this needs no axis-scale
+    # trick at all, unlike the y-axis log transform below. Skipped when
+    # ``x_true_log`` asks for a real log axis instead (raw values, not ranks).
+    rank_by_x: Optional[Dict[float, int]] = None
+    if x_log_base and not x_true_log:
+        rank_by_x = {v: i for i, v in enumerate(sorted(set(all_x)))}
+        for series in prepared:
+            series["xs"] = [rank_by_x[x] for x in series["xs"]]
+
+    drawn_count = 0
+    for series in prepared:
+        idx = series["idx"]
+        label = series["label"]
+        xs = series["xs"]
+        ys = series["ys"]
+        lows = series["lows"]
+        highs = series["highs"]
+        color = series["color"] or PALETTE[idx % len(PALETTE)]
+        linestyle = series["linestyle"] or _LINESTYLES[idx % len(_LINESTYLES)]
+        marker = series["marker"] or _MARKERS[idx % len(_MARKERS)]
         # Only draw error bars when the series explicitly provided bounds.
         yerr = (
-            _aligned_error_bars(ys, lows, highs)
-            if y_low is not None and y_high is not None
-            else None
+            _aligned_error_bars(ys, lows, highs) if series["has_bounds"] else None
         )
 
         if yerr is not None:
@@ -126,21 +226,65 @@ def create_sweep_line_plot(
                 label=label,
             )
             max_value = max(max_value, max(ys))
-        any_drawn = True
+        drawn_count += 1
 
-    if not any_drawn:
+    if not drawn_count:
         plt.close(fig)
         print("No drawable points for sweep line plot")
         return
 
-    ax.set_xlabel(x_axis_label, fontsize=14)
-    ax.set_ylabel(y_axis_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+    if rank_by_x is not None:
+        ax.set_xticks(list(range(len(rank_by_x))))
+        ax.set_xlim(left=0)
+        x_axis_label = f"{x_axis_label} -- X ({x_log_base}^X)"
+    elif x_log_base and x_true_log:
+        positive_x = [x for x in all_x if x > 0]
+        lo_exp = math.floor(math.log(min(positive_x), x_log_base))
+        hi_exp = math.ceil(math.log(max(positive_x), x_log_base))
+        xticks = [float(x_log_base) ** e for e in range(lo_exp, hi_exp + 1)]
+        ax.set_xscale("log", base=x_log_base)
+        ax.set_xticks(xticks)
+        ax.set_xlim(xticks[0], xticks[-1])
+        ax.minorticks_off()
+        ax.xaxis.set_major_formatter(
+            FuncFormatter(_exponent_only_formatter(x_log_base))
+        )
+        x_axis_label = f"{x_axis_label} -- X ({x_log_base}^X)"
+
+    if y_log_base:
+        positive_y = [y for y in all_y if y > 0]
+        lo_exp = math.floor(math.log(min(positive_y), y_log_base))
+        hi_exp = math.ceil(math.log(max(positive_y), y_log_base))
+        yticks = [float(y_log_base) ** e for e in range(lo_exp, hi_exp + 1)]
+        ax.set_yscale("log", base=y_log_base)
+        ax.set_yticks(yticks)
+        ax.set_ylim(yticks[0], yticks[-1])
+        ax.minorticks_off()
+        ax.yaxis.set_major_formatter(FuncFormatter(_log_value_formatter))
+        y_axis_label = f"{y_axis_label} (log{y_log_base} scale)"
+
+    ax.set_xlabel(x_axis_label, fontsize=20)
+    ax.set_ylabel(y_axis_label, fontsize=20)
+    ax.tick_params(axis="both", which="major", labelsize=17)
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=12)
-    ax.tick_params(axis="both", which="major", labelsize=12)
-    top_limit = 1.0 if max_value <= 0 else max_value * 1.1
-    ax.set_ylim(bottom=0, top=top_limit)
+    # Legend above the axes (not inside, upper-left) and sized to match, so
+    # every vs-TPS chart reads identically to the resource-consumption
+    # charts (timeseries_renderers.create_multi_line_plot) rather than
+    # falling back to the smaller rc-theme defaults. Wrapped at 3/row so
+    # five modes take two rows instead of one wide row; the title's pad
+    # reserves room for that between it and the axes.
+    ax.legend(
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.0),
+        ncol=min(3, max(1, drawn_count)),
+        fontsize=20,
+        frameon=False,
+    )
+    if show_title:
+        ax.set_title(title, fontsize=24, pad=135)
+    if not y_log_base:
+        top_limit = 1.0 if max_value <= 0 else max_value * 1.1
+        ax.set_ylim(bottom=0, top=top_limit)
     save_figure(fig, output_path)
     print(f"Sweep line plot saved to: {output_path}")
 
@@ -152,6 +296,7 @@ def create_identity_comparison_plot(
     x_axis_label: str = "Target",
     y_axis_label: str = "Achieved",
     identity_label: str = "y = x (ideal)",
+    show_title: bool = True,
 ) -> None:
     """Plot achieved-vs-target series against the ``y = x`` identity line.
 
@@ -161,7 +306,9 @@ def create_identity_comparison_plot(
     true 45 degrees and vertical distance below it *is* the shortfall -- on
     mismatched axes a client that fell 3x short can look like it tracked the
     target. The log scale is what makes a doubling sweep legible: on a linear
-    axis every point below 256 crowds into the left margin.
+    axis every point below 256 crowds into the left margin. Deliberately kept
+    square (not 4:3 like other charts here) -- that equal aspect is what makes
+    the identity line's 45 degrees geometrically true.
 
     Each entry in ``series_list`` is
     ``{"x_values": [...], "y_values": [...], "label": str}`` with optional
@@ -245,12 +392,27 @@ def create_identity_comparison_plot(
     ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}"))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}"))
 
-    ax.set_xlabel(x_axis_label, fontsize=14)
-    ax.set_ylabel(y_axis_label, fontsize=14)
-    ax.set_title(title, fontsize=16)
+    ax.set_xlabel(x_axis_label, fontsize=20)
+    ax.set_ylabel(y_axis_label, fontsize=20)
+    ax.tick_params(axis="both", which="major", labelsize=17)
+    if show_title:
+        ax.set_title(title, fontsize=24, pad=70)
     ax.grid(True, alpha=0.3, which="major")
-    ax.legend(fontsize=12, loc="upper left")
-    ax.tick_params(axis="both", which="major", labelsize=12)
+    # Anchored above the square axes, at a fontsize sized to fit within the
+    # 9in axes width: at the 20pt used elsewhere in this module, a 3-column
+    # legend with labels like "paytree_child_pair (real)" measures ~12.4in
+    # wide -- wider than the axes it's supposed to sit above. save_figure's
+    # bbox_inches="tight" then crops to that overflow, ballooning the saved
+    # image's width far past its height and squashing the square plot the
+    # equal-aspect log scale depends on. 14pt keeps a 3-column legend under
+    # 9in even for the longest label combination.
+    ax.legend(
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.0),
+        ncol=min(3, 1 + len(cleaned)),
+        fontsize=14,
+        frameon=False,
+    )
     save_figure(fig, output_path)
     print(f"Identity comparison plot saved to: {output_path}")
 
@@ -277,6 +439,7 @@ def create_delta_table(
     title: str = "Real TPS by target and protocol (% = of target achieved)",
     output_path: str = "delta_table.png",
     row_header: str = "Target TPS",
+    show_title: bool = True,
 ) -> None:
     """Render a target-TPS x protocol grid of real TPS as a CSV and a table PNG.
 
@@ -297,6 +460,11 @@ def create_delta_table(
 
     csv_path = write_table_csv(col_labels, cell_text, output_path)
     render_table_figure(
-        col_labels, cell_text, title, output_path, bold_first_column=True
+        col_labels,
+        cell_text,
+        title,
+        output_path,
+        bold_first_column=True,
+        show_title=show_title,
     )
     print(f"Delta table saved to: {output_path} (data: {csv_path})")

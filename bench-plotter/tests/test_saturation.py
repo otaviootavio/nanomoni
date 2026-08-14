@@ -436,7 +436,9 @@ class TestSaturationReportProfiling:
         )
         seen: Dict[str, Any] = {}
 
-        def _profile(runs: List[Dict[str, Any]], output_dir: str) -> List[str]:
+        def _profile(
+            runs: List[Dict[str, Any]], output_dir: str, **_kwargs: Any
+        ) -> List[str]:
             seen["runs"] = runs
             seen["output_dir"] = output_dir
             return [str(Path(output_dir) / "flame_signature.png")]

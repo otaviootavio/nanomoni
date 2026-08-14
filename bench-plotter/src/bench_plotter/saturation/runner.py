@@ -57,6 +57,7 @@ def _format_point(point: Dict[str, Any]) -> str:
 def generate_saturation_report(
     timing_path: str,
     output_root: str = "plots",
+    show_title: bool = True,
 ) -> Tuple[List[str], Dict[str, Any]]:
     """Read a sweep timing file, emit the chart + JSON summary.
 
@@ -95,6 +96,7 @@ def generate_saturation_report(
             x_axis_label="Expected TPS (client target)",
             y_axis_label="Real TPS (vendor, success)",
             identity_label="y = x (real = expected)",
+            show_title=show_title,
         )
         written.append(str(chart_path))
 
@@ -110,6 +112,7 @@ def generate_saturation_report(
                 f"(% = of target achieved; {client_label})"
             ),
             output_path=str(table_path),
+            show_title=show_title,
         )
         written.append(str(table_path))
         # create_delta_table writes a sibling CSV; record it so callers reporting
@@ -124,6 +127,7 @@ def generate_saturation_report(
         generate_profile_outputs(
             [run for run in runs if run.get("tps") is not None],
             output_dir=str(out_dir),
+            show_title=show_title,
         )
     )
 

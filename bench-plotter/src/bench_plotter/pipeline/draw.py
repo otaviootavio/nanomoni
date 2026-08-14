@@ -25,21 +25,26 @@ from bench_plotter.draw_worker import run_draw_task
 from .model import DrawTask
 
 
-def _run(task: DrawTask) -> Optional[str]:
+def _run(task: DrawTask, show_title: bool) -> Optional[str]:
     """Render a task; returns the written path, or None if it no-op'd."""
-    return run_draw_task(task.fn_name, task.output_path, task.kwargs)
+    kwargs = {**task.kwargs, "show_title": show_title}
+    return run_draw_task(task.fn_name, task.output_path, kwargs)
 
 
 def draw_all(
     tasks: List[DrawTask],
     workers: int | None = None,
     parallel: bool = True,
+    show_title: bool = True,
 ) -> Tuple[List[str], List[dict]]:
     """Render all tasks. Returns (written_paths, failures).
 
     ``parallel=False`` runs the tasks serially in-process (useful for debugging
     a rendering issue without the pool obscuring the traceback). Otherwise a
     fork-based process pool is used, sized to ``min(workers or cpu_count, n)``.
+    ``show_title`` is forwarded to every draw function as a ``show_title``
+    kwarg, overriding whatever the task's own ``kwargs`` carried -- the one
+    place that decides whether rendered figures get a title at all.
     """
     if not tasks:
         return [], []
@@ -48,7 +53,7 @@ def draw_all(
         written, failures = [], []
         for task in tasks:
             try:
-                result = _run(task)
+                result = _run(task, show_title)
                 if result:
                     written.append(result)
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
@@ -61,7 +66,7 @@ def draw_all(
     with ProcessPoolExecutor(
         max_workers=max_workers, mp_context=get_context("fork")
     ) as pool:
-        futures = {pool.submit(_run, task): task for task in tasks}
+        futures = {pool.submit(_run, task, show_title): task for task in tasks}
         for future, task in futures.items():
             try:
                 result = future.result()
