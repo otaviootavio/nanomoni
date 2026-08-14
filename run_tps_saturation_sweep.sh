@@ -163,7 +163,7 @@ fi
 
 # Best-effort report: do not override the benchmark exit status.
 log "Generating expected-vs-real TPS chart"
-if poetry run python -m bench_plotter.saturation "$TIMING_FILE"; then
+if poetry run python -m bench_plotter.saturation "$TIMING_FILE" --title true; then
   log "Saturation report generated"
 else
   log "Saturation report failed (benchmark exit status unchanged)"
