@@ -80,7 +80,8 @@ run_mode() {
     OVERALL_STATUS=1
   fi
   log "=== [$mode] finished: $result (window ${start}ms -> ${end}ms) ==="
-  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"status\":\"$result\",\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
+  # See run_benchmark.sh for why the plotter needs drain_sec recorded here.
+  TIMING_ENTRIES+=("{\"mode\":\"$mode\",\"tps\":$BENCHMARK_TARGET_TPS,\"total_requests\":$BENCHMARK_COUNT_VAR,\"status\":\"$result\",\"drain_sec\":$DRAIN_TIME,\"prometheus_timestamps\":{\"start_ms\":$start,\"finish_ms\":$end}}")
 }
 
 run_signature() {
