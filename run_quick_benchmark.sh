@@ -135,6 +135,13 @@ log "Building client image (tps_values=${TPS_VALUES[*]}, duration=${RUN_DURATION
 # Build the client image so the run uses current code (incl. the TPS delay plumbing).
 docker compose build client
 
+# Guarantee a clean starting keyspace even if a prior run was interrupted before
+# its post-run flush (e.g. killed mid-drain), so the first mode of this sweep
+# never inherits leftover channels/states/merkle nodes from an earlier run.
+log "Pre-sweep flush: clearing vendor and issuer datastores"
+docker compose exec -T redis-vendor redis-cli flushall >/dev/null || true
+docker compose exec -T redis-issuer redis-cli flushall >/dev/null || true
+
 log "Server run timestamp: $RUN_TS"
 
 for tps in "${TPS_VALUES[@]}"; do

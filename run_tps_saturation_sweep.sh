@@ -21,7 +21,7 @@ IFS=$'\n\t'
 # is bracketed within a factor of 2 no matter where it falls. The top two rungs
 # give headroom for CLIENT_VIRTUAL_CLIENTS > 1 runs to show a ceiling above what
 # a single virtual client could reach; harmless (just extra runtime) otherwise.
-TPS_VALUES=(16384)
+TPS_VALUES=(4096 8192 16384 32768 65536)
 
 # Virtual-client fan-out for this sweep (own keypair + channel + payment loop
 # each, plus its own vendor connection). Kept a multiple of VENDOR_API_WORKERS:
