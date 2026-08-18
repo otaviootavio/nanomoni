@@ -29,6 +29,19 @@ PALETTE = [
 FIGSIZE_STD = (8, 6)
 FIGSIZE_WIDE = (12, 9)
 
+# Final print size for the resource-usage overlay charts (client/vendor/issuer
+# CPU + memory time series): the paper places these at ~3.3in column width, so
+# rendering at that physical size directly -- rather than a large canvas
+# shrunk later -- is what keeps tick/legend text legible once printed.
+FIGSIZE_PRINT_TS = (3.3, 2.4)
+
+# Widened variant for the one overlay chart whose two-column, five-mode
+# legend ("paytree_child_pair" is the longest label) is naturally wider than
+# FIGSIZE_PRINT_TS's axes: at 3.3in the axes' right edge falls ~0.8in short
+# of the legend's right edge. 3.75in was measured (via
+# Legend.get_window_extent) as where the two align, rather than picked by eye.
+FIGSIZE_PRINT_TS_WIDE = (3.75, 2.4)
+
 _THEME_APPLIED = False
 
 

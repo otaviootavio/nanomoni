@@ -43,6 +43,8 @@ def overlay_job(
     section: str,
     series: List[Dict[str, Any]],
     y_axis_label: str,
+    show_linear_fit: bool = False,
+    figsize: tuple[float, float] | None = None,
 ) -> PlotJob:
     """Build an ``overlay`` job from resolved (spec, label) series entries."""
     return PlotJob(
@@ -55,6 +57,8 @@ def overlay_job(
         params={
             "series": series,  # [{"spec": QuerySpec, "label": str}]
             "unit_label": y_axis_label,
+            "show_linear_fit": show_linear_fit,
+            "figsize": figsize,
         },
     )
 

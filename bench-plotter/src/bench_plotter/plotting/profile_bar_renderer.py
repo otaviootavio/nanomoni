@@ -108,7 +108,7 @@ def _label_segments(
                 format_cell(value),
                 ha="center",
                 va="center",
-                fontsize=11,
+                fontsize=7,
                 fontweight="bold",
                 color=_INSIDE_TEXT_COLOR[color],
             )
@@ -119,7 +119,7 @@ def _label_segments(
             format_cell(value),
             ha="left",
             va="center",
-            fontsize=11,
+            fontsize=7,
             fontweight="bold",
             color=_OUTSIDE_TEXT_COLOR[color],
         )
@@ -179,8 +179,7 @@ def create_macro_micro_bar(
         running = [b + v for b, v in zip(running, segment_values)]
     totals = running
 
-    fig_width = max(7, 1.8 * len(modes))
-    fig, ax = plt.subplots(figsize=(fig_width, fig_width * 3 / 4))
+    fig, ax = plt.subplots(figsize=(3.6, 2.8))
     for (label, _, color), segment_values, bottom in zip(
         _BAR_SEGMENTS, values, bottoms
     ):
@@ -204,19 +203,19 @@ def create_macro_micro_bar(
             format_cell(total),
             ha="center",
             va="bottom",
-            fontsize=12,
+            fontsize=7,
             fontweight="bold",
         )
 
     ax.set_xticks(x)
     ax.set_xticklabels(modes, rotation=30, ha="right")
-    ax.set_ylabel("CPU time per payment (µs)")
+    ax.set_ylabel("CPU time per payment (µs)", fontsize=9)
     # Margin wide enough for a beside-the-bar label on the last mode too.
     ax.set_xlim(-0.5 - _BAR_WIDTH / 2, len(modes) - 0.5 + _BAR_WIDTH)
     ax.grid(True, axis="y", alpha=0.3)
-    # One step below the rc tick default: long mode names (e.g.
-    # "paytree_first_opt") rotated 30 degrees collide at the full size.
-    ax.tick_params(axis="both", which="major", labelsize=13)
+    # Below the rc tick default: long mode names (e.g. "paytree_first_opt")
+    # rotated 30 degrees collide at a larger size on this narrow a canvas.
+    ax.tick_params(axis="both", which="major", labelsize=8)
     # Headroom for the per-bar totals, which sit just above the tallest bar.
     if tallest > 0:
         ax.set_ylim(bottom=0, top=tallest * 1.1)
@@ -225,12 +224,12 @@ def create_macro_micro_bar(
     ax.legend(
         loc="lower left",
         bbox_to_anchor=(0.0, 1.0),
-        ncol=len(_BAR_SEGMENTS),
+        ncol=2,
         frameon=False,
-        fontsize=12,
+        fontsize=7,
     )
     if show_title:
-        ax.set_title(title, fontsize=18, pad=32)
+        ax.set_title(title, fontsize=10, pad=32)
 
     save_figure(fig, output_path)
     print(f"Macro/micro bar chart saved to: {output_path}")

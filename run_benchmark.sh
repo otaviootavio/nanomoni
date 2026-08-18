@@ -4,8 +4,8 @@ IFS=$'\n\t'
 
 # Target TPS sweep. For each TPS the client sends (TPS * RUN_DURATION_SEC)
 # payments paced at 1/TPS, yielding ~RUN_DURATION_SEC seconds of traffic.
-TPS_VALUES=(8 16 32 64 128 256 512 1024 2048 4096)
-RUN_DURATION_SEC=600
+TPS_VALUES=(256)
+RUN_DURATION_SEC=1200
 
 # One virtual client per this many target TPS (own keypair + channel + payment
 # loop each, see CLIENT_VIRTUAL_CLIENTS in envs/client.env.sh). A single

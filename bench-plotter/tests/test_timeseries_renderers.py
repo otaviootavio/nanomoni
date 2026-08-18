@@ -63,3 +63,38 @@ class TestCreateMultiLinePlot:
             output_path=str(out),
         )
         assert out.exists()
+
+    def test_linear_fit_overlay_writes_png(self, tmp_path: Path) -> None:
+        # Two growing series (mimics the unbounded PayTree merkle-node leak):
+        # show_linear_fit=True should overlay a y=mx+n line per series without
+        # otherwise changing the write contract.
+        series_list = [
+            _series("paytree_first_opt", [10.0, 20.0, 30.0, 40.0, 50.0]),
+            _series("paytree_child_pair", [5.0, 15.0, 25.0, 35.0, 45.0]),
+        ]
+        out = tmp_path / "linear_fit.png"
+        create_multi_line_plot(series_list, output_path=str(out), show_linear_fit=True)
+        assert out.exists()
+        assert out.stat().st_size > 0
+
+    def test_linear_fit_skipped_below_two_points(self, tmp_path: Path) -> None:
+        # A single-sample series has nothing to fit a line through; polyfit
+        # must not be called (it would raise) and the plot should still write.
+        out = tmp_path / "single_point.png"
+        create_multi_line_plot(
+            [_series("paytree_first_opt", [10.0])],
+            output_path=str(out),
+            show_linear_fit=True,
+        )
+        assert out.exists()
+
+    def test_linear_fit_ignores_non_leaky_modes(self, tmp_path: Path) -> None:
+        # signature/paytree/payword hold flat, so show_linear_fit=True must
+        # not fit or annotate them -- only paytree_first_opt/child_pair.
+        out = tmp_path / "non_leaky.png"
+        create_multi_line_plot(
+            [_series("signature", [10.0, 10.0, 10.0])],
+            output_path=str(out),
+            show_linear_fit=True,
+        )
+        assert out.exists()

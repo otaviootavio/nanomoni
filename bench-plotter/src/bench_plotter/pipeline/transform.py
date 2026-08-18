@@ -53,6 +53,8 @@ def _overlay_tasks(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
                 "series_list": series_list,
                 "title": job.title,
                 "y_axis_label": job.y_axis_label,
+                "show_linear_fit": job.params.get("show_linear_fit", False),
+                "figsize": job.params.get("figsize"),
             },
         )
     ]

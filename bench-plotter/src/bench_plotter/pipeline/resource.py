@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
+from bench_plotter.plotting.common import FIGSIZE_PRINT_TS_WIDE
+
 from .model import PlotJob
 from .plan_common import legend_and_names, overlay_job, specs_for
 
@@ -23,6 +25,12 @@ _STEADY_STATE_PREFIXES = (
 # payment requests themselves, so KiB/s over payments/s is the average request
 # size on the wire.
 _PER_PAYMENT_TARGET = ("Client Network (KiB/s)", "Output")
+
+# Chart(s) expected to grow roughly linearly over a run rather than fluctuate
+# around a plateau (e.g. an unbounded per-payment keyspace never reclaimed on
+# channel close) -- these get a least-squares y=mx+n trend line overlaid per
+# series so the growth rate is readable directly off the legend.
+_LINEAR_FIT_TITLES = ("Vendor Redis Memory Usage",)
 
 
 def build_resource_jobs(
@@ -53,6 +61,7 @@ def build_resource_jobs(
             output_path = str(section_dir / f"{stem}.png")
             series = [{"spec": r["spec"], "label": r["mode"]} for r in resolved]
 
+            is_linear_fit_chart = title.startswith(_LINEAR_FIT_TITLES)
             jobs.append(
                 overlay_job(
                     title=plot_title,
@@ -60,6 +69,8 @@ def build_resource_jobs(
                     section=section,
                     series=series,
                     y_axis_label=y_label,
+                    show_linear_fit=is_linear_fit_chart,
+                    figsize=FIGSIZE_PRINT_TS_WIDE if is_linear_fit_chart else None,
                 )
             )
             steady = section in _STEADY_STATE_SECTIONS and title.startswith(
