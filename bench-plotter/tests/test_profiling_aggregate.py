@@ -85,13 +85,17 @@ def _run(
     tps: float = 200.0,
     start_ms: int = 1_000_000,
     finish_ms: int = 1_100_000,
+    repeat: Optional[int] = None,
 ) -> Dict[str, Any]:
-    return {
+    run: Dict[str, Any] = {
         "mode": mode,
         "tps": tps,
         "total_requests": 12000,
         "prometheus_timestamps": {"start_ms": start_ms, "finish_ms": finish_ms},
     }
+    if repeat is not None:
+        run["repeat"] = repeat
+    return run
 
 
 class TestExtractRecord:
@@ -210,6 +214,8 @@ class TestFetchRunProfile:
         record = asyncio.run(_call(_run()))
         assert record is not None
         assert record["profile_payments"] == pytest.approx(9000.0)
+        # Window is 100s (1_000_000ms -> 1_100_000ms); 9000 payments => 90 TPS.
+        assert record["achieved_tps"] == pytest.approx(90.0)
         assert record["crypto_ms_per_payment"] == pytest.approx(1.0 / 9000 * 1000)
         assert record["db_read_ms_per_payment"] == pytest.approx(1.2 / 9000 * 1000)
         assert record["db_write_ms_per_payment"] == pytest.approx(1.0 / 9000 * 1000)
@@ -225,6 +231,8 @@ class TestFetchRunProfile:
         record = asyncio.run(_call(_run()))
         assert record is not None
         assert record["profile_payments"] is None
+        # No measured count -> fall back to the run's target TPS.
+        assert record["achieved_tps"] == pytest.approx(200.0)
         assert record["crypto_ms_per_payment"] is None
 
 
@@ -281,3 +289,60 @@ class TestBuildProfileDrawTasks:
             assert str(tmp_path / f"{category}_time_per_payment_vs_tps.png") in (
                 line_paths
             )
+
+
+class TestBuildProfileDrawTasksRepeats:
+    @patch(_QUERY_RANGE, new_callable=AsyncMock)
+    @patch(_RENDER, new_callable=AsyncMock)
+    def test_repeated_runs_get_distinct_flame_graphs_and_one_averaged_bar(
+        self,
+        mock_render: AsyncMock,
+        mock_query_range: AsyncMock,
+        tmp_path: Any,
+    ) -> None:
+        mock_render.return_value = _payload()
+        mock_query_range.return_value = _counter_payload([0.0, 9000.0])
+        runs = [
+            _run(mode="signature", tps=200.0, repeat=0),
+            _run(mode="signature", tps=200.0, repeat=1),
+            _run(mode="signature", tps=200.0, repeat=2),
+        ]
+        tasks = build_profile_draw_tasks(runs, str(tmp_path))
+        by_fn: Dict[str, list] = {}
+        for t in tasks:
+            by_fn.setdefault(t.fn_name, []).append(t)
+
+        # One flame graph per repeat, each with a distinct, repeat-tagged path.
+        flame_paths = {t.output_path for t in by_fn["flame_graph"]}
+        assert len(flame_paths) == 3
+        for rep in (0, 1, 2):
+            assert (
+                str(
+                    tmp_path
+                    / "tps200_req12000"
+                    / "profile"
+                    / f"flame_signature_rep{rep}.png"
+                )
+                in flame_paths
+            )
+
+        # But exactly one (averaged) bar chart for that TPS, not one per repeat.
+        assert len(by_fn["profile_macro_micro_bar"]) == 1
+
+    @patch(_QUERY_RANGE, new_callable=AsyncMock)
+    @patch(_RENDER, new_callable=AsyncMock)
+    def test_no_repeat_field_keeps_plain_flame_filename(
+        self,
+        mock_render: AsyncMock,
+        mock_query_range: AsyncMock,
+        tmp_path: Any,
+    ) -> None:
+        mock_render.return_value = _payload()
+        mock_query_range.return_value = _counter_payload([0.0, 9000.0])
+        tasks = build_profile_draw_tasks(
+            [_run(mode="signature", tps=200.0)], str(tmp_path)
+        )
+        flame_paths = {t.output_path for t in tasks if t.fn_name == "flame_graph"}
+        assert flame_paths == {
+            str(tmp_path / "tps200_req12000" / "profile" / "flame_signature.png")
+        }

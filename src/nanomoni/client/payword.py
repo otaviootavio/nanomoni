@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from asyncio import sleep
-from time import perf_counter
-
 from nanomoni.application.shared.payword_payloads import (
     PaywordOpenChannelRequestPayload,
 )
 from nanomoni.application.issuer.dtos import OpenChannelRequestDTO
 from nanomoni.application.vendor.payword_dtos import ReceivePaywordPaymentDTO
+from nanomoni.client.pacing import Pacer
 from nanomoni.crypto.payword import Payword
 from nanomoni.crypto.certificates import (
     json_to_bytes,
@@ -154,19 +152,9 @@ async def send_payments(
         payments: List of k counter values (monotonic sequence)
         inter_payment_delay: seconds to ``sleep`` between consecutive payments
     """
-    start = perf_counter()
+    pacer = Pacer(inter_payment_delay)
     for n, k in enumerate(payments):
-        if inter_payment_delay > 0:
-            target = start + n * inter_payment_delay
-            now = perf_counter()
-            if target > now:
-                await sleep(target - now)
-            elif now - target > inter_payment_delay:
-                # Fell behind by more than one slot (e.g. a stalled request) -
-                # resync the schedule instead of letting later iterations fire
-                # back-to-back to "catch up", which would burst well above the
-                # configured rate and contaminate steady-state measurements.
-                start = now - n * inter_payment_delay
+        await pacer.wait_for_slot(n)
         token_b64 = payword.payment_proof_b64(k=k)
         await vendor.send_payword_payment(
             channel_id,

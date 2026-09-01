@@ -36,6 +36,9 @@ from nanomoni.application.vendor.use_cases.paytree_first_opt_payment import (
 from nanomoni.application.vendor.use_cases.paytree_child_pair_payment import (
     PaytreeChildPairPaymentService,
 )
+from nanomoni.application.vendor.use_cases.paytree_second_opt_payment import (
+    PaytreeSecondOptPaymentService,
+)
 
 
 @dataclass(frozen=True)
@@ -63,12 +66,15 @@ class UseCaseVendorClient:
         vendor_public_key_der_b64: str,
         paytree_child_pair_payment_service: PaytreeChildPairPaymentService
         | None = None,
+        paytree_second_opt_payment_service: PaytreeSecondOptPaymentService
+        | None = None,
     ) -> None:
         self.payment_service = payment_service
         self.payword_payment_service = payword_payment_service
         self.paytree_std_payment_service = paytree_std_payment_service
         self.paytree_first_opt_payment_service = paytree_first_opt_payment_service
         self.paytree_child_pair_payment_service = paytree_child_pair_payment_service
+        self.paytree_second_opt_payment_service = paytree_second_opt_payment_service
         self.vendor_public_key_der_b64 = vendor_public_key_der_b64
 
     async def get_public_key(self) -> VendorPublicKeyDTO:
@@ -183,6 +189,63 @@ class UseCaseVendorClient:
                 paytree_max_i=paytree_max_i,
             )
             result = await self.paytree_first_opt_payment_service.receive_payment(
+                channel_id, dto
+            )
+            return UseCaseResponse(
+                status_code=200, content=json.dumps(result.model_dump()).encode("utf-8")
+            )
+        except ValueError as e:
+            return UseCaseResponse(
+                status_code=400, content=json.dumps({"detail": str(e)}).encode("utf-8")
+            )
+
+    # PayTree Second-Opt
+
+    async def receive_paytree_second_opt_payment(
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        paytree_max_i: int,
+    ) -> PaytreePaymentResponseDTO:
+        assert self.paytree_second_opt_payment_service is not None
+        dto = ReceivePaytreeFirstOptPaymentDTO(
+            i=i,
+            leaf_b64=leaf_b64,
+            siblings_b64=siblings_b64,
+            paytree_max_i=paytree_max_i,
+        )
+        return await self.paytree_second_opt_payment_service.receive_payment(
+            channel_id, dto
+        )
+
+    async def request_channel_settlement_paytree_second_opt(
+        self, channel_id: str
+    ) -> None:
+        assert self.paytree_second_opt_payment_service is not None
+        dto = CloseChannelDTO(channel_id=channel_id)
+        await self.paytree_second_opt_payment_service.settle_channel(dto)
+
+    async def receive_paytree_second_opt_payment_raw(
+        self,
+        channel_id: str,
+        *,
+        i: int,
+        leaf_b64: str,
+        siblings_b64: list[str],
+        paytree_max_i: int,
+    ) -> UseCaseResponse:
+        assert self.paytree_second_opt_payment_service is not None
+        try:
+            dto = ReceivePaytreeFirstOptPaymentDTO(
+                i=i,
+                leaf_b64=leaf_b64,
+                siblings_b64=siblings_b64,
+                paytree_max_i=paytree_max_i,
+            )
+            result = await self.paytree_second_opt_payment_service.receive_payment(
                 channel_id, dto
             )
             return UseCaseResponse(

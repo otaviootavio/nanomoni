@@ -228,3 +228,113 @@ class TestRunDrawTask:
         monkeypatch.setitem(DRAW_REGISTRY, "_write", _write)
         assert run_draw_task("_write", str(out), {}) == str(out)
         assert out.exists()
+
+
+class TestRepeatCollapseInTransform:
+    """Repeated intervals of the same mode must collapse to one series/box."""
+
+    def test_overlay_collapses_same_mode_repeats_to_one_series(self) -> None:
+        from bench_plotter.pipeline.transform import _series_list
+
+        runs = [
+            {
+                "interval_mode": "signature",
+                "timestamps": [100.0, 101.0, 102.0],
+                "values": [1.0, 1.0, 1.0],
+            },
+            {
+                "interval_mode": "signature",
+                "timestamps": [200.0, 201.0, 202.0],
+                "values": [3.0, 3.0, 3.0],
+            },
+            {
+                "interval_mode": "paytree",
+                "timestamps": [300.0, 301.0, 302.0],
+                "values": [5.0, 5.0, 5.0],
+            },
+        ]
+        series = _series_list(runs)
+        assert len(series) == 2
+        by_label = {s["label"]: s for s in series}
+        assert by_label["signature"]["values"] == pytest.approx([2.0, 2.0, 2.0])
+        assert "values_low" in by_label["signature"]
+        assert "values_high" in by_label["signature"]
+        assert by_label["paytree"]["values"] == [5.0, 5.0, 5.0]
+        assert "values_low" not in by_label["paytree"]
+
+    def test_steady_state_pools_same_mode_repeats_into_one_box(self) -> None:
+        from bench_plotter.pipeline.steady_state_transform import (
+            _pool_repeats_by_mode,
+            transform_steady_state,
+        )
+
+        # Flat plateaus so steady_state_samples keeps the samples.
+        runs = [
+            {"interval_mode": "signature", "values": [10.0] * 10},
+            {"interval_mode": "signature", "values": [12.0] * 10},
+            {"interval_mode": "paytree", "values": [5.0] * 10},
+        ]
+        pooled = _pool_repeats_by_mode(runs)
+        assert len(pooled) == 2
+        by_mode = {r["interval_mode"]: r for r in pooled}
+        assert len(by_mode["signature"]["values"]) == 20
+        assert len(by_mode["paytree"]["values"]) == 10
+
+        # End-to-end through transform_steady_state with a fake cache.
+        from bench_plotter.pipeline.model import PlotJob, QuerySpec
+
+        specs = [
+            QuerySpec("up", 1.0, 2.0),
+            QuerySpec("up", 3.0, 4.0),
+            QuerySpec("up", 5.0, 6.0),
+        ]
+
+        def _payload(values: List[float]) -> Dict[str, Any]:
+            # matrix_to_per_series_charts expects Prometheus matrix shape.
+            return {
+                "data": {
+                    "result": [
+                        {
+                            "metric": {},
+                            "values": [
+                                [float(i), str(v)] for i, v in enumerate(values)
+                            ],
+                        }
+                    ]
+                }
+            }
+
+        series = [
+            {"spec": specs[0], "label": "signature"},
+            {"spec": specs[1], "label": "signature"},
+            {"spec": specs[2], "label": "paytree"},
+        ]
+        cache = {
+            specs[0]: _payload([10.0] * 10),
+            specs[1]: _payload([12.0] * 10),
+            specs[2]: _payload([5.0] * 10),
+        }
+        job = PlotJob(
+            kind="steady_state",
+            title="Vendor CPU Usage (Cores)",
+            output_path="box.png",
+            section="vendor_resources",
+            specs=specs,
+            params={
+                "series": series,
+                "unit_label": "Cores",
+                "ecdf_path": "ecdf.png",
+                "violin_path": "violin.png",
+            },
+        )
+        tasks = transform_steady_state(job, cache)
+        assert len(tasks) == 3
+        box = next(t for t in tasks if t.fn_name == "steady_state_box")
+        assert box.kwargs["trim"] is False
+        assert len(box.kwargs["series_list"]) == 2
+        modes = {s["interval_mode"] for s in box.kwargs["series_list"]}
+        assert modes == {"signature", "paytree"}
+        ecdf = next(t for t in tasks if t.fn_name == "ecdf")
+        assert ecdf.kwargs["trim"] is False
+        violin = next(t for t in tasks if t.fn_name == "violin")
+        assert violin.kwargs["trim"] is False

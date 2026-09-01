@@ -45,22 +45,17 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
         channel_id: str,
         read_keys: list[str],
     ) -> tuple[Optional[PaymentChannel], dict[str, str]]:
+        """Read the channel and an arbitrary number of node keys in one MGET."""
         channel_key = f"payment_channel:{channel_id}"
         read_redis_keys = [_node_key(channel_id, k) for k in read_keys]
-        if len(read_redis_keys) < 2:
-            read_redis_keys.extend([read_redis_keys[0]] * (2 - len(read_redis_keys)))
-        values = await self._store.mget(
-            [channel_key, read_redis_keys[0], read_redis_keys[1]]
-        )
+        values = await self._store.mget([channel_key, *read_redis_keys])
         channel_raw = (values[0] or "").strip() if values else ""
         channel = (
             PaymentChannel.model_validate_json(channel_raw) if channel_raw else None
         )
         out: dict[str, str] = {}
-        for i, k in enumerate(read_keys[:2]):
-            val = (
-                (values[i + 1] or "").strip() if values and i + 1 < len(values) else ""
-            )
+        for i, k in enumerate(read_keys):
+            val = (values[i + 1] or "").strip() if values[i + 1] else ""
             out[k] = val
         return channel, out
 
@@ -135,3 +130,6 @@ class MerkleNodeRepositoryImpl(MerkleNodeRepository):
             count += 1
         await self._store.delete(index)
         return count + 1
+
+    async def count_nodes(self, channel_id: str) -> int:
+        return len(await self._store.zrevrange(_index_key(channel_id), 0, -1))

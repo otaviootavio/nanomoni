@@ -48,12 +48,15 @@ def extract_payment_mode_from_expr(expr: str) -> str:
     """Derive the payment mode from a PromQL metric prefix.
 
     Order matters: more specific "paytree_*" prefixes must be checked before
-    the bare "paytree_" one, since e.g. "paytree_child_pair_..." and
-    "paytree_first_opt_..." metric names both contain "paytree_" as a substring.
+    the bare "paytree_" one, since e.g. "paytree_child_pair_...",
+    "paytree_first_opt_...", and "paytree_second_opt_..." metric names all
+    contain "paytree_" as a substring.
     """
     ex = expr.lower()
     if "paytree_first_opt_" in ex:
         return "paytree_first_opt"
+    if "paytree_second_opt_" in ex:
+        return "paytree_second_opt"
     if "paytree_child_pair_" in ex:
         return "paytree_child_pair"
     if "paytree_" in ex:

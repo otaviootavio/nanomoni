@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from nanomoni.crypto.paytree import b64_to_bytes
 from nanomoni.protocol import (
     subroot_index_standard,
     verify_child_pair_close_proof,
     verify_child_pair_payment,
     verify_proof_with_leaf_hash,
+    verify_proof_with_leaf_hash_collecting_path,
 )
 
 
-def verify_paytree_proof_first_opt(
+def verify_paytree_proof_first_opt_collecting_path(
     *,
     i: int,
     leaf_b64: str,
@@ -19,15 +22,19 @@ def verify_paytree_proof_first_opt(
     subroot_b64: str,
     subroot_index: str,
     depth: int,
-) -> bool:
-    """Verify a first-opt pruned proof (leaf -> sub-root) using the protocol layer."""
+) -> Optional[list[bytes]]:
+    """Verify a first-opt pruned proof (leaf -> sub-root), returning every
+    ancestor hash computed while climbing from the leaf to the sub-root (one
+    per level) on success, or None if verification fails. Lets the caller
+    persist those newly derived nodes without re-walking the hash chain.
+    """
     try:
         leaf_hash = b64_to_bytes(leaf_b64)
         siblings = [b64_to_bytes(s) for s in siblings_b64]
         subroot = b64_to_bytes(subroot_b64)
     except Exception:
-        return False
-    return verify_proof_with_leaf_hash(
+        return None
+    return verify_proof_with_leaf_hash_collecting_path(
         leaf_hash=leaf_hash,
         leaf_index=i,
         siblings=siblings,

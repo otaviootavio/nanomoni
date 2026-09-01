@@ -31,9 +31,7 @@ async def test_vendor_rejects_duplicate_paytree_first_opt_payment_same_i_differe
         unit_value=1,
         max_i=max_i,
     )
-    channel_response = await issuer_client.open_paytree_first_opt_channel(
-        open_request
-    )
+    channel_response = await issuer_client.open_paytree_first_opt_channel(open_request)
     channel_id = channel_response.channel_id
 
     i = 10

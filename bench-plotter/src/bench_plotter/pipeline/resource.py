@@ -7,7 +7,10 @@ from typing import Any, Dict, List
 
 from bench_plotter.plotting.common import FIGSIZE_PRINT_TS_WIDE
 
-from .model import PlotJob
+from bench_plotter.plotting.query_utils import sanitize_query
+from bench_plotter.saturation.aggregate import achieved_tps_expr
+
+from .model import PlotJob, QuerySpec
 from .plan_common import legend_and_names, overlay_job, specs_for
 
 # Resource sections + chart-title prefixes that additionally get steady-state
@@ -119,9 +122,12 @@ def _per_payment_jobs(
     """The per-payment request-size table + bar chart jobs, or ``[]`` without a
     payment rate.
 
-    Needs each interval's ``tps`` to divide by; callers that build a plan from
-    intervals lacking it (the pipeline is usable standalone, not only from a
-    sweep) simply get no such jobs rather than a table/chart of blanks.
+    Needs each interval's ``tps`` as a fallback denominator; callers that build
+    a plan from intervals lacking it (the pipeline is usable standalone, not
+    only from a sweep) simply get no such jobs rather than a table/chart of
+    blanks. When Prometheus is reachable, the transform divides by the mode's
+    achieved TPS (vendor success-counter rate) instead of the configured
+    target.
     """
     tps_by_mode = {
         iv["mode"]: float(iv["tps"])
@@ -130,12 +136,35 @@ def _per_payment_jobs(
     }
     if not tps_by_mode:
         return []
-    specs = [r["spec"] for r in resolved]
-    params = {"series": series, "tps_by_mode": tps_by_mode}
+
+    achieved_tps_specs: Dict[str, QuerySpec] = {}
+    for iv in intervals:
+        mode = iv.get("mode")
+        if not mode or mode not in tps_by_mode:
+            continue
+        expr = achieved_tps_expr(str(mode))
+        if not expr:
+            continue
+        ts = iv.get("prometheus_timestamps", {}) or {}
+        start_ms, finish_ms = ts.get("start_ms"), ts.get("finish_ms")
+        if not start_ms or not finish_ms:
+            continue
+        achieved_tps_specs[str(mode)] = QuerySpec(
+            sanitize_query(expr),
+            start_ms / 1000.0,
+            finish_ms / 1000.0,
+        )
+
+    specs = [r["spec"] for r in resolved] + list(achieved_tps_specs.values())
+    params = {
+        "series": series,
+        "tps_by_mode": tps_by_mode,
+        "achieved_tps_specs": achieved_tps_specs,
+    }
     return [
         PlotJob(
             kind="per_payment_table",
-            title="Client egress per payment (steady-state mean / target TPS)",
+            title="Client egress per payment (steady-state mean / achieved TPS)",
             output_path=table_path,
             section=section,
             specs=specs,
@@ -143,7 +172,7 @@ def _per_payment_jobs(
         ),
         PlotJob(
             kind="per_payment_bar",
-            title="Client egress per payment by mode (steady-state mean / target TPS)",
+            title="Client egress per payment by mode (steady-state mean / achieved TPS)",
             output_path=bar_path,
             section=section,
             specs=specs,

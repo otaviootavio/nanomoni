@@ -151,9 +151,7 @@ def test_verify_close_proof_rejects_index_relabeling_forgery() -> None:
     # 2 modulo 2**len(siblings)==2 must be rejected, not just accepted as a
     # fluke of the honest k=2 case.
     for forged_k in (4, 6, 8, 10, 12, 14):
-        assert not verify_child_pair_close_proof(
-            root, forged_k, left, right, siblings
-        )
+        assert not verify_child_pair_close_proof(root, forged_k, left, right, siblings)
 
     # A k' with the wrong parity for the supplied siblings must also fail.
     assert not verify_child_pair_close_proof(root, 3, left, right, siblings)

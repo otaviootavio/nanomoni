@@ -13,12 +13,7 @@ from ....application.shared.paytree_payloads import PaytreeSettlementPayload
 from ....application.shared.serialization import payload_to_bytes
 from ....crypto.certificates import load_private_key_from_pem, sign_bytes
 from ....crypto.merkle_index import compute_tree_depth, key_eytzinger
-from ....crypto.merkle_tree import (
-    build_merkle_proof_indexes_for_leaf_a_given_ancestor_b,
-    build_node_from_dependencies,
-    get_proof_dependency_indexes,
-)
-from ....crypto.paytree import b64_to_bytes, bytes_to_b64
+from ...shared.paytree_proof_rebuild import rebuild_full_paytree_proof_first_opt
 from ...shared.paytree_scheme import PaytreeFirstOptCryptoScheme
 from ....domain.shared.crypto_proof import CryptoProof
 from ....domain.shared import IssuerClientFactory
@@ -80,7 +75,12 @@ async def _fetch_and_validate_channel(
 
 
 class PaytreeFirstOptPaymentService:
-    """Handles first-opt (pruned-proof) PayTree payments and settlement."""
+    """Handles first-opt (pruned-proof) PayTree payments and settlement.
+
+    Standalone class — independent of ``PaytreeSecondOptPaymentService``
+    (no shared base class between them), which duplicates this flow with its
+    own P+Q node-store writes.
+    """
 
     def __init__(
         self,
@@ -98,6 +98,11 @@ class PaytreeFirstOptPaymentService:
         self.crypto_scheme = crypto_scheme
         self.node_repo = node_repo
         self.vendor_private_key_pem = vendor_private_key_pem
+
+    async def _fetch_channel_from_issuer(self, channel_id: str) -> PaymentChannel:
+        return await _fetch_and_validate_channel(
+            channel_id, self.issuer_client_factory, self.vendor_public_key_der_b64
+        )
 
     async def receive_payment(
         self,
@@ -120,19 +125,7 @@ class PaytreeFirstOptPaymentService:
         )
 
         if payment_channel is None:
-            payment_channel = await _fetch_and_validate_channel(
-                channel_id, self.issuer_client_factory, self.vendor_public_key_der_b64
-            )
-            if payment_channel.commitment:
-                await node_repo.merge_nodes(
-                    channel_id, {prefetch_root_key: payment_channel.commitment}
-                )
-        else:
-            root_b64 = nodes.get(prefetch_root_key) or ""
-            if not root_b64 and payment_channel.commitment:
-                await node_repo.merge_nodes(
-                    channel_id, {prefetch_root_key: payment_channel.commitment}
-                )
+            payment_channel = await self._fetch_channel_from_issuer(channel_id)
 
         if payment_channel.is_closed:
             raise ValueError("Payment channel is closed")
@@ -140,14 +133,27 @@ class PaytreeFirstOptPaymentService:
         # From here on, every node-store key is derived from the channel's
         # authoritative max_steps — not dto.paytree_max_i, which only primed the
         # read above — same as verify() trusting channel.commitment (not client
-        # input) as the root. Reuse the prefetch if it happens to already cover
-        # these keys (the common case, since paytree_max_i normally matches);
-        # otherwise do one fresh, authoritative read.
+        # input) as the root. The prefetch keys are only reused when
+        # dto.paytree_max_i actually matches this channel's real capacity (the
+        # common case); otherwise they belong to a different tree shape
+        # entirely, so merging under them would just write a permanently-
+        # orphaned node-store entry — skip the write and fall through to a
+        # fresh authoritative read.
         depth = compute_tree_depth(payment_channel.max_steps)
-        root_key = key_eytzinger(depth, 0, depth)
-        subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
-            dto.i, len(dto.siblings_b64), depth
-        )
+        if prefetch_depth == depth:
+            root_key = prefetch_root_key
+            subroot_index = prefetch_subroot_index
+            root_b64 = nodes.get(root_key) or ""
+            if not root_b64 and payment_channel.commitment:
+                await node_repo.merge_nodes(
+                    channel_id, {root_key: payment_channel.commitment}
+                )
+        else:
+            root_key = key_eytzinger(depth, 0, depth)
+            subroot_index = infer_subroot_index_for_incoming_pruned_merkle_proof(
+                dto.i, len(dto.siblings_b64), depth
+            )
+
         if root_key not in nodes or subroot_index not in nodes:
             nodes = await node_repo.get_nodes(channel_id, [root_key, subroot_index])
 
@@ -227,6 +233,8 @@ class PaytreeFirstOptPaymentService:
             proof_fingerprint=dto.leaf_b64,
             created_at=created_at,
         )
+        # Just the pruned proof (no max_steps) — settlement rebuilds the full
+        # proof lazily from the node store (_rebuild_paytree_proof_for_settlement).
         store_proof = CryptoProof(
             scheme=PaymentScheme.PAYTREE,
             data={"leaf_b64": dto.leaf_b64, "siblings_b64": dto.siblings_b64},
@@ -270,36 +278,9 @@ class PaytreeFirstOptPaymentService:
         last_i: int,
         last_leaf_b64: str,
     ) -> Optional[tuple[str, list[str]]]:
-        node_repo = self.node_repo
-        depth = compute_tree_depth(channel.max_steps)
-        full_sibling_indexes = build_merkle_proof_indexes_for_leaf_a_given_ancestor_b(
-            0, last_i, depth, 0
+        return await rebuild_full_paytree_proof_first_opt(
+            self.node_repo, channel_id, channel, last_i, last_leaf_b64
         )
-        dependency_indexes = get_proof_dependency_indexes(full_sibling_indexes, depth)
-        node_keys = [key_eytzinger(lev, pos, depth) for lev, pos in dependency_indexes]
-        nodes_b64 = await node_repo.get_nodes(channel_id, node_keys)
-
-        node_hashes: dict[tuple[int, int], bytes] = {}
-        for lev, pos in dependency_indexes:
-            key = key_eytzinger(lev, pos, depth)
-            if (lev, pos) == (0, last_i):
-                node_hashes[(lev, pos)] = b64_to_bytes(last_leaf_b64)
-            else:
-                b64 = nodes_b64.get(key)
-                if b64:
-                    node_hashes[(lev, pos)] = b64_to_bytes(b64)
-                elif lev == depth and pos == 0 and channel.commitment:
-                    node_hashes[(lev, pos)] = b64_to_bytes(channel.commitment)
-
-        try:
-            full_siblings = [
-                build_node_from_dependencies(lev, pos, node_hashes, depth)
-                for lev, pos in full_sibling_indexes
-            ]
-        except KeyError:
-            return None
-
-        return last_leaf_b64, [bytes_to_b64(s) for s in full_siblings]
 
     async def settle_channel(self, dto: CloseChannelDTO) -> None:
         channel_id = dto.channel_id

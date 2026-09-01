@@ -10,18 +10,19 @@ lives in :mod:`.resource`.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 from bench_plotter.plotting.windowing import steady_state_samples
+from bench_plotter.saturation.aggregate import samples_from_payload, sustained_rate
 
-from .model import DrawTask, PlotJob, ResultCache
+from .model import DrawTask, PlotJob, QuerySpec, ResultCache
 from .series_runs import runs_from_series
 
 _COLUMNS = (
     "mode",
-    "target_tps",
+    "achieved_tps",
     "egress_kib_s_mean",
     "kib_per_payment",
     "bytes_per_payment",
@@ -30,16 +31,37 @@ _COLUMNS = (
 _BYTES_PER_KIB = 1024.0
 
 
+def _achieved_tps_for_mode(
+    mode: str,
+    cache: ResultCache,
+    achieved_tps_specs: Dict[str, QuerySpec],
+    fallback_tps: Optional[float],
+) -> Optional[float]:
+    """Prefer the vendor's sustained success rate; fall back to target TPS."""
+    spec = achieved_tps_specs.get(mode)
+    if spec is not None:
+        measured = sustained_rate(samples_from_payload(cache.get(spec)))
+        if measured is not None and measured > 0:
+            return float(measured)
+    if fallback_tps is not None and float(fallback_tps) > 0:
+        return float(fallback_tps)
+    return None
+
+
 def _per_payment_rows(job: PlotJob, cache: ResultCache) -> List[List[Any]]:
-    """Shared (mode, tps, KiB/s, KiB/payment, bytes/payment) rows for both the
-    table and bar-chart renderings of this job's cached rate series."""
+    """Shared (mode, achieved TPS, KiB/s, KiB/payment, bytes/payment) rows for
+    both the table and bar-chart renderings of this job's cached rate series."""
     runs = runs_from_series(job.params["series"], cache)
     tps_by_mode: Dict[str, Any] = job.params["tps_by_mode"]
+    achieved_tps_specs: Dict[str, QuerySpec] = (
+        job.params.get("achieved_tps_specs") or {}
+    )
 
     rows: List[List[Any]] = []
     for run in runs:
         mode = run["interval_mode"]
-        tps = tps_by_mode.get(mode)
+        fallback = tps_by_mode.get(mode)
+        tps = _achieved_tps_for_mode(mode, cache, achieved_tps_specs, fallback)
         samples = steady_state_samples(run["values"])
         if not tps or not samples:
             continue

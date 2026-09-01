@@ -34,9 +34,13 @@ duplicate/race branches) draw zero samples in a steady-state run.
 
 Function names are verified verbatim against a live Pyroscope trace of the
 vendor service (see profiling/aggregate.py docstring). ``verify`` is reused
-across the three paytree variants and payword: each mode's crypto scheme class
-defines its own ``verify`` method, but since extraction is scoped to one run's
-time window (one mode exercised per run), the bare name is unambiguous.
+across paytree-std, paytree-first-opt, paytree-child-pair and payword: each
+mode's crypto scheme class defines its own ``verify`` method, but since
+extraction is scoped to one run's time window (one mode exercised per run),
+the bare name is unambiguous. paytree-second-opt is the one exception: its
+accept path calls ``verify_collecting_path`` directly rather than going
+through ``verify()`` (needed to capture the ancestor hashes for P+Q node
+storage), so its crypto bucket names that function instead.
 ``mget`` names both our store method and redis-py's; only the outermost
 occurrence is counted, so the inner frame is not double-counted.
 
@@ -80,6 +84,19 @@ MODE_FUNCTIONS: Dict[str, ModeFunctions] = {
     "paytree_first_opt": {
         "endpoint": "receive_paytree_first_opt_payment",
         "crypto": ["verify"],
+        "db_read": STORE_READS,
+        "db_write": STORE_WRITES,
+    },
+    "paytree_second_opt": {
+        "endpoint": "receive_paytree_second_opt_payment",
+        # Unlike the other paytree variants, the accept path here calls
+        # PaytreeSecondOptCryptoScheme.verify_collecting_path(...) directly
+        # (to capture the ancestor hashes for P+Q storage), not verify() --
+        # verify() is only a thin wrapper used on the duplicate/replay branch,
+        # which draws ~zero samples in a steady-state run. Bare "verify" is
+        # deliberately omitted: it wraps verify_collecting_path, so including
+        # both would double-count ticks (see module docstring) for no benefit.
+        "crypto": ["verify_collecting_path"],
         "db_read": STORE_READS,
         "db_write": STORE_WRITES,
     },

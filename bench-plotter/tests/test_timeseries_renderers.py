@@ -98,3 +98,23 @@ class TestCreateMultiLinePlot:
             show_linear_fit=True,
         )
         assert out.exists()
+
+    def test_mean_std_band_writes_png_when_bounds_present(self, tmp_path: Path) -> None:
+        # Repeat-reduced series carry values_low/values_high; the renderer must
+        # draw the fill_between band without changing the write contract.
+        series = _series("signature", [10.0, 12.0, 11.0, 13.0, 12.0])
+        series["values_low"] = [9.0, 11.0, 10.0, 12.0, 11.0]
+        series["values_high"] = [11.0, 13.0, 12.0, 14.0, 13.0]
+        out = tmp_path / "band.png"
+        create_multi_line_plot([series], output_path=str(out))
+        assert out.exists()
+        assert out.stat().st_size > 0
+
+    def test_band_skipped_when_bounds_length_mismatch(self, tmp_path: Path) -> None:
+        # Mismatched band lengths must not crash -- fall back to mean-only line.
+        series = _series("signature", [10.0, 12.0, 11.0])
+        series["values_low"] = [9.0]  # wrong length
+        series["values_high"] = [11.0, 13.0, 12.0]
+        out = tmp_path / "band_mismatch.png"
+        create_multi_line_plot([series], output_path=str(out))
+        assert out.exists()

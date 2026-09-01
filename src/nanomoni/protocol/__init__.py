@@ -16,6 +16,7 @@ from .paytree_standard import (
     subroot_index_standard,
     verify_proof,
     verify_proof_with_leaf_hash,
+    verify_proof_with_leaf_hash_collecting_path,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "verify_child_pair_payment",
     "verify_proof",
     "verify_proof_with_leaf_hash",
+    "verify_proof_with_leaf_hash_collecting_path",
 ]

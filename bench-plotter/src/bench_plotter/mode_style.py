@@ -9,7 +9,7 @@ reverse edge would be circular).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from bench_plotter.plotting.common import PALETTE
 
@@ -18,6 +18,7 @@ MODE_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "*")
 KNOWN_MODES = (
     "paytree",
     "paytree_first_opt",
+    "paytree_second_opt",
     "paytree_child_pair",
     "payword",
     "signature",
@@ -47,29 +48,42 @@ def series_by_mode(
 
     ``x_key`` defaults to "tps" (every vs-TPS chart) but can be any other
     numeric scalar field (e.g. "total_requests" for a vs-total-payments chart).
+
+    When a row also carries ``<y_key>_low`` / ``<y_key>_high`` (as added by
+    ``bench_plotter.repeats.reduce_repeats`` when a point is the average of
+    several repeats), those are carried into the series as ``y_low`` /
+    ``y_high``, which ``sweep_renderers.create_sweep_line_plot`` then draws
+    as error bars. Rows without those fields behave exactly as before.
     """
-    by_mode: Dict[str, List[Tuple[float, float]]] = {}
+    low_key, high_key = f"{y_key}_low", f"{y_key}_high"
+    by_mode: Dict[str, List[Tuple[float, float, Optional[float], Optional[float]]]] = {}
     for row in scalars:
         y = row.get(y_key)
         x = row.get(x_key)
         if y is None or x is None:
             continue
         mode = row["mode"]
-        by_mode.setdefault(mode, []).append((float(x), float(y)))
+        by_mode.setdefault(mode, []).append(
+            (float(x), float(y), row.get(low_key), row.get(high_key))
+        )
 
     series: List[Dict[str, Any]] = []
     for mode in sorted(by_mode):
         points = sorted(by_mode[mode], key=lambda p: p[0])
         label = f"{mode}{label_suffix}" if label_suffix else mode
         style = mode_style(mode)
-        series.append(
-            {
-                "label": label,
-                "x_values": [p[0] for p in points],
-                "y_values": [p[1] for p in points],
-                "color": style["color"],
-                "marker": style["marker"],
-                "linestyle": linestyle,
-            }
-        )
+        entry: Dict[str, Any] = {
+            "label": label,
+            "x_values": [p[0] for p in points],
+            "y_values": [p[1] for p in points],
+            "color": style["color"],
+            "marker": style["marker"],
+            "linestyle": linestyle,
+        }
+        if any(p[2] is not None for p in points) or any(
+            p[3] is not None for p in points
+        ):
+            entry["y_low"] = [p[2] for p in points]
+            entry["y_high"] = [p[3] for p in points]
+        series.append(entry)
     return series

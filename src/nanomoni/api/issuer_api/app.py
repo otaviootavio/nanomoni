@@ -20,6 +20,7 @@ from .dependencies import get_store_dependency
 from .routers import (
     paytree_child_pair_channels,
     paytree_first_opt_channels,
+    paytree_second_opt_channels,
     paytree_std_channels,
     payment_channel,
     payword_channels,
@@ -70,6 +71,7 @@ def create_issuer_app() -> FastAPI:
     app.include_router(payword_channels.router, prefix="/api/v1/issuer")
     app.include_router(paytree_std_channels.router, prefix="/api/v1/issuer")
     app.include_router(paytree_first_opt_channels.router, prefix="/api/v1/issuer")
+    app.include_router(paytree_second_opt_channels.router, prefix="/api/v1/issuer")
     app.include_router(paytree_child_pair_channels.router, prefix="/api/v1/issuer")
 
     @app.get("/")

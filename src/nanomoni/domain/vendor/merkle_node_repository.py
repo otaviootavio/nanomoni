@@ -45,3 +45,9 @@ class MerkleNodeRepository(Protocol):
         ...
 
     async def delete(self, channel_id: str) -> int: ...
+
+    async def count_nodes(self, channel_id: str) -> int:
+        """Number of distinct node keys stored for this channel (P for
+        first-opt; P + Q for second-opt). Backed by the same
+        merkle_node_index used by delete()."""
+        ...

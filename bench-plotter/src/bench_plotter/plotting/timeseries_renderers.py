@@ -23,7 +23,11 @@ _MARKER_EVERY = 15
 # per-payment keyspace leak (see the PayTree merkle-node cleanup gap). Every
 # other mode holds roughly flat, so fitting them too would add near-zero
 # dashed lines and legend rows that dilute the two curves worth reading.
-_LINEAR_FIT_LABELS = frozenset({"paytree_first_opt", "paytree_child_pair"})
+# paytree_second_opt shares first-opt's sparse merkle-node store (same
+# cleanup gap) plus its own eagerly-stored full proof, so it leaks too.
+_LINEAR_FIT_LABELS = frozenset(
+    {"paytree_first_opt", "paytree_second_opt", "paytree_child_pair"}
+)
 
 
 def create_multi_line_plot(
@@ -94,12 +98,37 @@ def create_multi_line_plot(
             markersize=3.5,
             label=label,
         )
+        # Repeat-reduced series carry mean +/- sample-std bands (see
+        # repeats.reduce_repeat_timeseries); draw them as a translucent fill
+        # behind the mean line -- the timeseries analogue of the vs-TPS
+        # error bars in create_sweep_line_plot.
+        values_low = series.get("values_low")
+        values_high = series.get("values_high")
+        if (
+            values_low is not None
+            and values_high is not None
+            and len(values_low) == len(plot_elapsed)
+            and len(values_high) == len(plot_elapsed)
+        ):
+            ax.fill_between(
+                plot_elapsed,
+                values_low,
+                values_high,
+                color=color,
+                alpha=0.15,
+                linewidth=0,
+            )
+            band_highs = [float(v) for v in values_high if v is not None]
+            if band_highs:
+                max_value = max(max_value, max(band_highs))
         max_value = max(max_value, max(valid_values))
         drawn_count += 1
 
         if fit_m is not None:
             fit_line = fit_m * np.array(fit_t) + fit_n
-            ax.plot(fit_t, fit_line, color=color, linewidth=1.0, linestyle="--", alpha=0.8)
+            ax.plot(
+                fit_t, fit_line, color=color, linewidth=1.0, linestyle="--", alpha=0.8
+            )
             fit_notes.append((label, fit_m, color))
     ax.set_xlabel("Time (s)", fontsize=9)
     ax.set_ylabel(y_axis_label, fontsize=9)

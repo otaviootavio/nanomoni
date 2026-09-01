@@ -17,16 +17,23 @@ def create_steady_state_boxplot(
     output_path: str = "boxplot.png",
     y_axis_label: str = "Value",
     show_title: bool = True,
+    trim: bool = True,
 ) -> None:
     """Box plot of the stabilized (plateau) samples, one box per mode.
 
-    Warm-up and cool-down are trimmed via ``steady_state_samples`` so each box
-    reflects only the post-stabilization region.
+    With ``trim`` (default) warm-up and cool-down are dropped via
+    ``steady_state_samples`` so each box reflects only the post-stabilization
+    region. Pass ``trim=False`` when the values are already trimmed (and
+    possibly pooled across repeats) upstream -- matching ``create_ecdf_plot`` /
+    ``create_violin_plot``.
     """
     data: List[List[float]] = []
     labels: List[str] = []
     for idx, series in enumerate(series_list):
-        samples = steady_state_samples(series.get("values", []))
+        if trim:
+            samples = steady_state_samples(series.get("values", []))
+        else:
+            samples = [float(v) for v in series.get("values", []) if v is not None]
         if len(samples) < 3:
             continue
         data.append(samples)

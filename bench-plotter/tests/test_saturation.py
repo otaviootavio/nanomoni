@@ -21,7 +21,9 @@ from bench_plotter.saturation.aggregate import (
     achieved_tps_expr,
     build_delta_table,
     build_series,
+    counter_delta,
     ideal_traffic_span_seconds,
+    payments_served_expr,
     plateau_samples,
     rate_window_too_short,
     saturation_tps,
@@ -63,6 +65,54 @@ class TestAchievedTpsExpr:
 
     def test_unknown_mode_has_no_query(self) -> None:
         assert achieved_tps_expr("not_a_mode") is None
+
+
+class TestPaymentsServedExpr:
+    def test_is_the_raw_counter_without_rate(self) -> None:
+        expr = payments_served_expr("signature")
+        assert expr is not None
+        assert "rate(" not in expr
+        assert "payment_requests_total" in expr
+        assert 'status="success"' in expr
+
+    def test_unknown_mode_has_no_query(self) -> None:
+        assert payments_served_expr("not_a_mode") is None
+
+
+class TestCounterDelta:
+    def test_last_minus_first(self) -> None:
+        payload = {
+            "data": {
+                "result": [
+                    {
+                        "metric": {},
+                        "values": [[0.0, "100"], [10.0, "250"], [20.0, "400"]],
+                    }
+                ]
+            }
+        }
+        assert counter_delta(payload) == pytest.approx(300.0)
+
+    def test_sums_across_series(self) -> None:
+        payload = {
+            "data": {
+                "result": [
+                    {"metric": {"i": "0"}, "values": [[0.0, "10"], [5.0, "30"]]},
+                    {"metric": {"i": "1"}, "values": [[0.0, "5"], [5.0, "15"]]},
+                ]
+            }
+        }
+        assert counter_delta(payload) == pytest.approx(30.0)
+
+    def test_none_without_enough_samples(self) -> None:
+        assert counter_delta(None) is None
+        assert counter_delta({"data": {"result": []}}) is None
+        assert (
+            counter_delta(
+                {"data": {"result": [{"metric": {}, "values": [[0.0, "1"]]}]}}
+            )
+            is None
+        )
 
 
 def _samples(values: List[float], step: float = 5.0) -> List[Any]:

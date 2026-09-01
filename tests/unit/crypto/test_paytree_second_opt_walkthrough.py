@@ -357,7 +357,9 @@ def test_paytree_second_opt_walkthrough() -> None:
     """
     print("\n")
     print("[Test][SecondOpt] Start — pruned proof (leaf -> sub-root) per payment,")
-    print("                  verifier stores received siblings (P) AND computed path (Q)")
+    print(
+        "                  verifier stores received siblings (P) AND computed path (Q)"
+    )
     print()
     prover_secrets, prover_nodes, root, verifier_nodes, verifier_secrets, depth = (
         _run_standard_setup(NUM_LEAVES, LEAF_SECRETS)

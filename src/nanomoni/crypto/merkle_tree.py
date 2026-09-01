@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import hashlib
 
+from typing import Optional
+
 from nanomoni.crypto.merkle_index import (
     get_ancestor_at_level,
     get_node_dependency_indexes,
@@ -82,6 +84,45 @@ def build_merkle_tree(leaves: list[bytes]) -> tuple[bytes, list[list[bytes]]]:
     return root, tree_levels
 
 
+def verify_proof_to_known_node_collecting_path(
+    *,
+    leaf_hash: bytes,
+    leaf_index: int,
+    siblings: list[bytes],
+    known_node_hash: bytes,
+    known_node_level: int,
+) -> Optional[list[bytes]]:
+    """Verify a Merkle proof segment from leaf up to a known node, and return
+    every ancestor hash computed along the way.
+
+    Start with leaf hash; for each level, combine with sibling using left/right
+    order. On success, returns the list of intermediate node hashes computed
+    while climbing (one per level, from the leaf's immediate parent up to and
+    including known_node_hash itself) so a caller can persist those newly
+    derived nodes without recomputing this same walk a second time. Returns
+    None if verification fails.
+
+    siblings: one hash per level 0..known_node_level-1 (authentication path).
+    """
+    if leaf_index < 0 or known_node_level < 0:
+        return None
+    if len(siblings) != known_node_level:
+        return None
+
+    current = leaf_hash
+    current_index = leaf_index
+    computed: list[bytes] = []
+    for sibling in siblings:
+        left_is_first = (current_index % 2) == 0
+        current = combine_children(current, sibling, left_is_first)
+        current_index = current_index // 2
+        computed.append(current)
+
+    if current != known_node_hash:
+        return None
+    return computed
+
+
 def verify_proof_to_known_node(
     *,
     leaf_hash: bytes,
@@ -92,23 +133,19 @@ def verify_proof_to_known_node(
 ) -> bool:
     """Verify a Merkle proof segment from leaf up to a known node.
 
-    Start with leaf hash; for each level, combine with sibling using left/right
-    order. Success iff recomputed root matches known_node_hash.
-
-    siblings: one hash per level 0..known_node_level-1 (authentication path).
+    Thin bool wrapper over `verify_proof_to_known_node_collecting_path` — same
+    single hashing pass, path just discarded.
     """
-    if leaf_index < 0 or known_node_level < 0:
-        return False
-    if len(siblings) != known_node_level:
-        return False
-
-    current = leaf_hash
-    current_index = leaf_index
-    for sibling in siblings:
-        left_is_first = (current_index % 2) == 0
-        current = combine_children(current, sibling, left_is_first)
-        current_index = current_index // 2
-    return current == known_node_hash
+    return (
+        verify_proof_to_known_node_collecting_path(
+            leaf_hash=leaf_hash,
+            leaf_index=leaf_index,
+            siblings=siblings,
+            known_node_hash=known_node_hash,
+            known_node_level=known_node_level,
+        )
+        is not None
+    )
 
 
 def is_ancestor(

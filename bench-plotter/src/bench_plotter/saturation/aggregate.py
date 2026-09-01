@@ -87,6 +87,41 @@ def achieved_tps_expr(mode: str) -> Optional[str]:
     return f'rate({metric}{{job="vendor-api", status="success"}}[{_RATE_WINDOW}])'
 
 
+def payments_served_expr(mode: str) -> Optional[str]:
+    """PromQL for the vendor's raw success-counter series in ``mode``.
+
+    Same counter ``achieved_tps_expr`` wraps in ``rate()``, but without the rate
+    window -- callers that need a payment *count* (last-minus-first over a
+    window) use this with :func:`counter_delta`. Returns ``None`` for a mode
+    with no known counter.
+    """
+    metric = PAYMENT_COUNTER_METRIC_BY_MODE.get(mode)
+    if not metric:
+        return None
+    return f'{metric}{{job="vendor-api", status="success"}}'
+
+
+def counter_delta(payload: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Sum of each series' last-minus-first raw value.
+
+    ``None`` if no series had at least two samples in the window (nothing to
+    take a delta of), so the caller can tell "no data" apart from "zero
+    payments".
+    """
+    if not payload:
+        return None
+    charts = matrix_to_per_series_charts(payload.get("data", {}).get("result", []))
+    total = 0.0
+    found = False
+    for chart in charts:
+        data = [v for v in (chart.get("data") or []) if v is not None]
+        if len(data) < 2:
+            continue
+        found = True
+        total += data[-1] - data[0]
+    return total if found else None
+
+
 def samples_from_payload(
     payload: Optional[Dict[str, Any]],
 ) -> List[Tuple[float, float]]:

@@ -34,17 +34,18 @@ class SignatureRepositoryImpl(PaymentChannelRepositoryBaseImpl, SignatureReposit
             if result and result[0] is not None and result[0] != ""
             else 0
         )
-        payload = (
-            result[1] if len(result) > 1 and result[1] and result[1] != "" else None
-        )
 
         if code == 1:
-            if payload is None:
-                raise RuntimeError(
-                    "Unexpected: save_payment returned success but no payload"
-                )
-            return 1, SignatureState.model_validate_json(payload)
+            # Success: the script no longer echoes the stored payload back
+            # (it would just be payload_json above, verbatim) -- `new_state`
+            # is already the object the caller wants, so returning it
+            # directly skips both the larger run_script reply and a
+            # redundant model_validate_json re-parse of what was just sent.
+            return 1, new_state
         elif code == 0:
+            payload = (
+                result[1] if len(result) > 1 and result[1] and result[1] != "" else None
+            )
             return 0, SignatureState.model_validate_json(payload) if payload else None
         else:
             return 2, None

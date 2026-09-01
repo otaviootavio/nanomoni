@@ -68,6 +68,36 @@ class TestTransformPerPaymentTable:
         spec = QuerySpec("client_egress", 0.0, 100.0)
         assert transform_per_payment_table(_job(spec, {"payword": 256.0}), {}) == []
 
+    def test_prefers_achieved_tps_over_target(self) -> None:
+        # Target says 256 TPS but the vendor counter plateaued at 128; the
+        # per-payment size must divide by the measured rate (512 / 128 = 4 KiB).
+        egress = QuerySpec("client_egress", 0.0, 100.0)
+        achieved = QuerySpec("achieved_tps", 0.0, 100.0)
+        cache: ResultCache = {
+            egress: _payload([512.0] * 8),
+            achieved: _payload([128.0] * 8),
+        }
+        job = PlotJob(
+            kind="per_payment_table",
+            title="Client egress per payment",
+            output_path="plots/client_resources/out_per_payment.png",
+            section="client_resources",
+            specs=[egress, achieved],
+            params={
+                "series": [{"spec": egress, "label": "payword"}],
+                "tps_by_mode": {"payword": 256.0},
+                "achieved_tps_specs": {"payword": achieved},
+            },
+        )
+        tasks = transform_per_payment_table(job, cache)
+        assert len(tasks) == 1
+        (row,) = tasks[0].kwargs["rows"]
+        mode, tps, kib_s, kib_per_payment, bytes_per_payment = row
+        assert mode == "payword"
+        assert tps == pytest.approx(128.0)
+        assert kib_per_payment == pytest.approx(4.0)
+        assert bytes_per_payment == pytest.approx(4096.0)
+
 
 class TestTransformPerPaymentBar:
     def test_divides_egress_rate_by_the_payment_rate(self) -> None:

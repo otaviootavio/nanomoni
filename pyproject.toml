@@ -58,6 +58,7 @@ ignore_missing_imports = true
 markers = [
     "e2e: marks tests as end-to-end (requires docker compose)",
     "stress: marks tests as stress tests (requires docker compose)",
+    "integration: marks tests requiring real Redis but not the full API stack (skips if unavailable)",
 ]
 asyncio_mode = "auto"
 

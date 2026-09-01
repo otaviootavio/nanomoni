@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from nanomoni.crypto.merkle_index import key_eytzinger, level_position_from_eytzinger
 from nanomoni.crypto.merkle_tree import (
     build_merkle_proof_indexes_for_leaf_a_given_ancestor_b,
     is_ancestor,
     verify_proof_of_leaf_a_given_ancestor_b,
-    verify_proof_to_known_node,
+    verify_proof_to_known_node_collecting_path,
 )
 
 
@@ -39,6 +41,38 @@ def verify_proof(
     )
 
 
+def verify_proof_with_leaf_hash_collecting_path(
+    leaf_hash: bytes,
+    leaf_index: int,
+    siblings: list[bytes],
+    subroot_node: bytes,
+    subroot_index: str,
+    depth: int,
+) -> Optional[list[bytes]]:
+    """Verify a Merkle proof against a sub-root (leaf hash provided directly),
+    returning every ancestor hash computed while climbing from the leaf to the
+    sub-root (one per level) on success, or None if verification fails.
+
+    Used when the upper layer has leaf_hash (e.g. from API payload) rather than
+    the leaf preimage/secret. For standard proof to root: subroot = root at
+    (depth, 0), subroot_index = key_eytzinger(depth, 0, depth).
+    """
+    ancestor_level, ancestor_position = level_position_from_eytzinger(
+        int(subroot_index, 2), depth
+    )
+    if (ancestor_level, ancestor_position) != (0, leaf_index) and not is_ancestor(
+        ancestor_level, ancestor_position, 0, leaf_index
+    ):
+        return None
+    return verify_proof_to_known_node_collecting_path(
+        leaf_hash=leaf_hash,
+        leaf_index=leaf_index,
+        siblings=siblings,
+        known_node_hash=subroot_node,
+        known_node_level=ancestor_level,
+    )
+
+
 def verify_proof_with_leaf_hash(
     leaf_hash: bytes,
     leaf_index: int,
@@ -49,25 +83,15 @@ def verify_proof_with_leaf_hash(
 ) -> bool:
     """Verify a Merkle proof against a sub-root (leaf hash provided directly).
 
-    Used when the upper layer has leaf_hash (e.g. from API payload) rather than
-    the leaf preimage/secret. For standard proof to root: subroot = root at
-    (depth, 0), subroot_index = key_eytzinger(depth, 0, depth).
-
-    Returns True if valid, False otherwise.
+    Thin bool wrapper over `verify_proof_with_leaf_hash_collecting_path` — same
+    single hashing pass, path just discarded. Returns True if valid, False
+    otherwise.
     """
-    ancestor_level, ancestor_position = level_position_from_eytzinger(
-        int(subroot_index, 2), depth
-    )
-    if (ancestor_level, ancestor_position) != (0, leaf_index) and not is_ancestor(
-        ancestor_level, ancestor_position, 0, leaf_index
-    ):
-        return False
-    return verify_proof_to_known_node(
-        leaf_hash=leaf_hash,
-        leaf_index=leaf_index,
-        siblings=siblings,
-        known_node_hash=subroot_node,
-        known_node_level=ancestor_level,
+    return (
+        verify_proof_with_leaf_hash_collecting_path(
+            leaf_hash, leaf_index, siblings, subroot_node, subroot_index, depth
+        )
+        is not None
     )
 
 

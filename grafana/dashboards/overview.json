@@ -1785,6 +1785,32 @@
           "legendFormat": "Paytree Child-Pair (client_error)",
           "range": true,
           "refId": "J"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_second_opt_payment_requests_total{job=\"vendor-api\", status=\"success\"}[10s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Second-Opt",
+          "range": true,
+          "refId": "K"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "rate(paytree_second_opt_payment_requests_total{job=\"vendor-api\", status=\"client_error\"}[10s])",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Second-Opt (client_error)",
+          "range": true,
+          "refId": "L"
         }
       ],
       "title": "Vendor Payment TPS (success)",
@@ -2068,6 +2094,45 @@
           "legendFormat": "Paytree Child-Pair P50",
           "range": true,
           "refId": "O"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, \n  sum(rate(paytree_second_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Second-Opt P99",
+          "range": true,
+          "refId": "P"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, \n  sum(rate(paytree_second_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Second-Opt P95",
+          "range": true,
+          "refId": "Q"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "af7qj924y8ohsc"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, \n  sum(rate(paytree_second_opt_payment_request_duration_milliseconds_bucket{job=\"vendor-api\", status=\"success\"}[10s])) by (le)\n)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Paytree Second-Opt P50",
+          "range": true,
+          "refId": "R"
         }
       ],
       "title": "Vendor Payment Duration Average (ms)",

@@ -101,7 +101,9 @@ def _shadowed(node: FlameNode, closed: FrozenSet[str], target: FrozenSet[str]) -
     return node.name in target and node.name in closed
 
 
-def _close(node: FlameNode, closed: FrozenSet[str], target: FrozenSet[str]) -> FrozenSet[str]:
+def _close(
+    node: FlameNode, closed: FrozenSet[str], target: FrozenSet[str]
+) -> FrozenSet[str]:
     return closed | {node.name} if node.name in target else closed
 
 

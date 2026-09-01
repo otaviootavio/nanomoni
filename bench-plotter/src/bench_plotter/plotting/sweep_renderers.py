@@ -194,9 +194,7 @@ def create_sweep_line_plot(
         linestyle = series["linestyle"] or _LINESTYLES[idx % len(_LINESTYLES)]
         marker = series["marker"] or _MARKERS[idx % len(_MARKERS)]
         # Only draw error bars when the series explicitly provided bounds.
-        yerr = (
-            _aligned_error_bars(ys, lows, highs) if series["has_bounds"] else None
-        )
+        yerr = _aligned_error_bars(ys, lows, highs) if series["has_bounds"] else None
 
         if yerr is not None:
             ax.errorbar(

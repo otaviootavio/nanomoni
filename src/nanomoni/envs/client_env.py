@@ -31,7 +31,10 @@ class Settings(BaseModel):
     client_payment_count: int = 1
     client_channel_amount: int = 1
     # signature | payword | paytree | paytree_first_opt (paytree with pruned proofs, opt type 1)
-    # | paytree_child_pair (heap-indexed child reveal per payment)
+    # | paytree_second_opt (same wire proof and settle-time rebuild as
+    #   first_opt; the vendor additionally persists the computed ancestor
+    #   hashes from verification, not just the received nodes)
+    #   | paytree_child_pair (heap-indexed child reveal per payment)
     client_payment_mode: str = "signature"
     client_payword_unit_value: int = 1
     client_payword_max_k: Optional[int] = None

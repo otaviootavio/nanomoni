@@ -28,14 +28,14 @@ VENDOR_SCRIPTS: dict[str, str] = {
         local current_raw = redis.call('GET', latest_key)
         if not current_raw then
             redis.call('SET', latest_key, new_val)
-            return {1, new_val}
+            return {1, ''}
         end
 
         local current = cjson.decode(current_raw)
         local current_amount = tonumber(current.cumulative_owed_amount)
         if new_amount > current_amount then
             redis.call('SET', latest_key, new_val)
-            return {1, new_val}
+            return {1, ''}
         else
             return {0, current_raw}
         end

@@ -98,9 +98,9 @@ async def test_rebuild_succeeds_with_zero_repo_reads_when_extra_nodes_cover_ever
     leaf_b64 = bytes_to_b64(tree_levels[0][0])
 
     extra_nodes_b64 = {
-        key_eytzinger(level, get_sibling_position_at_level(0, level), DEPTH): bytes_to_b64(
-            tree_levels[level][get_sibling_position_at_level(0, level)]
-        )
+        key_eytzinger(
+            level, get_sibling_position_at_level(0, level), DEPTH
+        ): bytes_to_b64(tree_levels[level][get_sibling_position_at_level(0, level)])
         for level in range(DEPTH)
     }
     repo = _CountingNodeRepo({})
@@ -114,7 +114,9 @@ async def test_rebuild_succeeds_with_zero_repo_reads_when_extra_nodes_cover_ever
 
 
 @pytest.mark.asyncio
-async def test_rebuild_fails_instead_of_decomposing_a_target_into_its_children() -> None:
+async def test_rebuild_fails_instead_of_decomposing_a_target_into_its_children() -> (
+    None
+):
     """A target sibling not held at its own granularity must fail the rebuild,
     even when its two children ARE separately present in the store -- no
     second read is issued to try reconstructing it from them."""

@@ -97,7 +97,10 @@ async def test_receive_payment_persists_computed_path_alongside_received_sibling
     await service.receive_payment(
         CHANNEL_ID,
         ReceivePaytreeFirstOptPaymentDTO(
-            i=i1, leaf_b64=leaf1_b64, siblings_b64=siblings1_b64, paytree_max_i=MAX_STEPS
+            i=i1,
+            leaf_b64=leaf1_b64,
+            siblings_b64=siblings1_b64,
+            paytree_max_i=MAX_STEPS,
         ),
     )
     prior_sent.append(1)
@@ -122,7 +125,10 @@ async def test_receive_payment_persists_computed_path_alongside_received_sibling
     await service.receive_payment(
         CHANNEL_ID,
         ReceivePaytreeFirstOptPaymentDTO(
-            i=i2, leaf_b64=leaf2_b64, siblings_b64=siblings2_b64, paytree_max_i=MAX_STEPS
+            i=i2,
+            leaf_b64=leaf2_b64,
+            siblings_b64=siblings2_b64,
+            paytree_max_i=MAX_STEPS,
         ),
     )
     prior_sent.append(2)

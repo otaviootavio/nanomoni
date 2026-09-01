@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from asyncio import sleep
-from time import perf_counter
-
 from nanomoni.application.shared.paytree_payloads import (
     PaytreeOpenChannelRequestPayload,
 )
@@ -14,6 +11,7 @@ from nanomoni.application.vendor.paytree_dtos import (
     ReceivePaytreeFirstOptPaymentDTO,
     ReceivePaytreeChildPairPaymentDTO,
 )
+from nanomoni.client.pacing import Pacer
 from nanomoni.crypto.paytree import Paytree
 from nanomoni.crypto.certificates import (
     json_to_bytes,
@@ -132,19 +130,9 @@ async def send_std_payments(
     Although the tree leaves are still loaded in memory (as part of the Paytree
     object), generating proofs on-demand reduces peak memory usage.
     """
-    start = perf_counter()
+    pacer = Pacer(inter_payment_delay)
     for n, i in enumerate(payments):
-        if inter_payment_delay > 0:
-            target = start + n * inter_payment_delay
-            now = perf_counter()
-            if target > now:
-                await sleep(target - now)
-            elif now - target > inter_payment_delay:
-                # Fell behind by more than one slot (e.g. a stalled request) -
-                # resync the schedule instead of letting later iterations fire
-                # back-to-back to "catch up", which would burst well above the
-                # configured rate and contaminate steady-state measurements.
-                start = now - n * inter_payment_delay
+        await pacer.wait_for_slot(n)
         i_val, leaf_b64, siblings_b64 = paytree.payment_proof(i=i)
         await vendor.send_paytree_std_payment(
             channel_id,
@@ -165,20 +153,47 @@ async def send_first_opt_payments(
 ) -> None:
     """Send first-opt (pruned-proof) PayTree payments to the vendor."""
     prior_sent_indexes: list[int] = []
-    start = perf_counter()
+    pacer = Pacer(inter_payment_delay)
     for n, i in enumerate(payments):
-        if inter_payment_delay > 0:
-            target = start + n * inter_payment_delay
-            now = perf_counter()
-            if target > now:
-                await sleep(target - now)
-            elif now - target > inter_payment_delay:
-                start = now - n * inter_payment_delay
+        await pacer.wait_for_slot(n)
         i_val, leaf_b64, siblings_b64 = paytree.payment_proof_first_opt(
             i, prior_sent_indexes
         )
         prior_sent_indexes.append(i)
         await vendor.send_paytree_first_opt_payment(
+            channel_id,
+            ReceivePaytreeFirstOptPaymentDTO(
+                i=i_val,
+                leaf_b64=leaf_b64,
+                siblings_b64=siblings_b64,
+                paytree_max_i=paytree.max_i,
+            ),
+        )
+
+
+async def send_second_opt_payments(
+    vendor: VendorClientAsync,
+    channel_id: str,
+    paytree: Paytree,
+    payments: list[int],
+    inter_payment_delay: float = 0.0,
+) -> None:
+    """Send second-opt PayTree payments to the vendor.
+
+    Same pruned-proof wire format, verification, and settle-time rebuild as
+    first-opt; the client's proof generation is identical to
+    ``send_first_opt_payments``. The vendor additionally persists the
+    computed ancestor hashes from verification, not just the received nodes.
+    """
+    prior_sent_indexes: list[int] = []
+    pacer = Pacer(inter_payment_delay)
+    for n, i in enumerate(payments):
+        await pacer.wait_for_slot(n)
+        i_val, leaf_b64, siblings_b64 = paytree.payment_proof_first_opt(
+            i, prior_sent_indexes
+        )
+        prior_sent_indexes.append(i)
+        await vendor.send_paytree_second_opt_payment(
             channel_id,
             ReceivePaytreeFirstOptPaymentDTO(
                 i=i_val,
@@ -201,15 +216,9 @@ async def send_child_pair_payments(
     ``payments`` are Eytzinger node indexes k (must be sent in increasing
     order, each revealing the two children of node k).
     """
-    start = perf_counter()
+    pacer = Pacer(inter_payment_delay)
     for n, k in enumerate(payments):
-        if inter_payment_delay > 0:
-            target = start + n * inter_payment_delay
-            now = perf_counter()
-            if target > now:
-                await sleep(target - now)
-            elif now - target > inter_payment_delay:
-                start = now - n * inter_payment_delay
+        await pacer.wait_for_slot(n)
         k_val, left_b64, right_b64 = paytree.payment_proof_child_pair(k)
         await vendor.send_paytree_child_pair_payment(
             channel_id,

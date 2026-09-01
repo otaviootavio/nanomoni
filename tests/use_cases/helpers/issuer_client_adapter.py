@@ -65,6 +65,7 @@ class UseCaseIssuerClient:
         paytree_std_channel_service: PaytreeChannelService,
         paytree_first_opt_channel_service: PaytreeChannelService,
         paytree_child_pair_channel_service: PaytreeChannelService | None = None,
+        paytree_second_opt_channel_service: PaytreeChannelService | None = None,
     ) -> None:
         self.registration_service = registration_service
         self.payment_channel_service = payment_channel_service
@@ -73,6 +74,9 @@ class UseCaseIssuerClient:
         self.paytree_first_opt_channel_service = paytree_first_opt_channel_service
         self.paytree_child_pair_channel_service = (
             paytree_child_pair_channel_service or paytree_std_channel_service
+        )
+        self.paytree_second_opt_channel_service = (
+            paytree_second_opt_channel_service or paytree_first_opt_channel_service
         )
 
     async def register(self, dto: RegistrationRequestDTO) -> RegistrationResponseDTO:
@@ -191,6 +195,30 @@ class UseCaseIssuerClient:
             channel_id, dto
         )
 
+    # PayTree Second-Opt
+
+    async def open_paytree_second_opt_payment_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeOpenChannelResponseDTO:
+        return await self.paytree_second_opt_channel_service.open_channel(dto)
+
+    async def open_paytree_second_opt_channel(
+        self, dto: OpenChannelRequestDTO
+    ) -> PaytreeOpenChannelResponseDTO:
+        return await self.paytree_second_opt_channel_service.open_channel(dto)
+
+    async def get_paytree_second_opt_payment_channel(
+        self, dto: GetPaymentChannelRequestDTO
+    ) -> PaytreePaymentChannelResponseDTO:
+        return await self.paytree_second_opt_channel_service.get_channel(dto)
+
+    async def settle_paytree_second_opt_payment_channel(
+        self, channel_id: str, dto: PaytreeSettlementRequestDTO
+    ) -> CloseChannelResponseDTO:
+        return await self.paytree_second_opt_channel_service.settle_channel(
+            channel_id, dto
+        )
+
     # PayTree Child-Pair
 
     async def open_paytree_child_pair_payment_channel(
@@ -283,6 +311,19 @@ class UseCaseIssuerClient:
     ) -> UseCaseResponse:
         try:
             result = await self.paytree_first_opt_channel_service.open_channel(dto)
+            return UseCaseResponse(
+                status_code=201, content=json.dumps(result.model_dump()).encode("utf-8")
+            )
+        except ValueError as e:
+            return UseCaseResponse(
+                status_code=400, content=json.dumps({"detail": str(e)}).encode("utf-8")
+            )
+
+    async def open_paytree_second_opt_channel_raw(
+        self, dto: OpenChannelRequestDTO
+    ) -> UseCaseResponse:
+        try:
+            result = await self.paytree_second_opt_channel_service.open_channel(dto)
             return UseCaseResponse(
                 status_code=201, content=json.dumps(result.model_dump()).encode("utf-8")
             )

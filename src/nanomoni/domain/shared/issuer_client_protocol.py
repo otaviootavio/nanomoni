@@ -190,6 +190,22 @@ class IssuerClientProtocol(Protocol):
         dto: "PaytreeSettlementRequestDTO",
     ) -> "CloseChannelResponseDTO": ...
 
+    # PayTree Second-Opt Payment Channels
+
+    async def open_paytree_second_opt_payment_channel(
+        self, dto: "OpenChannelRequestDTO"
+    ) -> "PaytreeOpenChannelResponseDTO": ...
+
+    async def get_paytree_second_opt_payment_channel(
+        self, dto: "GetPaymentChannelRequestDTO"
+    ) -> "PaytreePaymentChannelResponseDTO": ...
+
+    async def settle_paytree_second_opt_payment_channel(
+        self,
+        channel_id: str,
+        dto: "PaytreeSettlementRequestDTO",
+    ) -> "CloseChannelResponseDTO": ...
+
     # PayTree Child-Pair Payment Channels
 
     async def open_paytree_child_pair_payment_channel(

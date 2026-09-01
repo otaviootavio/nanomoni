@@ -52,5 +52,7 @@ These never require running services.
 - `tests/use_cases/` — fast unit tests, in-memory only
 - `tests/e2e/` — end-to-end tests, require all services
 - `tests/bug/` — regression tests for documented bugs
-- `envs/` — environment variable scripts (`*.env.dev.sh` = local dev, `*.env.sh` = Docker)
+- `envs/` — environment variable scripts:
+  - `*.env.dev.sh` — no Docker for the app itself: `poetry run python -m nanomoni.main` / `nanomoni.issuer_main` on the host (only Redis runs in Docker, as a sidecar). Talks to `localhost`, single worker, `--reload` on. Use for quick iteration.
+  - `*.env.sh` — full Docker Compose: vendor/issuer/client all run as containers on the compose network (`redis-vendor`, `issuer`, etc. as hostnames), multi-worker, pinned to the benchmark's `cpuset` layout. Use for E2E tests and benchmark runs (`run_benchmark.sh`, `scripts/benchmark_*.sh`) — those require Docker involved end to end, so they always source the `.env.sh` variant, never `.env.dev.sh`.
 - `.claude/hooks/` — hook scripts enforcing the dev workflow above

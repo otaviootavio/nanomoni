@@ -72,6 +72,7 @@ _BAR_SEGMENTS = (
 
 _CSV_FIELDS = [
     "tps",
+    "total_requests",
     "mode",
     "total_time_s",
     "run_endpoint_time_s",
@@ -241,21 +242,36 @@ def create_macro_micro_table(
     output_path: str = "profile_macro_micro_table.png",
     show_title: bool = True,
 ) -> None:
-    """Write the combined (tps, mode) data as both a CSV and a rendered table PNG."""
+    """Write the combined (tps, total_requests, mode) data as both a CSV and a
+    rendered table PNG.
+
+    ``total_requests`` is its own column (not folded into the sort order
+    alone) because a duration sweep can put several rows at the same
+    ``(tps, mode)`` -- one per ``RUN_DURATION_SEC`` value -- and without it
+    those rows would be indistinguishable in the rendered table.
+    """
     if not records:
         print(f"No profile records for macro/micro table: {title}")
         return
 
-    sorted_rows = sorted(records, key=lambda r: (r["tps"], r["mode"]))
+    sorted_rows = sorted(
+        records, key=lambda r: (r["tps"], r.get("total_requests") or 0, r["mode"])
+    )
     raw_rows = [[row.get(field) for field in _CSV_FIELDS] for row in sorted_rows]
     csv_path = write_table_csv(_CSV_FIELDS, raw_rows, output_path)
 
     cell_text = [
-        [str(int(row["tps"])), row["mode"]]
-        + [format_cell(row.get(field)) for field in _CSV_FIELDS[2:]]
+        [
+            format_cell(row.get("tps")),
+            format_cell(row.get("total_requests")),
+            row["mode"],
+        ]
+        + [format_cell(row.get(field)) for field in _CSV_FIELDS[3:]]
         for row in sorted_rows
     ]
-    render_table_figure(_CSV_FIELDS, cell_text, title, output_path, show_title=show_title)
+    render_table_figure(
+        _CSV_FIELDS, cell_text, title, output_path, show_title=show_title
+    )
     print(f"Macro/micro table saved to: {output_path} (data: {csv_path})")
 
 

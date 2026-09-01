@@ -28,6 +28,7 @@ from .routers import (
     payments,
     paytree_child_pair_payments,
     paytree_first_opt_payments,
+    paytree_second_opt_payments,
     paytree_std_payments,
     payword_payments,
     tasks,
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(payword_payments.router, prefix="/api/v1/vendor")
     app.include_router(paytree_std_payments.router, prefix="/api/v1/vendor")
     app.include_router(paytree_first_opt_payments.router, prefix="/api/v1/vendor")
+    app.include_router(paytree_second_opt_payments.router, prefix="/api/v1/vendor")
     app.include_router(paytree_child_pair_payments.router, prefix="/api/v1/vendor")
 
     @app.get("/")

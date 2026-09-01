@@ -4,6 +4,8 @@ import asyncio
 from contextlib import AsyncExitStack
 from multiprocessing import get_context
 
+import uvloop
+
 from nanomoni.application.issuer.dtos import (
     RegistrationRequestDTO,
 )
@@ -23,6 +25,8 @@ from nanomoni.infrastructure.http.http_client import HttpError
 from nanomoni.infrastructure.issuer.issuer_client import AsyncIssuerClient
 from nanomoni.infrastructure.vendor.vendor_client_async import VendorClientAsync
 
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 PAYWORD_NOT_INITIALIZED = "PayWord object should be initialized"
 PAYTREE_NOT_INITIALIZED = "PayTree object should be initialized"
@@ -83,7 +87,7 @@ async def _run_virtual_client(
         final_cumulative_owed_amount = common.compute_final_cumulative_owed_amount(
             client_mode, payments, payword_unit_value
         )
-    elif client_mode in ("paytree", "paytree_first_opt"):
+    elif client_mode in ("paytree", "paytree_first_opt", "paytree_second_opt"):
         (
             paytree_obj,
             paytree_root_b64,
@@ -125,7 +129,12 @@ async def _run_virtual_client(
             payword_unit_value,
             payword_max_k,
         )
-    elif client_mode in ("paytree", "paytree_first_opt", "paytree_child_pair"):
+    elif client_mode in (
+        "paytree",
+        "paytree_first_opt",
+        "paytree_second_opt",
+        "paytree_child_pair",
+    ):
         open_dto = paytree.build_open_channel_request(
             client_private_key,
             client_public_key_der_b64,
@@ -195,6 +204,17 @@ async def _run_virtual_client(
             raise RuntimeError(PAYTREE_NOT_INITIALIZED)
         paytree_for_payments = paytree_obj
         await paytree.send_first_opt_payments(
+            vendor,
+            channel_id,
+            paytree_for_payments,
+            payments,
+            inter_payment_delay=delay,
+        )
+    elif client_mode == "paytree_second_opt":
+        if paytree_obj is None:
+            raise RuntimeError(PAYTREE_NOT_INITIALIZED)
+        paytree_for_payments = paytree_obj
+        await paytree.send_second_opt_payments(
             vendor,
             channel_id,
             paytree_for_payments,

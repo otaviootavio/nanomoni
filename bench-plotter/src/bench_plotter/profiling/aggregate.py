@@ -39,7 +39,10 @@ from bench_plotter.flamebearer import (
     sum_ticks_by_name,
     sum_ticks_within,
 )
-from bench_plotter.metric_queries import PAYMENT_COUNTER_METRIC_BY_MODE
+from bench_plotter.saturation.aggregate import (
+    counter_delta,
+    payments_served_expr,
+)
 from bench_plotter.mode_style import series_by_mode
 from bench_plotter.pipeline.draw import draw_all
 from bench_plotter.pipeline.model import DrawTask
@@ -54,7 +57,7 @@ from bench_plotter.profiling.mode_functions import (
     VENDOR_PROFILE_QUERY,
 )
 from bench_plotter.prometheus_fetch import query_range
-from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
+from bench_plotter.repeats import reduce_repeats
 
 _MAX_CONCURRENCY = 4
 
@@ -117,25 +120,6 @@ def _extract_record(payload: Dict[str, Any], mode: str, tps: float) -> Dict[str,
     }
 
 
-def _counter_delta(payload: Dict[str, Any]) -> Optional[float]:
-    """Sum of each series' last-minus-first raw value.
-
-    ``None`` if no series had at least two samples in the window (nothing to
-    take a delta of), so the caller can tell "no data" apart from "zero
-    payments".
-    """
-    charts = matrix_to_per_series_charts(payload.get("data", {}).get("result", []))
-    total = 0.0
-    found = False
-    for chart in charts:
-        data = [v for v in (chart.get("data") or []) if v is not None]
-        if len(data) < 2:
-            continue
-        found = True
-        total += data[-1] - data[0]
-    return total if found else None
-
-
 async def _payments_served(
     mode: str,
     start: float,
@@ -160,15 +144,15 @@ async def _payments_served(
     rather than degrading to a guess -- a per-payment number computed from a
     wrong payment count is worse than no number at all.
     """
-    metric = PAYMENT_COUNTER_METRIC_BY_MODE.get(mode)
-    if not metric:
+    expr = payments_served_expr(mode)
+    if not expr:
         return None
     payload = await query_range(
-        query=f'{metric}{{job="vendor-api", status="success"}}',
+        query=expr,
         start_unix=start,
         end_unix=end,
     )
-    return _counter_delta(payload)
+    return counter_delta(payload)
 
 
 def _add_per_payment_fields(record: Dict[str, Any]) -> None:
@@ -220,7 +204,12 @@ async def _fetch_run_profile(
         return None
 
     record["total_requests"] = run.get("total_requests")
+    record["repeat"] = run.get("repeat")
     record["profile_payments"] = payments
+    window_s = end - start
+    record["achieved_tps"] = (
+        payments / window_s if payments and window_s > 0 else float(tps)
+    )
     _add_per_payment_fields(record)
     return record
 
@@ -265,8 +254,17 @@ def build_profile_draw_tasks(
         mode = record["mode"]
         tps = int(record["tps"])
         total = int(record.get("total_requests") or 0)
+        repeat = record.get("repeat")
         cfg = MODE_FUNCTIONS[mode]
-        flame_path = base / f"tps{tps}_req{total}" / "profile" / f"flame_{mode}.png"
+        # Every repeat of the same (mode, tps) is its own run with its own
+        # flamebearer payload, so each needs a distinct file -- the
+        # "_rep{N}" suffix only appears once REPEATS makes that ambiguous
+        # (older timing files, or REPEATS=1, have no "repeat" field at all
+        # and keep the plain filename).
+        flame_name = (
+            f"flame_{mode}.png" if repeat is None else f"flame_{mode}_rep{repeat}.png"
+        )
+        flame_path = base / f"tps{tps}_req{total}" / "profile" / flame_name
         tasks.append(
             DrawTask(
                 fn_name="flame_graph",
@@ -285,12 +283,33 @@ def build_profile_draw_tasks(
         )
 
     bar_records = [{k: v for k, v in r.items() if k != "payload"} for r in records]
+    # Collapses any repeats of the same (mode, tps, total_requests) point (see
+    # run_benchmark.sh's REPEATS) into one row with mean +/- std dev bounds;
+    # a point with no repeats passes through unchanged. The bar chart, the
+    # combined table and the vs-TPS lines below all read this reduced list,
+    # so a repeated point contributes exactly one bar/row/point, not one per
+    # repeat -- only the flame graphs above stay per-repeat (they are
+    # inherently single-run visual artifacts, not something to average).
+    reduced_records = reduce_repeats(bar_records)
 
-    # One bar chart per TPS (not faceted into a single image), written into that
-    # TPS's own profile folder alongside that config's flame graphs.
-    for tps in sorted({r["tps"] for r in bar_records}):
-        rows = [r for r in bar_records if r["tps"] == tps]
-        total = int(rows[0].get("total_requests") or 0)
+    # One bar chart per (tps, total_requests) config -- not per TPS alone --
+    # written into that config's own profile folder alongside its flame
+    # graphs. A duration sweep can put several total_requests values at the
+    # same TPS; grouping by TPS only would hand create_macro_micro_bar
+    # several rows for the same mode (one per duration), and its
+    # ``{r["mode"]: r for r in usable}`` dict would then silently keep just
+    # one of them, dropping the rest with no error.
+    configs = sorted(
+        {(r["tps"], r.get("total_requests")) for r in reduced_records},
+        key=lambda c: (c[0], c[1] or 0),
+    )
+    for tps, total_requests in configs:
+        rows = [
+            r
+            for r in reduced_records
+            if r["tps"] == tps and r.get("total_requests") == total_requests
+        ]
+        total = int(total_requests or 0)
         tasks.append(
             DrawTask(
                 fn_name="profile_macro_micro_bar",
@@ -305,7 +324,7 @@ def build_profile_draw_tasks(
                     "title": (
                         f"Vendor CPU time per payment: macro (endpoint) vs micro "
                         f"(crypto/db read/db write) by mode "
-                        f"(tps={int(tps)})"
+                        f"(tps={int(tps)}, total_requests={total})"
                     ),
                 },
             )
@@ -317,7 +336,7 @@ def build_profile_draw_tasks(
             fn_name="profile_macro_micro_table",
             output_path=str(base / "profile_macro_micro_table.png"),
             kwargs={
-                "records": bar_records,
+                "records": reduced_records,
                 "title": "Vendor CPU time by mode and TPS",
             },
         )
@@ -379,7 +398,7 @@ def build_profile_draw_tasks(
             "CPU time per payment (ms)",
         ),
     ):
-        series = series_by_mode(bar_records, key)
+        series = series_by_mode(reduced_records, key, x_key="achieved_tps")
         if not series:
             continue
         tasks.append(
@@ -388,8 +407,8 @@ def build_profile_draw_tasks(
                 output_path=str(base / filename),
                 kwargs={
                     "series_list": series,
-                    "title": f"{label} vs TPS",
-                    "x_axis_label": "TPS",
+                    "title": f"{label} vs Achieved TPS",
+                    "x_axis_label": "Achieved TPS",
                     "y_axis_label": y_label,
                 },
             )

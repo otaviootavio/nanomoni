@@ -2,11 +2,15 @@
 
 Builds draw tasks for the latency box plot and ECDF/violin companions from
 cached Prometheus payloads. Plan-side job construction lives in :mod:`.latency`.
+
+When ``REPEATS`` produces several intervals of the same mode, each becomes its
+own entry in the plan; this module collapses those to one box / ECDF / violin
+per mode (mean of per-repeat quantile stats or bucket CDFs) before drawing.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
 from bench_plotter.plotting.windowing import steady_state_samples
@@ -19,6 +23,7 @@ from bench_plotter.plotting.histogram_math import (
 from .model import DrawTask, PlotJob, ResultCache
 
 _STATS_COLUMNS = ("mode", "mean_ms", "stddev_ms", "p50_ms", "p95_ms")
+_BOX_FIELDS = ("whislo", "q1", "med", "q3", "whishi")
 
 
 def _le_sort_key(le: str) -> float:
@@ -28,6 +33,105 @@ def _le_sort_key(le: str) -> float:
 
 def _median(samples: List[float]) -> float:
     return sorted(samples)[len(samples) // 2]
+
+
+def _clamp_nondecreasing_quantiles(qmed: Dict[float, float]) -> None:
+    """Clamp quantile values non-decreasing (filter noise can invert them)."""
+    ordered = sorted(qmed)
+    for prev, cur in zip(ordered, ordered[1:]):
+        if qmed[cur] < qmed[prev]:
+            qmed[cur] = qmed[prev]
+
+
+def _group_by_label(
+    items: List[Dict[str, Any]], label_key: str = "label"
+) -> Tuple[List[Any], Dict[Any, List[Dict[str, Any]]]]:
+    """Preserve first-seen label order while grouping items by ``label_key``."""
+    groups: Dict[Any, List[Dict[str, Any]]] = {}
+    order: List[Any] = []
+    for item in items:
+        label = item.get(label_key)
+        if label is None:
+            continue
+        if label not in groups:
+            order.append(label)
+        groups.setdefault(label, []).append(item)
+    return order, groups
+
+
+def _reduce_box_stats(stats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Average box quantile fields across repeats sharing the same mode label."""
+    order, groups = _group_by_label(stats)
+    reduced: List[Dict[str, Any]] = []
+    for label in order:
+        group = groups[label]
+        if len(group) == 1:
+            reduced.append(dict(group[0]))
+            continue
+        merged: Dict[str, Any] = {"label": label}
+        for field in _BOX_FIELDS:
+            values = [float(row[field]) for row in group if field in row]
+            merged[field] = sum(values) / len(values) if values else 0.0
+        # Re-clamp after averaging in case means crossed.
+        qmed = {
+            0.05: merged["whislo"],
+            0.25: merged["q1"],
+            0.50: merged["med"],
+            0.75: merged["q3"],
+            0.95: merged["whishi"],
+        }
+        _clamp_nondecreasing_quantiles(qmed)
+        merged["whislo"] = qmed[0.05]
+        merged["q1"] = qmed[0.25]
+        merged["med"] = qmed[0.50]
+        merged["q3"] = qmed[0.75]
+        merged["whishi"] = qmed[0.95]
+        reduced.append(merged)
+    return reduced
+
+
+def _reduce_dists(dists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Average bucket CDFs across repeats sharing the same mode label.
+
+    Edges are taken from the first repeat of each mode (Prometheus histogram
+    bucket bounds are identical across runs of the same metric). Cum-fractions
+    are averaged pointwise on those edges; missing edges on a later repeat are
+    skipped for that point. The averaged CDF is re-clamped non-decreasing.
+    """
+    order, groups = _group_by_label(dists)
+    reduced: List[Dict[str, Any]] = []
+    for label in order:
+        group = groups[label]
+        if len(group) == 1:
+            reduced.append(dict(group[0]))
+            continue
+        edges = list(group[0]["edges"])
+        n = len(edges)
+        means: List[float] = []
+        running_max = 0.0
+        for i in range(n):
+            vals = [
+                float(d["cum_fraction"][i])
+                for d in group
+                if i < len(d.get("edges", []))
+                and i < len(d.get("cum_fraction", []))
+                and d["edges"][i] == edges[i]
+            ]
+            if not vals:
+                continue
+            avg = sum(vals) / len(vals)
+            running_max = max(running_max, min(1.0, avg))
+            means.append(running_max)
+        if means:
+            # Keep edges aligned with means if some points were skipped.
+            reduced.append(
+                {
+                    "label": label,
+                    "edges": edges[: len(means)],
+                    "cum_fraction": means,
+                }
+            )
+    return reduced
 
 
 def transform_latency_box(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
@@ -55,10 +159,7 @@ def transform_latency_box(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
 
         # A fixed histogram state is monotone in the quantile, so any crossing is
         # filter noise; clamp non-decreasing so bxp never draws an inverted box.
-        ordered = sorted(qmed)
-        for prev, cur in zip(ordered, ordered[1:]):
-            if qmed[cur] < qmed[prev]:
-                qmed[cur] = qmed[prev]
+        _clamp_nondecreasing_quantiles(qmed)
 
         stats.append(
             {
@@ -71,6 +172,7 @@ def transform_latency_box(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
             }
         )
 
+    stats = _reduce_box_stats(stats)
     if not stats:
         print("No latency data for box plot")
         return []
@@ -133,6 +235,7 @@ def transform_latency_dist(job: PlotJob, cache: ResultCache) -> List[DrawTask]:
                 {"label": entry["mode"], "edges": edges, "cum_fraction": cum_fraction}
             )
 
+    dists = _reduce_dists(dists)
     if not dists:
         print("No latency data for distribution plots")
         return []

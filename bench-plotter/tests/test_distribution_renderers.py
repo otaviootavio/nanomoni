@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 from bench_plotter.plotting.distribution_renderers import (
     create_bucket_ecdf,
     create_ecdf_plot,
+    create_steady_state_boxplot,
 )
 
 
@@ -62,4 +63,42 @@ class TestCreateEcdfPlot:
     def test_no_samples_writes_nothing(self, tmp_path: Path) -> None:
         out = tmp_path / "ecdf.png"
         create_ecdf_plot([], output_path=str(out))
+        assert not out.exists()
+
+
+class TestCreateSteadyStateBoxplot:
+    def test_trim_false_uses_pre_pooled_values(self, tmp_path: Path) -> None:
+        # Already-trimmed/pooled samples (as emitted by transform_steady_state
+        # after collapsing repeats) must render with trim=False without being
+        # re-filtered by steady_state_samples.
+        series_list: List[Dict[str, Any]] = [
+            {
+                "interval_mode": "signature",
+                "values": [10.0, 10.1, 9.9, 10.2, 10.0] * 4,
+            },
+            {
+                "interval_mode": "paytree",
+                "values": [5.0, 5.1, 4.9, 5.2, 5.0] * 4,
+            },
+        ]
+        out = tmp_path / "box.png"
+        create_steady_state_boxplot(series_list, output_path=str(out), trim=False)
+        assert out.exists()
+        assert out.stat().st_size > 0
+
+    def test_default_trim_still_writes_png(self, tmp_path: Path) -> None:
+        series_list: List[Dict[str, Any]] = [
+            {
+                "interval_mode": "signature",
+                # Flat plateau so steady_state_samples keeps most points.
+                "values": [10.0] * 20,
+            },
+        ]
+        out = tmp_path / "box_trim.png"
+        create_steady_state_boxplot(series_list, output_path=str(out))
+        assert out.exists()
+
+    def test_no_samples_writes_nothing(self, tmp_path: Path) -> None:
+        out = tmp_path / "box.png"
+        create_steady_state_boxplot([], output_path=str(out), trim=False)
         assert not out.exists()

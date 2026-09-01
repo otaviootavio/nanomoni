@@ -101,9 +101,9 @@ async def test_rebuild_first_opt_succeeds_with_zero_repo_reads_when_extra_nodes_
     leaf_b64 = bytes_to_b64(tree_levels[0][0])
 
     extra_nodes_b64 = {
-        key_eytzinger(level, get_sibling_position_at_level(0, level), DEPTH): bytes_to_b64(
-            tree_levels[level][get_sibling_position_at_level(0, level)]
-        )
+        key_eytzinger(
+            level, get_sibling_position_at_level(0, level), DEPTH
+        ): bytes_to_b64(tree_levels[level][get_sibling_position_at_level(0, level)])
         for level in range(DEPTH)
     }
     repo = _CountingNodeRepo({})

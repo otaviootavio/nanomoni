@@ -90,7 +90,7 @@ async def test_second_opt_stores_strictly_more_nodes_than_first_opt() -> None:
         seed=SEED,
     )
 
-    assert all(
-        s >= f for f, s in zip(first_opt_counts, second_opt_counts)
-    ), "second-opt must never store fewer distinct nodes than first-opt at any step"
+    assert all(s >= f for f, s in zip(first_opt_counts, second_opt_counts)), (
+        "second-opt must never store fewer distinct nodes than first-opt at any step"
+    )
     assert second_opt_counts[-1] > first_opt_counts[-1]

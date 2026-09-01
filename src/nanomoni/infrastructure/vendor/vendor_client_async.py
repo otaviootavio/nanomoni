@@ -185,6 +185,23 @@ class VendorClientAsync:
         path = f"/vendor/channels/paytree/first-opt/{dto.channel_id}/closure-requests"
         await self._http.post(path, json=dto.model_dump())
 
+    async def send_paytree_second_opt_payment(
+        self,
+        channel_id: str,
+        dto: ReceivePaytreeFirstOptPaymentDTO,
+    ) -> PaytreePaymentResponseDTO:
+        """Send a second-opt PayTree payment to the vendor API."""
+        path = f"/vendor/channels/paytree/second-opt/{channel_id}/payments"
+        resp = await self._post_with_payment_retries(path, json=dto.model_dump())
+        return PaytreePaymentResponseDTO.model_validate(resp.json())
+
+    async def request_settle_channel_paytree_second_opt(
+        self, dto: CloseChannelDTO
+    ) -> None:
+        """Ask the vendor to settle a second-opt PayTree payment channel."""
+        path = f"/vendor/channels/paytree/second-opt/{dto.channel_id}/closure-requests"
+        await self._http.post(path, json=dto.model_dump())
+
     async def send_paytree_child_pair_payment(
         self,
         channel_id: str,

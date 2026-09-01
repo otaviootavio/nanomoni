@@ -21,18 +21,18 @@ IFS=$'\n\t'
 # is bracketed within a factor of 2 no matter where it falls. The top two rungs
 # give headroom for CLIENT_VIRTUAL_CLIENTS > 1 runs to show a ceiling above what
 # a single virtual client could reach; harmless (just extra runtime) otherwise.
-TPS_VALUES=(4096 8192 16384 32768 65536)
+TPS_VALUES=(1000)
 
 # Virtual-client fan-out for this sweep (own keypair + channel + payment loop
 # each, plus its own vendor connection). Kept a multiple of VENDOR_API_WORKERS:
 # each virtual client stays on the worker that accepted its connection, so a
 # count that does not divide by the worker count leaves some workers carrying an
 # extra client and capping the measured ceiling.
-CLIENT_VIRTUAL_CLIENTS=96
+CLIENT_VIRTUAL_CLIENTS=1
 
 # Every mode: the ceiling is a property of per-payment cost, so each has its own,
 # and the chart draws one line per mode. Same order as run_benchmark.sh.
-MODES=(signature paytree paytree_first_opt paytree_child_pair payword)
+MODES=(signature paytree paytree_first_opt paytree_second_opt paytree_child_pair payword)
 
 # Seconds of traffic per run. Each run sends (TPS * RUN_DURATION_SEC) payments, so
 # a run that cannot keep up takes proportionally LONGER -- that overshoot is the
@@ -58,6 +58,16 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
+# docker-compose.yml interpolates every ${VAR} it references on ANY compose
+# command, including vendor/issuer vars this script never sources (those
+# services are started separately) -- so even a client-only command warns
+# about each one. That warning is legitimate wherever those vars are truly
+# meant to be set; here it never applies, so filter it out of this script's
+# own compose calls only, leaving `docker compose` unaffected everywhere else.
+dc() {
+  docker compose "$@" 2> >(grep -Fv 'variable is not set. Defaulting to a blank string.' >&2)
+}
+
 # configure_mode <mode> <count>: export the client env for one run.
 configure_mode() {
   local mode="$1" count="$2"
@@ -76,7 +86,7 @@ configure_mode() {
   local per_client_count=$((count / CLIENT_VIRTUAL_CLIENTS))
 
   case "$mode" in
-    paytree | paytree_first_opt | paytree_child_pair)
+    paytree | paytree_first_opt | paytree_second_opt | paytree_child_pair)
       export CLIENT_PAYTREE_MAX_I="$per_client_count"
       # channel_amount must cover (max_i * unit_value) with headroom.
       export CLIENT_CHANNEL_AMOUNT=10000000
@@ -110,19 +120,19 @@ run_one() {
   # run last, which is not a property of the mode. Done before the gap so the
   # reclaim and the rewrite it triggers settle before traffic starts.
   log "[$mode] flushing both datastores"
-  docker compose exec -T redis-vendor redis-cli flushall >/dev/null || true
-  docker compose exec -T redis-issuer redis-cli flushall >/dev/null || true
+  dc exec -T redis-vendor redis-cli flushall >/dev/null || true
+  dc exec -T redis-issuer redis-cli flushall >/dev/null || true
 
   log "[$mode] pre-run gap: sleeping ${SLEEP_GAP}s"
   sleep "$SLEEP_GAP"
 
   # start/end bound the Prometheus query window the plotter reads back.
   start=$(date +%s%3N)
-  docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
+  dc up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
   log "[$mode] client exited with status $status"
 
-  docker compose stop client >/dev/null 2>&1 || true
-  docker compose rm -fsv client >/dev/null 2>&1 || true
+  dc stop client >/dev/null 2>&1 || true
+  dc rm -fsv client >/dev/null 2>&1 || true
 
   log "[$mode] drain gap: sleeping ${DRAIN_TIME}s"
   sleep "$DRAIN_TIME"
@@ -139,9 +149,11 @@ run_one() {
 }
 
 log "Building client image so the run uses current code"
-docker compose build client
+dc build client
 
-log "Sweep: modes=[${MODES[*]}] targets=[${TPS_VALUES[*]}] duration=${RUN_DURATION_SEC}s clients=${CLIENT_VIRTUAL_CLIENTS} run_ts=$RUN_TS"
+# IFS is set to $'\n\t' above, so "${ARRAY[*]}" would join elements with a
+# newline instead of a space -- force a space join here regardless.
+log "Sweep: modes=[$(IFS=' '; echo "${MODES[*]}")] targets=[$(IFS=' '; echo "${TPS_VALUES[*]}")] duration=${RUN_DURATION_SEC}s clients=${CLIENT_VIRTUAL_CLIENTS} run_ts=$RUN_TS"
 
 for mode in "${MODES[@]}"; do
   for tps in "${TPS_VALUES[@]}"; do

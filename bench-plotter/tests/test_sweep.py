@@ -22,9 +22,11 @@ from bench_plotter.sweep.aggregate import (
     _latency_series,
     _mode_style,
     _series_by_mode,
+    build_aggregate_draw_tasks,
 )
 from bench_plotter.sweep.runner import (
     config_dirname,
+    export_raw_run_table,
     group_runs_by_config,
     generate_sweep_plots,
 )
@@ -132,6 +134,7 @@ class TestMcpuPerPaymentUsesAchievedTps:
         run = {
             "mode": "signature",
             "tps": 1024,
+            "repeat": 2,
             "prometheus_timestamps": {"start_ms": 1_000, "finish_ms": 46_000},
         }
 
@@ -148,6 +151,12 @@ class TestMcpuPerPaymentUsesAchievedTps:
         wrong_mcpu_if_using_target = (vendor_cpu / 1024.0) * 1000.0
         assert result["mcpu_per_payment"] == pytest.approx(expected_mcpu)
         assert result["mcpu_per_payment"] != pytest.approx(wrong_mcpu_if_using_target)
+        # vs-TPS charts and per-payment denominators must see the measured rate,
+        # not the configured target, when Prometheus can resolve it.
+        assert result["achieved_tps"] == pytest.approx(achieved)
+        assert result["tps"] == 1024.0  # target preserved for grouping / folders
+        # Join key for the per-run metrics CSV (see export_raw_run_table).
+        assert result["repeat"] == 2
 
     def test_falls_back_to_target_when_achieved_tps_unavailable(
         self, monkeypatch: pytest.MonkeyPatch
@@ -177,6 +186,126 @@ class TestMcpuPerPaymentUsesAchievedTps:
 
         assert result is not None
         assert result["mcpu_per_payment"] == pytest.approx((vendor_cpu / 64.0) * 1000.0)
+        # No measured rate -> fall back to the configured target for both the
+        # per-payment denominator and the vs-TPS x-axis value.
+        assert result["achieved_tps"] == pytest.approx(64.0)
+        assert result["payments_served"] is None
+        assert result["payments_count"] is None  # no total_requests on this run either
+        # Legacy / missing repeat must still land as None so the join key is
+        # well-defined rather than KeyError'd away.
+        assert result["repeat"] is None
+
+
+class TestExportRawRunTable:
+    """Per-run Prometheus + Pyroscope join written as all_runs.csv."""
+
+    def test_merges_on_join_key_keeps_both_achieved_tps_drops_payload(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def fake_collect_scalars(
+            runs: List[Dict[str, Any]],
+        ) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "mode": "signature",
+                    "tps": 250.0,
+                    "total_requests": 30000,
+                    "repeat": 0,
+                    "achieved_tps": 248.0,
+                    "latency_p50": 0.7,
+                    "mcpu_per_payment": 1.2,
+                },
+                {
+                    "mode": "signature",
+                    "tps": 250.0,
+                    "total_requests": 30000,
+                    "repeat": 1,
+                    "achieved_tps": 249.0,
+                    "latency_p50": 0.71,
+                    "mcpu_per_payment": 1.1,
+                },
+            ]
+
+        async def fake_collect_profiles(
+            runs: List[Dict[str, Any]],
+        ) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "mode": "signature",
+                    "tps": 250.0,
+                    "total_requests": 30000,
+                    "repeat": 0,
+                    "achieved_tps": 247.5,
+                    "crypto_ms_per_payment": 0.03,
+                    "payload": {"huge": "flamebearer tree"},
+                },
+                # Profile-only row (no matching scalar) still lands in the CSV.
+                {
+                    "mode": "paytree",
+                    "tps": 250.0,
+                    "total_requests": 30000,
+                    "repeat": 0,
+                    "achieved_tps": 250.0,
+                    "crypto_ms_per_payment": 0.04,
+                    "payload": {"ignored": True},
+                },
+            ]
+
+        monkeypatch.setattr(
+            "bench_plotter.sweep.runner._collect_scalars", fake_collect_scalars
+        )
+        monkeypatch.setattr(
+            "bench_plotter.sweep.runner._collect_profiles", fake_collect_profiles
+        )
+
+        csv_path = export_raw_run_table(
+            [_run("signature", 250, 30000), _run("paytree", 250, 30000)],
+            output_dir=str(tmp_path),
+        )
+        assert csv_path == str(tmp_path / "all_runs.csv")
+        assert Path(csv_path).exists()
+
+        import pandas as pd
+
+        df = pd.read_csv(csv_path)
+        assert len(df) == 3
+        # Flamebearer payload must not leak into the tabular export.
+        assert "payload" not in df.columns
+
+        sig0 = df[(df["mode"] == "signature") & (df["repeat"] == 0)].iloc[0]
+        assert sig0["achieved_tps"] == pytest.approx(248.0)
+        assert sig0["profile_achieved_tps"] == pytest.approx(247.5)
+        assert sig0["latency_p50"] == pytest.approx(0.7)
+        assert sig0["crypto_ms_per_payment"] == pytest.approx(0.03)
+
+        # Scalar-only repeat (no matching profile) keeps its Prometheus rate
+        # and has no profile_achieved_tps overwrite.
+        sig1 = df[(df["mode"] == "signature") & (df["repeat"] == 1)].iloc[0]
+        assert sig1["achieved_tps"] == pytest.approx(249.0)
+        assert sig1["mcpu_per_payment"] == pytest.approx(1.1)
+
+        # Profile-only mode still appears, under the renamed rate column.
+        paytree = df[df["mode"] == "paytree"].iloc[0]
+        assert paytree["profile_achieved_tps"] == pytest.approx(250.0)
+        assert paytree["crypto_ms_per_payment"] == pytest.approx(0.04)
+
+    def test_returns_none_on_empty_runs(self, tmp_path: Path) -> None:
+        assert export_raw_run_table([], output_dir=str(tmp_path)) is None
+        assert not (tmp_path / "all_runs.csv").exists()
+
+    def test_returns_none_when_collectors_raise(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def boom(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            raise RuntimeError("prometheus down")
+
+        monkeypatch.setattr("bench_plotter.sweep.runner._collect_scalars", boom)
+        assert (
+            export_raw_run_table(
+                [_run("signature", 250, 30000)], output_dir=str(tmp_path)
+            )
+            is None
+        )
 
 
 class TestRedisMemoryUsesSettledNotPeak:
@@ -271,6 +400,219 @@ class TestRedisMemoryUsesSettledNotPeak:
         }
         result = self._collect(monkeypatch, run, points)
         assert result["vendor_redis_memory_delta_mib"] >= 0.0
+
+
+class TestPaymentsCountAndRedisBytesPerPayment:
+    """payments_count comes from the vendor counter; redis bytes/payment uses it."""
+
+    def test_divides_redis_delta_by_measured_payment_count(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Flat 10 MiB baseline, flat 20 MiB drain plateau -> delta = 10 MiB.
+        # Vendor counter advances by 500 payments (not the configured 1000).
+        mem_points = [(1.0 + i * 5.0, 10.0) for i in range(8)] + [
+            (1.0 + (8 + i) * 5.0, 20.0) for i in range(12)
+        ]
+        served_start, served_end = 100.0, 600.0  # delta = 500
+
+        async def fake_query_range(
+            *, query: str, start_unix: float, end_unix: float, step: str | None = None
+        ) -> Dict[str, Any]:
+            if "container_memory_working_set_bytes" in query:
+                return _matrix_payload(mem_points)
+            if "rate(" in query:
+                return _matrix_payload([(float(i * 5), 10.0) for i in range(8)])
+            if "requests_total" in query or "payment" in query:
+                return _matrix_payload([(0.0, served_start), (50.0, served_end)])
+            return _matrix_payload([])
+
+        monkeypatch.setattr(sweep_aggregate, "query_range", fake_query_range)
+
+        run = {
+            "mode": "signature",
+            "tps": 16,
+            "total_requests": 1000,
+            "drain_sec": 60,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(mem_points[-1][0] * 1_000),
+            },
+        }
+
+        async def _go() -> Any:
+            return await _fetch_run_metrics(run, asyncio.Semaphore(1))
+
+        result = asyncio.run(_go())
+        assert result is not None
+        assert result["payments_served"] == pytest.approx(500.0)
+        assert result["payments_count"] == pytest.approx(500.0)
+        expected = 10.0 * (1024.0 * 1024.0) / 500.0
+        assert result["vendor_redis_memory_delta_bytes_per_payment"] == pytest.approx(
+            expected
+        )
+
+    def test_falls_back_to_total_requests_when_counter_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Flat 5 -> flat 15 over a 60s drain: delta = 10 MiB; no counter data.
+        mem_points = [(1.0 + i * 5.0, 5.0) for i in range(8)] + [
+            (1.0 + (8 + i) * 5.0, 15.0) for i in range(12)
+        ]
+
+        async def fake_query_range(
+            *, query: str, start_unix: float, end_unix: float, step: str | None = None
+        ) -> Dict[str, Any]:
+            if "container_memory_working_set_bytes" in query:
+                return _matrix_payload(mem_points)
+            return _matrix_payload([])
+
+        monkeypatch.setattr(sweep_aggregate, "query_range", fake_query_range)
+
+        run = {
+            "mode": "signature",
+            "tps": 16,
+            "total_requests": 200,
+            "drain_sec": 60,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(mem_points[-1][0] * 1_000),
+            },
+        }
+
+        async def _go() -> Any:
+            return await _fetch_run_metrics(run, asyncio.Semaphore(1))
+
+        result = asyncio.run(_go())
+        assert result is not None
+        assert result["payments_served"] is None
+        assert result["payments_count"] == 200
+        expected = 10.0 * (1024.0 * 1024.0) / 200.0
+        assert result["vendor_redis_memory_delta_bytes_per_payment"] == pytest.approx(
+            expected
+        )
+
+
+class TestRedisMemoryGrowthRate:
+    """The linear-fit slope ``m`` (MiB/s) computed alongside the delta."""
+
+    def _collect(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        run: Dict[str, Any],
+        points: List[Tuple[float, float]],
+    ) -> Dict[str, Any]:
+        async def fake_query_range(
+            *, query: str, start_unix: float, end_unix: float, step: str | None = None
+        ) -> Dict[str, Any]:
+            if "container_memory_working_set_bytes" in query:
+                return _matrix_payload(points)
+            return _matrix_payload([])
+
+        monkeypatch.setattr(sweep_aggregate, "query_range", fake_query_range)
+
+        async def _go() -> Any:
+            return await _fetch_run_metrics(run, asyncio.Semaphore(1))
+
+        result = asyncio.run(_go())
+        assert result is not None
+        return result
+
+    def test_slope_matches_known_linear_climb(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Exactly 2 MiB/s: value = 10 + 2*elapsed_seconds, sampled every 5s.
+        points = [(1.0 + i * 5.0, 10.0 + 2.0 * (i * 5.0)) for i in range(20)]
+        run = {
+            "mode": "paytree_first_opt",
+            "tps": 256,
+            "total_requests": 1000,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(points[-1][0] * 1_000),
+            },
+        }
+        result = self._collect(monkeypatch, run, points)
+        assert result["vendor_redis_memory_growth_rate_mib_per_s"] == pytest.approx(2.0)
+
+    def test_flat_series_has_near_zero_slope(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        points = [(1.0 + i * 5.0, 42.0) for i in range(10)]
+        run = {
+            "mode": "signature",
+            "tps": 16,
+            "total_requests": 100,
+            "prometheus_timestamps": {
+                "start_ms": 1_000,
+                "finish_ms": int(points[-1][0] * 1_000),
+            },
+        }
+        result = self._collect(monkeypatch, run, points)
+        assert result["vendor_redis_memory_growth_rate_mib_per_s"] == pytest.approx(
+            0.0, abs=1e-9
+        )
+
+    def test_no_points_is_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        run = {
+            "mode": "signature",
+            "tps": 16,
+            "total_requests": 100,
+            "prometheus_timestamps": {"start_ms": 1_000, "finish_ms": 61_000},
+        }
+        result = self._collect(monkeypatch, run, [])
+        assert result["vendor_redis_memory_growth_rate_mib_per_s"] is None
+
+
+class TestBuildAggregateDrawTasksGrowthRate:
+    """The m-per-mode column chart and m-vs-TPS chart get wired into the plan."""
+
+    def test_includes_growth_rate_charts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        points_by_mode = {
+            "paytree_first_opt": [
+                (1.0 + i * 5.0, 10.0 + 2.0 * (i * 5.0)) for i in range(10)
+            ],
+            "signature": [(1.0 + i * 5.0, 5.0) for i in range(10)],
+        }
+        runs = [
+            _run("paytree_first_opt", 256, 1000),
+            _run("signature", 256, 1000),
+        ]
+        # Patch query_range per-mode so each run's memory series differs.
+        call_mode: Dict[str, Any] = {"current": None}
+
+        async def fake_query_range_per_mode(
+            *, query: str, start_unix: float, end_unix: float, step: str | None = None
+        ) -> Dict[str, Any]:
+            if "container_memory_working_set_bytes" in query:
+                return _matrix_payload(points_by_mode[call_mode["current"]])
+            return _matrix_payload([])
+
+        monkeypatch.setattr(sweep_aggregate, "query_range", fake_query_range_per_mode)
+
+        async def fake_collect_scalars(
+            runs: List[Dict[str, Any]],
+        ) -> List[Dict[str, Any]]:
+            results = []
+            sem = asyncio.Semaphore(1)
+            for run in runs:
+                call_mode["current"] = run["mode"]
+                results.append(await _fetch_run_metrics(run, sem))
+            return [r for r in results if r is not None]
+
+        monkeypatch.setattr(sweep_aggregate, "_collect_scalars", fake_collect_scalars)
+
+        tasks = build_aggregate_draw_tasks(runs, "out")
+        output_paths = {t.output_path for t in tasks}
+
+        assert "out/vendor_redis_memory_growth_rate_vs_tps.png" in output_paths
+        assert (
+            "out/vendor_redis_memory_delta_bytes_per_payments_vs_tps.png"
+            in output_paths
+        )
+        assert (
+            "out/tps256_req1000/vendor_resources/vendor_redis_memory_growth_rate_bar.png"
+            in output_paths
+        )
 
 
 class TestSweepLineRenderer:
@@ -393,8 +735,8 @@ class TestModeStyle:
         payword = _mode_style("payword")
         signature = _mode_style("signature")
         assert paytree["color"] == PALETTE[0]
-        assert payword["color"] == PALETTE[3]
-        assert signature["color"] == PALETTE[4]
+        assert payword["color"] == PALETTE[4]
+        assert signature["color"] == PALETTE[5]
         assert paytree["marker"] != payword["marker"]
 
     def test_series_by_mode_attaches_style(self) -> None:
@@ -408,13 +750,20 @@ class TestModeStyle:
         by_label = {s["label"]: s for s in series}
         assert by_label["paytree"]["color"] == PALETTE[0]
         assert by_label["paytree"]["linestyle"] == "-"
-        assert by_label["signature"]["color"] == PALETTE[4]
+        assert by_label["signature"]["color"] == PALETTE[5]
 
     def test_latency_series_p50_only(self) -> None:
+        # vs-TPS charts now plot against achieved_tps (falls back to target when
+        # the counter is unavailable); the fixture mirrors that contract.
         scalars = [
-            {"mode": "paytree", "tps": 16.0, "latency_p50": 0.5},
-            {"mode": "paytree", "tps": 32.0, "latency_p50": 0.4},
-            {"mode": "signature", "tps": 16.0, "latency_p50": 1.0},
+            {"mode": "paytree", "tps": 16.0, "achieved_tps": 16.0, "latency_p50": 0.5},
+            {"mode": "paytree", "tps": 32.0, "achieved_tps": 32.0, "latency_p50": 0.4},
+            {
+                "mode": "signature",
+                "tps": 16.0,
+                "achieved_tps": 16.0,
+                "latency_p50": 1.0,
+            },
         ]
         series = _latency_series(scalars)
         assert len(series) == 2
@@ -422,7 +771,39 @@ class TestModeStyle:
         assert by_label["paytree"]["y_values"] == [0.5, 0.4]
         assert "y_low" not in by_label["paytree"]
         assert by_label["paytree"]["color"] == PALETTE[0]
-        assert by_label["signature"]["color"] == PALETTE[4]
+        assert by_label["signature"]["color"] == PALETTE[5]
+
+    def test_series_by_mode_carries_low_high_bounds_when_present(self) -> None:
+        # As added by bench_plotter.repeats.reduce_repeats when a point
+        # averages several repeats.
+        scalars = [
+            {
+                "mode": "paytree",
+                "tps": 16.0,
+                "vendor_cpu_mean": 0.03,
+                "vendor_cpu_mean_low": 0.02,
+                "vendor_cpu_mean_high": 0.04,
+            },
+            {
+                "mode": "paytree",
+                "tps": 32.0,
+                "vendor_cpu_mean": 0.06,
+                "vendor_cpu_mean_low": 0.05,
+                "vendor_cpu_mean_high": 0.07,
+            },
+        ]
+        series = _series_by_mode(scalars, "vendor_cpu_mean")
+        assert len(series) == 1
+        assert series[0]["y_low"] == [0.02, 0.05]
+        assert series[0]["y_high"] == [0.04, 0.07]
+
+    def test_series_by_mode_omits_bounds_when_absent(self) -> None:
+        scalars = [
+            {"mode": "paytree", "tps": 16.0, "vendor_cpu_mean": 0.03},
+        ]
+        series = _series_by_mode(scalars, "vendor_cpu_mean")
+        assert "y_low" not in series[0]
+        assert "y_high" not in series[0]
 
 
 class TestGenerateSweepPlotsLoad:
@@ -454,6 +835,10 @@ class TestGenerateSweepPlotsLoad:
         monkeypatch.setattr(
             "bench_plotter.sweep.runner.generate_profile_outputs",
             lambda *a, **k: [],
+        )
+        monkeypatch.setattr(
+            "bench_plotter.sweep.runner.export_raw_run_table",
+            lambda *a, **k: None,
         )
 
         written = generate_sweep_plots(

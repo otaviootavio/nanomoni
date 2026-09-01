@@ -23,6 +23,11 @@ from .paytree_first_opt import (
     LATENCY_BUCKET_METRIC as _PAYTREE_FIRST_OPT_METRIC,
     PAYMENT_COUNTER_METRIC as _PAYTREE_FIRST_OPT_COUNTER,
 )
+from .paytree_second_opt import (
+    get_paytree_second_opt_charts,
+    LATENCY_BUCKET_METRIC as _PAYTREE_SECOND_OPT_METRIC,
+    PAYMENT_COUNTER_METRIC as _PAYTREE_SECOND_OPT_COUNTER,
+)
 from .paytree_child_pair import (
     get_paytree_child_pair_charts,
     LATENCY_BUCKET_METRIC as _PAYTREE_CHILD_PAIR_METRIC,
@@ -37,6 +42,7 @@ LATENCY_BUCKET_METRIC_BY_MODE: Dict[str, str] = {
     "payword": _PAYWORD_METRIC,
     "paytree": _PAYTREE_METRIC,
     "paytree_first_opt": _PAYTREE_FIRST_OPT_METRIC,
+    "paytree_second_opt": _PAYTREE_SECOND_OPT_METRIC,
     "paytree_child_pair": _PAYTREE_CHILD_PAIR_METRIC,
 }
 
@@ -47,6 +53,7 @@ PAYMENT_COUNTER_METRIC_BY_MODE: Dict[str, str] = {
     "payword": _PAYWORD_COUNTER,
     "paytree": _PAYTREE_COUNTER,
     "paytree_first_opt": _PAYTREE_FIRST_OPT_COUNTER,
+    "paytree_second_opt": _PAYTREE_SECOND_OPT_COUNTER,
     "paytree_child_pair": _PAYTREE_CHILD_PAIR_COUNTER,
 }
 
@@ -57,6 +64,7 @@ _MODE_CHART_GETTERS = {
     "payword": get_payword_charts,
     "paytree": get_paytree_charts,
     "paytree_first_opt": get_paytree_first_opt_charts,
+    "paytree_second_opt": get_paytree_second_opt_charts,
     "paytree_child_pair": get_paytree_child_pair_charts,
 }
 

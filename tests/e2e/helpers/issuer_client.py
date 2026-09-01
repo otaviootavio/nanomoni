@@ -272,6 +272,39 @@ class IssuerTestClient:
             json=open_channel_request.model_dump(),
         )
 
+    async def open_paytree_second_opt_channel(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> PaytreeOpenChannelResponseDTO:
+        """Open a second-opt PayTree payment channel."""
+        response = await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree/second-opt",
+            json=open_channel_request.model_dump(),
+        )
+        response.raise_for_status()
+        return PaytreeOpenChannelResponseDTO.model_validate(response.json())
+
+    async def open_paytree_second_opt_channel_raw(
+        self,
+        open_channel_request: OpenChannelRequestDTO,
+    ) -> AiohttpResponse:
+        return await self._request(
+            "POST",
+            f"{self.base_url}/issuer/channels/paytree/second-opt",
+            json=open_channel_request.model_dump(),
+        )
+
+    async def get_paytree_second_opt_channel(
+        self, channel_id: str
+    ) -> PaytreePaymentChannelResponseDTO:
+        response = await self._request(
+            "GET",
+            f"{self.base_url}/issuer/channels/paytree/second-opt/{channel_id}",
+        )
+        response.raise_for_status()
+        return PaytreePaymentChannelResponseDTO.model_validate(response.json())
+
     async def get_paytree_std_channel(
         self, channel_id: str
     ) -> PaytreePaymentChannelResponseDTO:

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from bench_plotter.repeats import reduce_repeat_timeseries
+
 from .model import DrawTask, PlotJob, ResultCache
 from .series_runs import runs_from_series
 from .latency_transform import transform_latency_box, transform_latency_dist
@@ -26,15 +28,22 @@ def _nonzero(values: List[Any]) -> bool:
 
 
 def _series_list(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Build line-plot series, dropping all-zero series unless every one is zero."""
-    built = [
-        {
+    """Build line-plot series, dropping all-zero series unless every one is zero.
+
+    Repeated runs of the same mode are collapsed first (mean +/- std band) so
+    the renderer draws one line per mode, matching the vs-TPS aggregate charts.
+    """
+    built: List[Dict[str, Any]] = []
+    for run in reduce_repeat_timeseries(runs):
+        entry: Dict[str, Any] = {
             "timestamps": run["timestamps"],
             "values": run["values"],
             "label": run["interval_mode"],
         }
-        for run in runs
-    ]
+        if "values_low" in run and "values_high" in run:
+            entry["values_low"] = run["values_low"]
+            entry["values_high"] = run["values_high"]
+        built.append(entry)
     if any(_nonzero(s["values"]) for s in built):
         return [s for s in built if _nonzero(s["values"])]
     return built

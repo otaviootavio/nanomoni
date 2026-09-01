@@ -37,6 +37,16 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
+# docker-compose.yml interpolates every ${VAR} it references on ANY compose
+# command, including vendor/issuer vars this script never sources (those
+# services are started separately) -- so even a client-only command warns
+# about each one. That warning is legitimate wherever those vars are truly
+# meant to be set; here it never applies, so filter it out of this script's
+# own compose calls only, leaving `docker compose` unaffected everywhere else.
+dc() {
+  docker compose "$@" 2> >(grep -Fv 'variable is not set. Defaulting to a blank string.' >&2)
+}
+
 run_mode() {
   local mode="$1"
   local start end status=0
@@ -58,11 +68,11 @@ run_mode() {
   start=$(date +%s%3N)
   # Capture the client exit status without letting `set -e` abort the script,
   # so cleanup always runs and the timing entry is always recorded.
-  docker compose up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
+  dc up --no-deps --abort-on-container-exit --exit-code-from client client || status=$?
   log "[$mode] client container exited with status $status"
 
-  docker compose stop client >/dev/null 2>&1 || true
-  docker compose rm -fsv client >/dev/null 2>&1 || true
+  dc stop client >/dev/null 2>&1 || true
+  dc rm -fsv client >/dev/null 2>&1 || true
 
   log "[$mode] drain gap: sleeping ${DRAIN_TIME}s"
   sleep "$DRAIN_TIME"
@@ -72,7 +82,7 @@ run_mode() {
   # next run does not inherit this one's dataset, and the benchmark does not
   # leave it behind. After the window closes, so the reclaim is not measured.
   log "[$mode] flushing vendor datastore"
-  docker compose exec -T redis-vendor redis-cli flushall >/dev/null || true
+  dc exec -T redis-vendor redis-cli flushall >/dev/null || true
 
   local result="success"
   if [ "$status" -ne 0 ]; then
@@ -131,16 +141,18 @@ run_payword() {
   run_mode "payword"
 }
 
-log "Building client image (tps_values=${TPS_VALUES[*]}, duration=${RUN_DURATION_SEC}s)"
+# IFS is set to $'\n\t' above, so "${ARRAY[*]}" would join elements with a
+# newline instead of a space -- force a space join here regardless.
+log "Building client image (tps_values=$(IFS=' '; echo "${TPS_VALUES[*]}"), duration=${RUN_DURATION_SEC}s)"
 # Build the client image so the run uses current code (incl. the TPS delay plumbing).
-docker compose build client
+dc build client
 
 # Guarantee a clean starting keyspace even if a prior run was interrupted before
 # its post-run flush (e.g. killed mid-drain), so the first mode of this sweep
 # never inherits leftover channels/states/merkle nodes from an earlier run.
 log "Pre-sweep flush: clearing vendor and issuer datastores"
-docker compose exec -T redis-vendor redis-cli flushall >/dev/null || true
-docker compose exec -T redis-issuer redis-cli flushall >/dev/null || true
+dc exec -T redis-vendor redis-cli flushall >/dev/null || true
+dc exec -T redis-issuer redis-cli flushall >/dev/null || true
 
 log "Server run timestamp: $RUN_TS"
 

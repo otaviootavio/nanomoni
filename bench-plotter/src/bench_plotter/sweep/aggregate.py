@@ -24,6 +24,7 @@ from bench_plotter.mode_style import series_by_mode as _series_by_mode
 from bench_plotter.pipeline.draw import draw_all
 from bench_plotter.pipeline.model import DrawTask
 from bench_plotter.plotting.windowing import steady_state_samples
+from bench_plotter.repeats import reduce_repeats
 from bench_plotter.prometheus_fetch import query_range
 from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
 
@@ -37,6 +38,8 @@ from bench_plotter.prometheus_matrix import matrix_to_per_series_charts
 # "achieved TPS" means.
 from bench_plotter.saturation.aggregate import (
     achieved_tps_expr,
+    counter_delta,
+    payments_served_expr,
     samples_from_payload,
     sustained_rate,
 )
@@ -131,6 +134,25 @@ def _points_from_payload(
     ]
 
 
+def _growth_rate_mib_per_s(
+    points: List[Tuple[float, float]],
+) -> Optional[float]:
+    """Least-squares slope ``m`` (MiB/s) of memory over elapsed time.
+
+    Same fit ``timeseries_renderers.create_multi_line_plot`` overlays on the
+    per-TPS "Vendor Redis Memory Usage" chart (see its ``_LINEAR_FIT_LABELS``),
+    computed here too so the slope can be compared across modes and across the
+    TPS sweep instead of only read off one chart's in-axes annotation.
+    """
+    if len(points) < 2:
+        return None
+    start = points[0][0]
+    elapsed = [t - start for t, _ in points]
+    values = [v for _, v in points]
+    slope, _intercept = np.polyfit(elapsed, values, 1)
+    return float(slope)
+
+
 def _settled_value(
     points: List[Tuple[float, float]],
     end_unix: float,
@@ -208,6 +230,9 @@ async def _fetch_run_metrics(
     tps_expr = achieved_tps_expr(str(mode))
     if tps_expr:
         queries["achieved_tps"] = tps_expr
+    served_expr = payments_served_expr(str(mode))
+    if served_expr:
+        queries["payments_served"] = served_expr
 
     keys = list(queries.keys())
     payloads = await asyncio.gather(
@@ -217,7 +242,7 @@ async def _fetch_run_metrics(
     series = {
         k: _values_from_payload(p)
         for k, p in payload_by_key.items()
-        if k != "achieved_tps"
+        if k not in ("achieved_tps", "payments_served")
     }
 
     vendor_cpu_mean = _steady_mean(series.get("vendor_cpu", []))
@@ -239,6 +264,7 @@ async def _fetch_run_metrics(
         if redis_mem_baseline is not None and redis_mem_settled is not None
         else None
     )
+    redis_mem_growth_rate_mib_per_s = _growth_rate_mib_per_s(mem_points)
 
     # Falls back to the target when achieved TPS can't be resolved (e.g. no
     # counter for the mode, or too little data), rather than dropping the point.
@@ -257,20 +283,32 @@ async def _fetch_run_metrics(
         # KiB/s / payments/s = KiB per payment
         client_net_output_kib_per_payment = client_net_output_mean / payments_per_second
 
+    payments_served_count = counter_delta(payload_by_key.get("payments_served"))
     total_requests = run.get("total_requests")
+    # Prefer the vendor's own counter delta; fall back to the configured count
+    # so a missing counter still yields a denominator rather than dropping the
+    # per-payment Redis point (mirrors the achieved_tps -> target fallback
+    # above).
+    payments_count = (
+        payments_served_count if payments_served_count is not None else total_requests
+    )
     redis_mem_delta_bytes_per_payment = None
-    if redis_mem_delta_mib is not None and total_requests:
+    if redis_mem_delta_mib is not None and payments_count:
         # MiB delta over this run's whole window / this run's payment count =
         # bytes written to Redis per payment -- readable at this magnitude,
         # unlike the MiB delta itself (a tiny fraction of a MiB per payment).
         redis_mem_delta_bytes_per_payment = (
-            redis_mem_delta_mib * _BYTES_PER_MIB / total_requests
+            redis_mem_delta_mib * _BYTES_PER_MIB / payments_count
         )
 
     return {
         "mode": mode,
         "tps": float(tps),
-        "total_requests": run.get("total_requests"),
+        "achieved_tps": payments_per_second,
+        "total_requests": total_requests,
+        "repeat": run.get("repeat"),
+        "payments_served": payments_served_count,
+        "payments_count": payments_count,
         "latency_p50": latency_p50,
         "vendor_cpu_mean": vendor_cpu_mean,
         "vendor_redis_cpu_mean": redis_cpu_mean,
@@ -280,6 +318,7 @@ async def _fetch_run_metrics(
         "vendor_redis_memory_settled_mib": redis_mem_settled,
         "vendor_redis_memory_delta_mib": redis_mem_delta_mib,
         "vendor_redis_memory_delta_bytes_per_payment": redis_mem_delta_bytes_per_payment,
+        "vendor_redis_memory_growth_rate_mib_per_s": redis_mem_growth_rate_mib_per_s,
     }
 
 
@@ -291,7 +330,7 @@ async def _collect_scalars(runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _latency_series(scalars: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """One p50 line per mode."""
-    return _series_by_mode(scalars, "latency_p50")
+    return _series_by_mode(scalars, "latency_p50", x_key="achieved_tps")
 
 
 def build_aggregate_draw_tasks(
@@ -308,38 +347,67 @@ def build_aggregate_draw_tasks(
     if not scalars:
         print("No aggregate scalars available; skipping vs-TPS charts")
         return []
+    # Collapses any repeats of the same (mode, tps) point (see
+    # run_benchmark.sh's REPEATS) into one row with mean +/- std dev bounds;
+    # a point with no repeats passes through unchanged. Everything below --
+    # the vs-TPS lines, the per-TPS tables/bars -- reads this reduced list,
+    # so a repeated point contributes exactly one entry everywhere, not one
+    # per repeat.
+    scalars = reduce_repeats(scalars)
 
     base = Path(output_dir)
     charts = [
         (
             "latency_p50_vs_tps.png",
-            "Latency p50 vs TPS",
+            "Latency p50 vs Achieved TPS",
             "Latency (ms)",
             _latency_series(scalars),
         ),
         (
             "vendor_cpu_vs_tps.png",
-            "Vendor CPU (mean, steady-state) vs TPS",
+            "Vendor CPU (mean, steady-state) vs Achieved TPS",
             "CPU (cores)",
-            _series_by_mode(scalars, "vendor_cpu_mean"),
+            _series_by_mode(scalars, "vendor_cpu_mean", x_key="achieved_tps"),
         ),
         (
             "vendor_redis_cpu_vs_tps.png",
-            "Vendor Redis CPU vs TPS",
+            "Vendor Redis CPU vs Achieved TPS",
             "CPU (cores)",
-            _series_by_mode(scalars, "vendor_redis_cpu_mean"),
+            _series_by_mode(scalars, "vendor_redis_cpu_mean", x_key="achieved_tps"),
         ),
         (
             "cpu_seconds_per_payment_vs_tps.png",
-            "milliCPU per payment vs TPS",
+            "milliCPU per payment vs Achieved TPS",
             "mCPU / payment",
-            _series_by_mode(scalars, "mcpu_per_payment"),
+            _series_by_mode(scalars, "mcpu_per_payment", x_key="achieved_tps"),
         ),
         (
             "client_network_output_per_payment_vs_tps.png",
-            "Client network output per payment vs TPS",
+            "Client network output per payment vs Achieved TPS",
             "Network output (KiB) / payment",
-            _series_by_mode(scalars, "client_net_output_kib_per_payment"),
+            _series_by_mode(
+                scalars, "client_net_output_kib_per_payment", x_key="achieved_tps"
+            ),
+        ),
+        (
+            "vendor_redis_memory_delta_bytes_per_payments_vs_tps.png",
+            "Vendor Redis memory delta per payment vs Achieved TPS",
+            "Redis memory delta (bytes / payment)",
+            _series_by_mode(
+                scalars,
+                "vendor_redis_memory_delta_bytes_per_payment",
+                x_key="achieved_tps",
+            ),
+        ),
+        (
+            "vendor_redis_memory_growth_rate_vs_tps.png",
+            "Vendor Redis memory growth rate (m) vs Achieved TPS",
+            "Growth rate m (MiB/s)",
+            _series_by_mode(
+                scalars,
+                "vendor_redis_memory_growth_rate_mib_per_s",
+                x_key="achieved_tps",
+            ),
         ),
     ]
 
@@ -355,7 +423,7 @@ def build_aggregate_draw_tasks(
                 kwargs={
                     "series_list": series,
                     "title": title,
-                    "x_axis_label": "TPS",
+                    "x_axis_label": "Achieved TPS",
                     "y_axis_label": y_label,
                 },
             )
@@ -369,7 +437,7 @@ def build_aggregate_draw_tasks(
     # leak or expected growth is a judgment call for whoever reads the chart,
     # not something this label should presuppose.
     redis_delta_series = _series_by_mode(
-        scalars, "vendor_redis_memory_delta_mib", x_key="total_requests"
+        scalars, "vendor_redis_memory_delta_mib", x_key="payments_count"
     )
     if redis_delta_series:
         tasks.append(
@@ -413,7 +481,7 @@ def build_aggregate_draw_tasks(
     redis_bytes_per_payment_series = _series_by_mode(
         scalars,
         "vendor_redis_memory_delta_bytes_per_payment",
-        x_key="total_requests",
+        x_key="payments_count",
     )
     if redis_bytes_per_payment_series:
         tasks.append(
@@ -509,13 +577,45 @@ def build_aggregate_draw_tasks(
                 )
             )
 
+        # Same run's memory-growth-rate column as a bar, one bar per mode --
+        # the per-TPS "Vendor Redis Memory Usage" chart already annotates this
+        # slope in-axes (see timeseries_renderers._LINEAR_FIT_LABELS), but only
+        # for modes with a known leak and only as text; this puts every mode's
+        # rate side by side as a column graph at this TPS.
+        growth_rate_records = [
+            {
+                "mode": r["mode"],
+                "growth_rate_mib_per_s": r["vendor_redis_memory_growth_rate_mib_per_s"],
+            }
+            for r in sorted_rows
+            if r.get("vendor_redis_memory_growth_rate_mib_per_s") is not None
+        ]
+        if growth_rate_records:
+            tasks.append(
+                DrawTask(
+                    fn_name="per_payment_bar",
+                    output_path=str(
+                        config_dir / "vendor_redis_memory_growth_rate_bar.png"
+                    ),
+                    kwargs={
+                        "records": growth_rate_records,
+                        "title": (
+                            "Vendor Redis memory growth rate (m) by mode "
+                            f"(tps={int(tps)})"
+                        ),
+                        "value_key": "growth_rate_mib_per_s",
+                        "y_axis_label": "Growth rate m (MiB/s)",
+                    },
+                )
+            )
+
     # Aggregate baseline/settled/delta table across every config, one row per
     # (total payments, mode) -- keyed by total payments rather than TPS
     # because that is what actually drives Redis's memory footprint (more
     # payment keys written), not the rate they arrived at.
     aggregate_rows = [
         (
-            int(r.get("total_requests") or 0),
+            int(r.get("payments_count") or 0),
             r["mode"],
             r["vendor_redis_memory_baseline_mib"],
             r["vendor_redis_memory_settled_mib"],

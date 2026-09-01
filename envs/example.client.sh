@@ -50,6 +50,11 @@ export CLIENT_CHANNEL_AMOUNT=10000000
 # - "payword": send PayWord hash-chain tokens (k, token_b64)
 # - "paytree": send PayTree Merkle proof payments (i, leaf_b64, siblings_b64[])
 # - "paytree_first_opt": PayTree with a smaller first-payment proof
+# - "paytree_second_opt": same wire proof as paytree_first_opt, but the vendor
+#   eagerly stores the full proof on every payment so settle is a direct read
+#   instead of rebuilding it lazily from the sparse node store (name reused
+#   from an unrelated, removed client-message-size optimization of the same
+#   name)
 # - "paytree_child_pair": PayTree child-pair revelation (k, left_b64, right_b64);
 #   reuses CLIENT_PAYTREE_MAX_I/CLIENT_PAYTREE_UNIT_VALUE (max_i is the max k here)
 export CLIENT_PAYMENT_MODE="payword"

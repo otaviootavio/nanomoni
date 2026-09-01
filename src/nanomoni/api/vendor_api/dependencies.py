@@ -16,6 +16,9 @@ from ...application.vendor.use_cases.paytree_first_opt_payment import (
 from ...application.vendor.use_cases.paytree_child_pair_payment import (
     PaytreeChildPairPaymentService,
 )
+from ...application.vendor.use_cases.paytree_second_opt_payment import (
+    PaytreeSecondOptPaymentService,
+)
 from ...application.vendor.use_cases.task import TaskService
 from ...application.vendor.use_cases.user import UserService
 from ...domain.shared import IssuerClientFactory
@@ -27,6 +30,7 @@ from ...infrastructure.storage import KeyValueStore, RedisKeyValueStore
 from ...application.shared.paytree_scheme import (
     PaytreeStdCryptoScheme,
     PaytreeFirstOptCryptoScheme,
+    PaytreeSecondOptCryptoScheme,
     PaytreeChildPairCryptoScheme,
 )
 from ...application.shared.payword_scheme import PaywordCryptoScheme
@@ -187,6 +191,27 @@ async def get_paytree_child_pair_payment_service(
         issuer_client_factory=issuer_client_factory,
         vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
         crypto_scheme=PaytreeChildPairCryptoScheme(),
+        node_repo=node_repo,
+        vendor_private_key_pem=settings.vendor_private_key_pem,
+    )
+
+
+async def get_paytree_second_opt_payment_service(
+    request: Request,
+) -> PaytreeSecondOptPaymentService:
+    """Get PayTree second-opt payment service."""
+    settings = get_settings_dependency()
+    issuer_client_factory = _create_issuer_client_factory(
+        settings.issuer_base_url,
+        session=request.app.state.issuer_session,
+    )
+    store = get_key_value_store_dependency()
+    node_repo = MerkleNodeRepositoryImpl(store)
+    return PaytreeSecondOptPaymentService(
+        payment_repository=get_payment_repository(),
+        issuer_client_factory=issuer_client_factory,
+        vendor_public_key_der_b64=settings.vendor_public_key_der_b64,
+        crypto_scheme=PaytreeSecondOptCryptoScheme(),
         node_repo=node_repo,
         vendor_private_key_pem=settings.vendor_private_key_pem,
     )
